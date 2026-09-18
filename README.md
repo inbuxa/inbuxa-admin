@@ -22,7 +22,10 @@ server has without hardcoding any of them.
   mail server itself. INBUXA Admin is its own deployment, pointed at the server
   either at build time (`VITE_API_BASE_URL`) or at deploy time:
   `<meta name="api-base-url" content="https://mail.example.com">` in
-  `index.html`.
+  `index.html`. Hosted like that, it signs in as the OAuth client
+  `inbuxa-admin`, which the server registers when it's started with
+  `INBUXA_ADMIN_URL` set to INBUXA Admin's address (for development,
+  `http://localhost:5173`).
 - **INBUXA's look:** the logo and ihasmail's palette.
 - **Two-factor setup** names INBUXA as the issuer, and no longer makes
   authenticator apps fetch a logo from a third-party site.

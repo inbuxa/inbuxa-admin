@@ -46,6 +46,20 @@ describe('getOAuthClientId', () => {
     expect(getOAuthClientId()).toBe('stalwart-webui');
   });
 
+  it('is inbuxa-admin when hosted apart from the server', async () => {
+    const getOAuthClientId = await loadWithMeta(
+      '<meta name="oauth-client-id" content="" /><meta name="api-base-url" content="https://mail.example.org" />',
+    );
+    expect(getOAuthClientId()).toBe('inbuxa-admin');
+  });
+
+  it('still prefers an injected client id when hosted apart from the server', async () => {
+    const getOAuthClientId = await loadWithMeta(
+      '<meta name="oauth-client-id" content="custom" /><meta name="api-base-url" content="https://mail.example.org" />',
+    );
+    expect(getOAuthClientId()).toBe('custom');
+  });
+
   it('reads the document only once', async () => {
     const getOAuthClientId = await loadWithMeta('<meta name="oauth-client-id" content="pocket-id-client" />');
     expect(getOAuthClientId()).toBe('pocket-id-client');
