@@ -303,7 +303,7 @@
   },
   "logout": "Logout",
   "version": {
-    "label": "INBUXA Admin v{{version}}"
+    "label": "INBUXA Admin {{version}}"
   },
   "oauth": {
     "backToLogin": "Back to login",

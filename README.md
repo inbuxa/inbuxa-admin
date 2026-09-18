@@ -46,6 +46,12 @@ git fetch upstream --tags
 git merge v1.0.12        # the next release tag
 ```
 
+## Versions
+
+INBUXA Admin has its own dated version (`inbuxa-version.json`), shown with the
+WebUI release it's based on: `INBUXA Admin 2026.9.18 (WebUI 1.0.11)`.
+`package.json` keeps upstream's version, so upstream's bumps merge cleanly.
+
 ## License and credits
 
 Free software under the [GNU Affero General Public License, version 3](./LICENSES/AGPL-3.0-only.txt).
