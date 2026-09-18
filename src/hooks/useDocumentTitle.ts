@@ -6,7 +6,7 @@
 
 import { useEffect } from 'react';
 
-const APP_NAME = 'Stalwart WebUI';
+const APP_NAME = 'INBUXA Admin';
 
 export function useDocumentTitle(title?: string | null) {
   useEffect(() => {

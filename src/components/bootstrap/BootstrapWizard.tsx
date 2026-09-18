@@ -333,7 +333,7 @@ export function BootstrapWizard() {
     <WizardShell>
       <div className="space-y-6">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">{t('bootstrap.welcome', 'Welcome to Stalwart')}</h2>
+          <h2 className="text-2xl font-semibold tracking-tight">{t('bootstrap.welcome', 'Welcome to INBUXA')}</h2>
           <p className="text-sm text-muted-foreground mt-1">
             {t('bootstrap.welcomeSubtitle', "Let's get your server set up.")}
           </p>
@@ -468,7 +468,7 @@ function SuccessScreen({
                   'bootstrap.credentialsCreated',
                   'Your administrator account has been created. Write these down now: the password will not be shown again.',
                 )
-              : t('bootstrap.configuredSuccessfully', 'Stalwart has been configured successfully.')}
+              : t('bootstrap.configuredSuccessfully', 'INBUXA has been configured successfully.')}
           </p>
         </div>
       </div>
@@ -500,7 +500,7 @@ function SuccessScreen({
           <span className="font-medium">{t('bootstrap.nextStepLabel', 'Next step:')}</span>{' '}
           {t(
             'bootstrap.nextStepBody',
-            'restart Stalwart for the new configuration to take effect. Once restarted, sign in with the credentials above to continue administering your server.',
+            'restart INBUXA for the new configuration to take effect. Once restarted, sign in with the credentials above to continue administering your server.',
           )}
         </p>
       </div>

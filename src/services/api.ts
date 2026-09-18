@@ -13,6 +13,12 @@ export function getApiBaseUrl(): string {
   if (envUrl && envUrl.length > 0) {
     return envUrl.replace(/\/+$/, '');
   }
+  // Set at deploy time rather than build time, so one build can point at any
+  // server: <meta name="api-base-url" content="https://mail.example.com">.
+  const injected = document.querySelector('meta[name="api-base-url"]')?.getAttribute('content')?.trim();
+  if (injected) {
+    return injected.replace(/\/+$/, '');
+  }
   return window.location.origin;
 }
 

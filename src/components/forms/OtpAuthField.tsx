@@ -27,17 +27,15 @@ interface OtpAuthFieldProps {
   readOnly: boolean;
 }
 
-const STALWART_IMAGE_URL = 'https://stalw.art/img/favicon-32x32.png';
-
 function buildOtpAuthUrl(totp: OTPAuth.TOTP): string {
-  const base = totp.toString();
-  const sep = base.includes('?') ? '&' : '?';
-  return `${base}${sep}image=${encodeURIComponent(STALWART_IMAGE_URL)}`;
+  // No `image` parameter: it made authenticator apps fetch a logo from a
+  // third-party site each time someone set up two-factor.
+  return totp.toString();
 }
 
 function generateTotp(): { totp: OTPAuth.TOTP; url: string } {
   const totp = new OTPAuth.TOTP({
-    issuer: 'Stalwart',
+    issuer: 'INBUXA',
     label: 'account',
     algorithm: 'SHA1',
     digits: 6,

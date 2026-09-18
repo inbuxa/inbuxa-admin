@@ -32,7 +32,19 @@ export async function discover(username: string): Promise<DiscoveryResponse> {
       }),
     );
   }
-  return response.json() as Promise<DiscoveryResponse>;
+  const discovered = (await response.json()) as DiscoveryResponse;
+  // A server that doesn't know its public URL yet (bootstrap mode, or no
+  // public URL configured) returns relative endpoints such as "/login". They
+  // belong to the server, so resolve them against the server's address, not
+  // this page's: INBUXA Admin is usually served from somewhere else.
+  const base = `${getApiBaseUrl()}/`;
+  const absolute = (endpoint: string | undefined) => (endpoint ? new URL(endpoint, base).toString() : endpoint);
+  return {
+    ...discovered,
+    authorization_endpoint: absolute(discovered.authorization_endpoint) as string,
+    token_endpoint: absolute(discovered.token_endpoint) as string,
+    end_session_endpoint: absolute(discovered.end_session_endpoint),
+  };
 }
 
 const UNRESERVED = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';

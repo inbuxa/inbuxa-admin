@@ -33,7 +33,8 @@ describe('accountStore', () => {
 
       const state = useAccountStore.getState();
       expect(state.permissions).toEqual(['b', 'c']);
-      expect(state.edition).toBe('oss');
+      // INBUXA: one edition. A server reporting 'oss' still unlocks everything.
+      expect(state.edition).toBe('enterprise');
       expect(state.locale).toBe('ja');
     });
 
@@ -101,9 +102,11 @@ describe('accountStore', () => {
       expect(useAccountStore.getState().edition).toBe('enterprise');
     });
 
-    it('can be changed to oss', () => {
+    it('is never oss or community, whatever the server reports (INBUXA: one edition)', () => {
       useAccountStore.getState().setAccountInfo([], 'oss', 'en');
-      expect(useAccountStore.getState().edition).toBe('oss');
+      expect(useAccountStore.getState().edition).toBe('enterprise');
+      useAccountStore.getState().setAccountInfo([], 'community', 'en');
+      expect(useAccountStore.getState().edition).toBe('enterprise');
     });
   });
 });

@@ -23,8 +23,11 @@ export const useAccountStore = create<AccountState>()((set, get) => ({
   edition: 'community',
   locale: 'en',
 
-  setAccountInfo: (permissions, edition, locale) => {
-    set({ permissions, edition, locale });
+  setAccountInfo: (permissions, _edition, locale) => {
+    // INBUXA has one edition, with every feature. Whatever the server reports,
+    // nothing is hidden or disabled as Enterprise-only. Features the server
+    // hasn't rebuilt yet answer that for themselves.
+    set({ permissions, edition: 'enterprise', locale });
   },
 
   hasPermission: (perm) => {

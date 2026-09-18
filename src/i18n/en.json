@@ -15,7 +15,7 @@
   "bootstrap": {
     "clipboardBlocked": "Your browser blocked clipboard access.",
     "complete": "Setup complete",
-    "configuredSuccessfully": "Stalwart has been configured successfully.",
+    "configuredSuccessfully": "INBUXA has been configured successfully.",
     "copyFailed": "Copy failed",
     "credentialsCreated": "Your administrator account has been created. Write these down now: the password will not be shown again.",
     "emptyForm": "Setup form is empty. The server did not return any bootstrap fields.",
@@ -23,11 +23,11 @@
     "failedToLoad": "Failed to load bootstrap state.",
     "finishSetup": "Finish setup",
     "loadingSetup": "Loading setup...",
-    "nextStepBody": "restart Stalwart for the new configuration to take effect. Once restarted, sign in with the credentials above to continue administering your server.",
+    "nextStepBody": "restart INBUXA for the new configuration to take effect. Once restarted, sign in with the credentials above to continue administering your server.",
     "nextStepLabel": "Next step:",
     "noConfirm": "The server did not confirm the update.",
     "stepOf": "Step {{current}} of {{total}}",
-    "welcome": "Welcome to Stalwart",
+    "welcome": "Welcome to INBUXA",
     "welcomeSubtitle": "Let's get your server set up."
   },
   "common": {
@@ -299,11 +299,11 @@
   },
   "logo": {
     "alt": "Logo",
-    "stalwartAlt": "Stalwart Logo"
+    "stalwartAlt": "INBUXA"
   },
   "logout": "Logout",
   "version": {
-    "label": "Stalwart WebUI v{{version}}"
+    "label": "INBUXA Admin v{{version}}"
   },
   "oauth": {
     "backToLogin": "Back to login",

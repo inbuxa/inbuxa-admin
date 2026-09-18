@@ -1,8 +1,8 @@
 {
-  "name": "stalwart-webui",
+  "name": "inbuxa-admin",
   "private": true,
   "version": "1.0.11",
-  "description": "Stalwart WebUI",
+  "description": "INBUXA Admin, a fork of Stalwart WebUI",
   "type": "module",
   "scripts": {
     "dev": "vite",
