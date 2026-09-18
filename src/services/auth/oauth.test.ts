@@ -102,3 +102,50 @@ describe('generateCodeChallenge', () => {
     }
   });
 });
+
+describe('startAuthFlow (INBUXA: no account-name step)', () => {
+  const metadata = {
+    authorization_endpoint: '/login',
+    token_endpoint: '/auth/token',
+    scopes_supported: ['openid', 'offline_access'],
+  };
+
+  async function run(username: string | null) {
+    document.head.innerHTML = '<meta name="api-base-url" content="https://mail.example.org" />';
+    const requested: string[] = [];
+    const fetchMock = async (url: string) => {
+      requested.push(url);
+      return new Response(JSON.stringify(metadata), { status: 200 });
+    };
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as typeof fetch;
+    let href = '';
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, origin: 'https://admin.example.org', pathname: '/', search: '', set href(v: string) { href = v; }, get href() { return href; } },
+    });
+    try {
+      const { startAuthFlow } = await import('./oauth');
+      await startAuthFlow(username);
+    } finally {
+      globalThis.fetch = originalFetch;
+      Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+    }
+    return { requested, target: new URL(href) };
+  }
+
+  it('reads the server-wide configuration and goes straight to its sign-in page', async () => {
+    const { requested, target } = await run(null);
+    expect(requested).toEqual(['https://mail.example.org/.well-known/openid-configuration']);
+    expect(`${target.origin}${target.pathname}`).toBe('https://mail.example.org/login');
+    expect(target.searchParams.has('login_hint')).toBe(false);
+    expect(target.searchParams.get('redirect_uri')).toBe('https://admin.example.org/oauth/callback');
+  });
+
+  it('still looks an account up, and passes the hint, when given one', async () => {
+    const { requested, target } = await run('someone@example.org');
+    expect(requested).toEqual(['https://mail.example.org/api/discover/someone%40example.org']);
+    expect(target.searchParams.get('login_hint')).toBe('someone@example.org');
+  });
+});

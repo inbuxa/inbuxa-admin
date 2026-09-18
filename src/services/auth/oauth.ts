@@ -20,13 +20,24 @@ interface DiscoveryResponse {
   scopes_supported?: string[];
 }
 
-export async function discover(username: string): Promise<DiscoveryResponse> {
-  const url = `${getApiBaseUrl()}/api/discover/${encodeURIComponent(username)}`;
+/**
+ * The server's OAuth endpoints.
+ *
+ * Upstream asks for the account name first and looks the endpoints up per
+ * account, because a domain there can sign in at its own identity provider.
+ * INBUXA Admin talks to one known server whose own sign-in page handles every
+ * account, so it reads the server's published OpenID configuration instead,
+ * which needs no account name. Given one, it still asks per account.
+ */
+export async function discover(username?: string | null): Promise<DiscoveryResponse> {
+  const url = username
+    ? `${getApiBaseUrl()}/api/discover/${encodeURIComponent(username)}`
+    : `${getApiBaseUrl()}/.well-known/openid-configuration`;
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
       i18n.t('oauth.discoveryFailed', 'Discovery failed for "{{username}}": {{status}} {{statusText}}', {
-        username,
+        username: username ?? getApiBaseUrl(),
         status: response.status,
         statusText: response.statusText,
       }),
@@ -136,7 +147,7 @@ function getRedirectUri(): string {
   return `${window.location.origin}${basePath}/oauth/callback`;
 }
 
-export async function startAuthFlow(username: string, returnUrl?: string | null): Promise<void> {
+export async function startAuthFlow(username: string | null, returnUrl?: string | null): Promise<void> {
   const { authorization_endpoint, token_endpoint, end_session_endpoint, scopes_supported } = await discover(username);
 
   const codeVerifier = generateCodeVerifier();
@@ -170,9 +181,11 @@ export async function startAuthFlow(username: string, returnUrl?: string | null)
     code_challenge: codeChallenge,
     code_challenge_method: codeChallengeMethod,
     state,
-    login_hint: username,
     prompt: 'login',
   });
+  if (username) {
+    params.set('login_hint', username);
+  }
 
   let scope: string;
   if (SCOPES && SCOPES.length > 0) {

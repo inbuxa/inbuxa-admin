@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
-import { type FormEvent, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowRight, Loader2 } from 'lucide-react';
@@ -12,35 +12,42 @@ import { ArrowRight, Loader2 } from 'lucide-react';
 import Logo from '@/components/common/Logo';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { startAuthFlow } from '@/services/auth/oauth';
 
+/**
+ * INBUXA: straight to the server's own sign-in page, which asks for the
+ * username and password. There is no account-name step first: INBUXA Admin
+ * talks to one known server, so there is nothing to look up per account (see
+ * `discover`). The card stays only for when getting there fails.
+ */
 export default function LoginPage() {
   const { t } = useTranslation();
   const location = useLocation();
   const originalPath = (location.state as { from?: string } | null)?.from ?? null;
-  const [username, setUsername] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const started = useRef(false);
 
   useDocumentTitle(t('login.title', 'Sign in'));
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const trimmed = username.trim();
-    if (!trimmed) return;
-
+  const go = useCallback(async () => {
     setError(null);
     setLoading(true);
-
     try {
-      await startAuthFlow(trimmed, originalPath);
+      await startAuthFlow(null, originalPath);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('login.error', 'An unexpected error occurred'));
       setLoading(false);
     }
-  }
+  }, [originalPath, t]);
+
+  useEffect(() => {
+    // Once, even under StrictMode's double effect.
+    if (started.current) return;
+    started.current = true;
+    void go();
+  }, [go]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-content-background px-4">
@@ -49,42 +56,22 @@ export default function LoginPage() {
           <Logo />
         </CardHeader>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-center text-sm text-muted-foreground">
-                {t('login.prompt', 'Enter your account name to continue')}
-              </p>
-              <Input
-                id="username"
-                type="text"
-                autoComplete="username"
-                autoFocus
-                placeholder={t('login.usernamePlaceholder', 'user@example.com')}
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                disabled={loading}
-                aria-label={t('login.prompt', 'Enter your account name to continue')}
-              />
-            </div>
-
-            {error && (
-              <p className="text-sm text-destructive" role="alert">
-                {error}
-              </p>
+        <CardContent className="space-y-4">
+          {error && (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+          <Button type="button" className="w-full" disabled={loading} onClick={() => void go()}>
+            {loading ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <>
+                {t('login.continue', 'Continue')}
+                <ArrowRight />
+              </>
             )}
-
-            <Button type="submit" className="w-full" disabled={loading || !username.trim()}>
-              {loading ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                <>
-                  {t('login.continue', 'Continue')}
-                  <ArrowRight />
-                </>
-              )}
-            </Button>
-          </form>
+          </Button>
         </CardContent>
       </Card>
     </div>
