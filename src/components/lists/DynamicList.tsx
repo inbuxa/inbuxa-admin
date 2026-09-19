@@ -7,6 +7,7 @@
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
+import { HelpPanel } from '@/help/HelpPanel';
 import { iconForView } from '@/lib/viewIcon';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -1113,6 +1114,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageHeader icon={iconForView(schema, viewName)} title={list.title} subtitle={list.subtitle} />
         <div className="flex items-center gap-2">
+          <HelpPanel viewName={viewName} title={list.title} />
           {hasMassActions && selectedIds.size > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

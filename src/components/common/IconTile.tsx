@@ -46,7 +46,9 @@ export function IconTile({
   const box = size === 'sm' ? 'h-6 w-6 rounded-md' : size === 'lg' ? 'h-10 w-10 rounded-xl' : 'h-7 w-7 rounded-lg';
   const glyph = size === 'sm' ? 'h-3.5 w-3.5' : size === 'lg' ? 'h-5 w-5' : 'h-4 w-4';
   return (
-    <span className={cn('inline-flex shrink-0 items-center justify-center', box, TONE_CLASSES[toneFor(name)], className)}>
+    <span
+      className={cn('inline-flex shrink-0 items-center justify-center', box, TONE_CLASSES[toneFor(name)], className)}
+    >
       {createElement(iconComponent(name), { className: glyph, strokeWidth: 2, 'aria-hidden': true })}
     </span>
   );

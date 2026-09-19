@@ -137,7 +137,11 @@ export function TopBar() {
         {/* INBUXA: the three areas, one click away, where the eye already looks. */}
         {schema && navigableLayouts.length > 1 && (
           <TooltipProvider delayDuration={150}>
-            <div className="hidden items-center gap-0.5 rounded-xl bg-muted p-1 sm:flex" role="tablist" aria-label={t('sections', 'Sections')}>
+            <div
+              className="hidden items-center gap-0.5 rounded-xl bg-muted p-1 sm:flex"
+              role="tablist"
+              aria-label={t('sections', 'Sections')}
+            >
               {navigableLayouts.map((layout) => {
                 const isActive = layout.name === activeSection;
                 return (

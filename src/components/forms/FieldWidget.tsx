@@ -9,7 +9,8 @@ import { humanize } from '@/lib/humanize';
 import { useState, useEffect, useMemo, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBufferedValue, useResetOnChange } from '@/hooks/useBufferedValue';
-import ReactMarkdown from 'react-markdown';
+import { HelpTip } from '@/help/HelpTip';
+import { fieldHelp } from '@/help/texts';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -63,6 +64,8 @@ export interface FieldWidgetProps {
   error?: string;
   schema: Schema;
   sieveScriptName?: string;
+  /** INBUXA: the object or schema that owns this field, for its help id (`scope.field`). */
+  helpScope?: string;
 }
 
 function getRequiredMarker(field: Field, readOnly: boolean): 'required' | 'optional' | null {
@@ -83,7 +86,8 @@ function getRequiredMarker(field: Field, readOnly: boolean): 'required' | 'optio
 
 export function FieldWidget(props: FieldWidgetProps) {
   const { t } = useTranslation();
-  const { field, formField, value, onChange, readOnly, error, schema, sieveScriptName } = props;
+  const { field, formField, value, onChange, readOnly, error, schema, sieveScriptName, helpScope } = props;
+  const helpId = helpScope ? `${helpScope}.${formField.name}` : undefined;
   const ft = field.type;
   const edition = useEffectiveEdition();
 
@@ -233,12 +237,8 @@ export function FieldWidget(props: FieldWidgetProps) {
             </span>
           )}
         </Label>
+        <HelpTip id={helpId} text={fieldHelp(helpId, field.description)} />
       </div>
-      {field.description && (
-        <div className="text-xs text-muted-foreground prose prose-sm max-w-none [&_p]:m-0">
-          <ReactMarkdown>{field.description.replace(/\\n/g, '\n')}</ReactMarkdown>
-        </div>
-      )}
       {widget}
       {sieveScriptName !== undefined && ft.type === 'string' && (
         <SievepadButton scriptName={sieveScriptName} source={typeof value === 'string' ? value : ''} />
@@ -1409,6 +1409,7 @@ function EmbeddedObjectField({
 
   if (resolvedSchema.type === 'single') {
     const fields = resolvedSchema.fields;
+    const helpScopeHere = resolvedSchema.schemaName ?? objectName;
     const form = resolveVariantForm(schema, objectName, objectName, resolvedSchema.schemaName);
     const formFields = form?.sections.flatMap((s) => s.fields) ?? [];
 
@@ -1427,6 +1428,7 @@ function EmbeddedObjectField({
               onChange={(v) => handleFieldChange(ff.name, v)}
               readOnly={readOnly}
               schema={schema}
+              helpScope={helpScopeHere}
             />
           );
         })}
@@ -1442,6 +1444,7 @@ function EmbeddedObjectField({
                 onChange={(v) => handleFieldChange(name, v)}
                 readOnly={readOnly}
                 schema={schema}
+                helpScope={helpScopeHere}
               />
             ))}
       </div>
@@ -1451,6 +1454,7 @@ function EmbeddedObjectField({
   const currentType = (objValue['@type'] as string) ?? resolvedSchema.variants[0]?.name ?? '';
   const currentVariant = resolvedSchema.variants.find((v) => v.name === currentType);
   const variantFields = currentVariant?.fields;
+  const helpScopeHere = currentVariant?.schemaName ?? objectName;
   const variantForm = resolveVariantForm(schema, objectName, objectName, currentVariant?.schemaName);
   const variantFormFields = variantForm?.sections.flatMap((s) => s.fields) ?? [];
 
@@ -1491,6 +1495,7 @@ function EmbeddedObjectField({
               onChange={(v) => handleFieldChange(ff.name, v)}
               readOnly={readOnly}
               schema={schema}
+              helpScope={helpScopeHere}
             />
           );
         })}
@@ -1507,6 +1512,7 @@ function EmbeddedObjectField({
               onChange={(v) => handleFieldChange(name, v)}
               readOnly={readOnly}
               schema={schema}
+              helpScope={helpScopeHere}
             />
           ))}
     </div>

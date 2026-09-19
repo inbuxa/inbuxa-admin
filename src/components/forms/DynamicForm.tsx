@@ -7,6 +7,7 @@
 
 import { humanize } from '@/lib/humanize';
 import { PageHeader } from '@/components/common/PageHeader';
+import { HelpPanel } from '@/help/HelpPanel';
 import { iconForView } from '@/lib/viewIcon';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
@@ -123,6 +124,15 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
     }
     return { ...fields, properties: filtered };
   }, [resolved, selectedVariant, schema]);
+
+  // INBUXA: whose fields these are, for their help ids: the variant's schema
+  // (x:UserAccount) when the object has variants, else the object (x:Domain).
+  const helpScope = useMemo(() => {
+    if (!resolved) return undefined;
+    const { sch, obj } = resolved;
+    if (sch.type === 'single') return obj.objectName;
+    return sch.variants.find((v) => v.name === selectedVariant)?.schemaName ?? obj.objectName;
+  }, [resolved, selectedVariant]);
 
   const currentForm = useMemo((): Form | null => {
     if (!schema || !resolved) return null;
@@ -761,6 +771,7 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
         icon={iconForView(schema, viewName)}
         title={formTitle}
         subtitle={formSubtitle}
+        actions={<HelpPanel viewName={viewName} title={String(formTitle ?? '')} />}
       />
 
       {generalError && (
@@ -834,6 +845,7 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
                     sieveScriptName={
                       isSieveScriptField(resolved.obj.objectName, formField.name) ? scriptName : undefined
                     }
+                    helpScope={helpScope}
                   />
                 );
 

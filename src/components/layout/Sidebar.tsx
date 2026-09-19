@@ -427,9 +427,9 @@ export function Sidebar() {
   const layout: Layout | undefined = layouts.find((l) => l.name === activeSection);
   if (!layout) return null;
 
-
   // Folding to a rail is for wide screens; a phone keeps the slide-over.
-  const collapsed = sidebarCollapsed && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches;
+  const collapsed =
+    sidebarCollapsed && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches;
 
   if (collapsed) {
     return (
@@ -476,7 +476,9 @@ export function Sidebar() {
       />
       <aside className="fixed top-14 left-0 bottom-0 z-30 flex w-64 flex-col border-r bg-background">
         <div className="flex items-center justify-between px-4 pt-3 pb-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{layout.name}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {layout.name}
+          </span>
           <button
             type="button"
             aria-label="Collapse sidebar"
