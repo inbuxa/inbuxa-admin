@@ -13,6 +13,7 @@ import { useSchemaStore } from '@/stores/schemaStore';
 import { useAccountStore } from '@/stores/accountStore';
 import { useUIStore } from '@/stores/uiStore';
 import { fetchSession, fetchSchema, fetchAccountInfo } from '@/services/jmap/client';
+import { getApiBaseUrl } from '@/services/api';
 import { loadAccountTheme, setAccountSettingsTarget } from '@/lib/accountSettings';
 import { setLocale } from '@/i18n';
 import { TopBar } from '@/components/layout/TopBar';
@@ -117,7 +118,13 @@ export default function AdminPanel() {
   useEffect(() => {
     const bypassToken = import.meta.env.VITE_ACCESS_TOKEN;
     if (bypassToken && !accessToken) {
-      useAuthStore.getState().setTokens(bypassToken, '', 86400, '');
+      // INBUXA: with a refresh token as well, the dev bypass renews itself like a real
+      // sign-in instead of dying when the access token does.
+      const bypassRefresh = (import.meta.env.VITE_REFRESH_TOKEN as string | undefined) ?? '';
+      const expiresIn = Number(import.meta.env.VITE_ACCESS_TOKEN_EXPIRES_IN ?? 86400);
+      useAuthStore
+        .getState()
+        .setTokens(bypassToken, bypassRefresh, expiresIn, bypassRefresh ? `${getApiBaseUrl()}/auth/token` : '');
     }
   }, [accessToken]);
 
