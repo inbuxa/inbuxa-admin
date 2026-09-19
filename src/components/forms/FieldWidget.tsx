@@ -1,9 +1,11 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+import { humanize } from '@/lib/humanize';
 import { useState, useEffect, useMemo, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBufferedValue, useResetOnChange } from '@/hooks/useBufferedValue';
@@ -1435,7 +1437,7 @@ function EmbeddedObjectField({
               <FieldWidget
                 key={name}
                 field={fieldDef}
-                formField={{ name, label: name }}
+                formField={{ name, label: humanize(name) }}
                 value={objValue[name]}
                 onChange={(v) => handleFieldChange(name, v)}
                 readOnly={readOnly}
@@ -1500,7 +1502,7 @@ function EmbeddedObjectField({
             <FieldWidget
               key={name}
               field={fieldDef}
-              formField={{ name, label: name }}
+              formField={{ name, label: humanize(name) }}
               value={objValue[name]}
               onChange={(v) => handleFieldChange(name, v)}
               readOnly={readOnly}

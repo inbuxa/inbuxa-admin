@@ -1,9 +1,13 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+import { EmptyState } from '@/components/common/EmptyState';
+import { PageHeader } from '@/components/common/PageHeader';
+import { iconForView } from '@/lib/viewIcon';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -1105,12 +1109,9 @@ export function DynamicList({ viewName }: DynamicListProps) {
   }
 
   return (
-    <div className="relative space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{list.title}</h1>
-          {list.subtitle && <p className="text-sm text-muted-foreground mt-1">{list.subtitle}</p>}
-        </div>
+    <div className="relative space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <PageHeader icon={iconForView(schema, viewName)} title={list.title} subtitle={list.subtitle} />
         <div className="flex items-center gap-2">
           {hasMassActions && selectedIds.size > 0 && (
             <DropdownMenu>
@@ -1233,11 +1234,11 @@ export function DynamicList({ viewName }: DynamicListProps) {
         </div>
       )}
 
-      <div className="rounded-lg border bg-background shadow-sm">
-        <div className="overflow-x-auto rounded-[calc(var(--radius-lg)-1px)]">
+      <div className="rounded-xl border bg-card shadow-soft">
+        <div className="overflow-x-auto rounded-[calc(var(--radius-xl)-1px)]">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b bg-muted">
+              <tr className="border-b bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
                 {hasMassActions && (
                   <th className="w-10 px-3 py-3">
                     <Checkbox
@@ -1276,9 +1277,12 @@ export function DynamicList({ viewName }: DynamicListProps) {
                 <tr>
                   <td
                     colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasItemActions ? 1 : 0)}
-                    className="px-3 py-12 text-center text-muted-foreground"
+                    className="px-3"
                   >
-                    {t('list.noResults', 'No results found')}
+                    <EmptyState
+                      title={t('list.emptyTitle', 'Nothing here yet')}
+                      hint={t('list.noResults', 'No results found')}
+                    />
                   </td>
                 </tr>
               ) : (

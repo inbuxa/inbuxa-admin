@@ -1,11 +1,12 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+import { IconTile } from '@/components/common/IconTile';
 import { useMemo } from 'react';
-import * as LucideIcons from 'lucide-react';
 import { Info } from 'lucide-react';
 import { LineChart, Line } from 'recharts';
 import { Card, CardContent } from '@/components/ui/card';
@@ -16,24 +17,6 @@ import type { Metric } from '../types/metrics';
 import { cardValue, formatValue, sparklineData, computeDelta } from '../helpers';
 import { useLiveMetricsStore } from '../stores/liveMetricsStore';
 import { getChartColor } from '@/components/ui/chart';
-
-const warnedIcons = new Set<string>();
-
-function LucideIcon({ name, className }: { name: string; className?: string }) {
-  const formatted = name
-    .split('-')
-    .map((s) => s[0].toUpperCase() + s.slice(1))
-    .join('');
-  const IconComp = (LucideIcons as Record<string, unknown>)[formatted] as LucideIcons.LucideIcon | undefined;
-  if (!IconComp) {
-    if (import.meta.env.DEV && !warnedIcons.has(name)) {
-      warnedIcons.add(name);
-      console.warn(`Unknown icon name: "${name}"`);
-    }
-    return <LucideIcons.HelpCircle className={className} />;
-  }
-  return <IconComp className={className} />;
-}
 
 interface StatCardProps {
   card: CardSchema;
@@ -70,10 +53,10 @@ export function StatCard({ card, historySamples, historyWindow }: StatCardProps)
   }, [card, historySamples, from, to]);
 
   return (
-    <Card>
-      <CardContent className="p-4">
+    <Card className="transition-shadow hover:shadow-md">
+      <CardContent className="p-5">
         <div className="flex items-center gap-2">
-          <LucideIcon name={card.icon} className="h-4 w-4 text-muted-foreground" />
+          <IconTile name={card.icon} size="sm" />
           <span className="text-sm font-medium text-muted-foreground">{card.title}</span>
           {card.description && (
             <TooltipProvider>
@@ -89,7 +72,7 @@ export function StatCard({ card, historySamples, historyWindow }: StatCardProps)
           )}
         </div>
 
-        <div className="mt-2 text-2xl font-bold">{formattedValue}</div>
+        <div className="mt-3 font-display text-3xl font-semibold tracking-tight">{formattedValue}</div>
 
         {(delta || sparkline) && (
           <div className="mt-1 flex items-center gap-2">

@@ -1,9 +1,12 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+import { useTranslation } from 'react-i18next';
+import { Greeting } from './Greeting';
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle } from 'lucide-react';
@@ -24,6 +27,7 @@ interface DashboardViewProps {
 }
 
 export function DashboardView({ dashboardId, section }: DashboardViewProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const schema = useSchemaStore((s) => s.schema);
   const period = useDashboardStore((s) => s.period);
@@ -102,6 +106,7 @@ export function DashboardView({ dashboardId, section }: DashboardViewProps) {
 
   return (
     <div className="space-y-6">
+      <Greeting />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {dashboards.length > 1 && (
           <Tabs value={dashboardId} onValueChange={(id) => navigate(`/${section}/Dashboard/${id}`)}>
@@ -114,15 +119,19 @@ export function DashboardView({ dashboardId, section }: DashboardViewProps) {
             </TabsList>
           </Tabs>
         )}
-        {dashboards.length === 1 && <h1 className="text-xl font-semibold">{dashboard.label}</h1>}
+        {dashboards.length === 1 && <h2 className="text-lg font-semibold">{dashboard.label}</h2>}
 
         <PeriodSelector onRefresh={handleRefresh} loading={isLoading} />
       </div>
 
       {liveStatus === 'error' && liveError && (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {liveError}
+        <div className="flex items-center gap-3 rounded-xl border border-highlight/40 bg-highlight-soft px-4 py-3 text-sm text-foreground">
+          <AlertCircle className="h-4 w-4 shrink-0 text-highlight" />
+          <span>
+            {/404/.test(liveError)
+              ? t('dashboard.liveUnavailable', "Live numbers aren't available on this server yet. The rest of the dashboard still works.")
+              : liveError}
+          </span>
         </div>
       )}
 

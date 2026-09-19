@@ -8,77 +8,89 @@
 @import 'tailwindcss';
 
 :root {
-  --background: #ffffff;
-  --foreground: #111827;
+  /* INBUXA, light: warm paper, the mark's navy for text, its teal to act. */
+  --background: #fbfaf7;
+  --foreground: #16262f;
 
   --card: #ffffff;
-  --card-foreground: #111827;
+  --card-foreground: #16262f;
 
   --popover: #ffffff;
-  --popover-foreground: #111827;
+  --popover-foreground: #16262f;
 
-  --content-background: #f6f8fa;
+  --content-background: #f4f1ea;
 
-  --primary: #0f766e;
+  --primary: #0d8a82;
   --primary-foreground: #ffffff;
 
-  --secondary: #eef1f4;
-  --secondary-foreground: #111827;
+  --secondary: #efece5;
+  --secondary-foreground: #16262f;
 
-  --muted: #eef1f4;
-  --muted-foreground: #5b6472;
+  --muted: #efece5;
+  --muted-foreground: #5f6b73;
 
-  --accent: #d9f1ee;
-  --accent-foreground: #0b5750;
+  --accent: #e1f4f1;
+  --accent-foreground: #0a5f59;
 
-  --destructive: #dc2626;
+  /* The cat's orange, for the few things that should feel warm. */
+  --highlight: #f59e3f;
+  --highlight-soft: #fdebd5;
+
+  --destructive: #d9383a;
   --destructive-foreground: #ffffff;
 
-  --border: #e3e7ec;
-  --input: #e3e7ec;
-  --ring: #0f766e;
+  --border: #e7e2d8;
+  --input: #ddd7cb;
+  --ring: #0d8a82;
 
-  --radius: 0.5rem;
+  --radius: 0.75rem;
+  --shadow-soft: 0 1px 2px rgb(22 38 47 / 0.04), 0 4px 16px rgb(22 38 47 / 0.05);
 
-  --chart-1: #0f766e;
-  --chart-2: #f9a34c;
+  --chart-1: #0d8a82;
+  --chart-2: #f59e3f;
   --chart-3: #1c4053;
-  --chart-4: #0e7490;
+  --chart-4: #46cac3;
   --chart-5: #b45309;
 }
 
 .dark {
-  --background: #111a2b;
-  --foreground: #e5e9f0;
+  /* INBUXA, dark: the lockup's own background, lifted surfaces, bright teal. */
+  --background: #0e1c26;
+  --foreground: #e7eef2;
 
-  --card: #111a2b;
-  --card-foreground: #e5e9f0;
+  --card: #132633;
+  --card-foreground: #e7eef2;
 
-  --popover: #111a2b;
-  --popover-foreground: #e5e9f0;
+  --popover: #152a38;
+  --popover-foreground: #e7eef2;
 
-  --content-background: #0b1220;
+  --content-background: #0b1720;
 
-  --primary: #2dd4bf;
-  --primary-foreground: #052e2b;
+  --primary: #46cac3;
+  --primary-foreground: #062a28;
 
-  --secondary: #1f2a3d;
-  --secondary-foreground: #e5e9f0;
+  --secondary: #1a3140;
+  --secondary-foreground: #e7eef2;
 
-  --muted: #1f2a3d;
-  --muted-foreground: #9aa5b8;
+  --muted: #1a3140;
+  --muted-foreground: #93a8b6;
 
-  --accent: #12343a;
-  --accent-foreground: #99f6e4;
+  --accent: #133d40;
+  --accent-foreground: #9ff0e9;
+
+  --highlight: #f9a34c;
+  --highlight-soft: #3a2a18;
 
   --destructive: #f87171;
-  --destructive-foreground: #0b1220;
+  --destructive-foreground: #0b1720;
 
-  --border: #1f2a3d;
-  --input: #1f2a3d;
-  --ring: #2dd4bf;
+  --border: #1f3847;
+  --input: #274455;
+  --ring: #46cac3;
 
-  --chart-1: #2dd4bf;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.25), 0 6px 20px rgb(0 0 0 / 0.2);
+
+  --chart-1: #46cac3;
   --chart-2: #f9a34c;
   --chart-3: #9fc2d6;
   --chart-4: #67e8f9;
@@ -108,6 +120,9 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
 
+  --color-highlight: var(--highlight);
+  --color-highlight-soft: var(--highlight-soft);
+
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
 
@@ -115,16 +130,20 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --color-chart-1: hsl(var(--chart-1));
-  --color-chart-2: hsl(var(--chart-2));
-  --color-chart-3: hsl(var(--chart-3));
-  --color-chart-4: hsl(var(--chart-4));
-  --color-chart-5: hsl(var(--chart-5));
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk Variable', 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --shadow-soft: var(--shadow-soft);
 }
 
 @layer base {
@@ -133,7 +152,24 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.015em;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 30%, transparent);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent) transparent;
   }
 }
 

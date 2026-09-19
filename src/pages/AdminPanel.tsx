@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -81,6 +82,7 @@ export default function AdminPanel() {
   const activeAccountId = useAuthStore((s) => s.activeAccountId);
   const setActiveSection = useUIStore((s) => s.setActiveSection);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
+  const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const { canViewObject } = usePermissions();
 
   const [initError, setInitError] = useState<string | null>(null);
@@ -270,7 +272,7 @@ export default function AdminPanel() {
       <div className="flex flex-1">
         <Sidebar />
         <main
-          className={`flex-1 overflow-auto bg-content-background p-6 transition-[margin] ${sidebarOpen ? 'md:ml-64' : ''}`}
+          className={`flex-1 overflow-auto bg-content-background p-6 transition-[margin] ${sidebarOpen ? (sidebarCollapsed ? 'md:ml-[4.5rem]' : 'md:ml-64') : ''}`}
         >
           <ErrorBoundary key={activeAccountId ?? 'none'}>
             <MainContent viewName={viewName} id={id} section={section} />

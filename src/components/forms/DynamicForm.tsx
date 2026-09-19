@@ -5,6 +5,9 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+import { humanize } from '@/lib/humanize';
+import { PageHeader } from '@/components/common/PageHeader';
+import { iconForView } from '@/lib/viewIcon';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate, useBlocker } from 'react-router-dom';
@@ -687,7 +690,8 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
     if (!resolved || !schema) return '';
     const { obj } = resolved;
 
-    if (isSingleton) return titleForm?.title ?? obj.objectType.description;
+    // With no form of its own, the object's description is a sentence, not a title: spell out its name instead.
+    if (isSingleton) return titleForm?.title ?? humanize(viewName);
 
     const list = resolveList(schema, viewName, obj.objectName);
     const name = list?.singularName ?? obj.objectType.description;
@@ -705,8 +709,9 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
   }, [resolved, schema, isCreate, isSingleton, formData, viewName, titleForm, t]);
 
   const formSubtitle = useMemo(() => {
-    return titleForm?.subtitle;
-  }, [titleForm]);
+    if (titleForm?.subtitle) return titleForm.subtitle;
+    return isSingleton && !titleForm ? resolved?.obj.objectType.description : undefined;
+  }, [titleForm, isSingleton, resolved]);
 
   if (!schema || !resolved) {
     return (
@@ -746,15 +751,16 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <div className="flex items-center gap-4">
-        <Button type="button" variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{formTitle}</h1>
-          {formSubtitle && <p className="text-sm text-muted-foreground mt-1">{formSubtitle}</p>}
-        </div>
-      </div>
+      <PageHeader
+        leading={
+          <Button type="button" variant="ghost" size="icon" className="rounded-xl" onClick={() => navigate(-1)}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        }
+        icon={iconForView(schema, viewName)}
+        title={formTitle}
+        subtitle={formSubtitle}
+      />
 
       {generalError && (
         <div className="rounded-md bg-destructive/10 border border-destructive/20 p-4">
@@ -1005,7 +1011,7 @@ function buildSections(
 
   if (!form) {
     const allFields = Object.entries(fields!.properties)
-      .map(([name, field]) => buildRenderableField({ name, label: name }, field, isCreate, edition))
+      .map(([name, field]) => buildRenderableField({ name, label: humanize(name) }, field, isCreate, edition))
       .filter((f): f is RenderableField => f !== null);
     return [{ fields: allFields }];
   }

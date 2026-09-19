@@ -13,12 +13,15 @@ type Theme = 'light' | 'dark';
 interface UIState {
   theme: Theme;
   sidebarOpen: boolean;
+  /** INBUXA: the sidebar folded to a rail of icon tiles, on wide screens. */
+  sidebarCollapsed: boolean;
   activeSection: string;
 
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
+  toggleSidebarCollapsed: () => void;
   setActiveSection: (section: string) => void;
 }
 
@@ -36,6 +39,7 @@ export const useUIStore = create<UIState>()(
       theme:
         typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
       sidebarOpen: typeof window !== 'undefined' ? (window.matchMedia?.('(min-width: 768px)').matches ?? true) : true,
+      sidebarCollapsed: false,
       activeSection: '',
 
       toggleTheme: () => {
@@ -57,6 +61,10 @@ export const useUIStore = create<UIState>()(
         set({ sidebarOpen: open });
       },
 
+      toggleSidebarCollapsed: () => {
+        set({ sidebarCollapsed: !get().sidebarCollapsed });
+      },
+
       setActiveSection: (section) => {
         set({ activeSection: section });
       },
@@ -65,6 +73,7 @@ export const useUIStore = create<UIState>()(
       name: 'inbuxa-ui',
       partialize: (state) => ({
         theme: state.theme,
+        sidebarCollapsed: state.sidebarCollapsed,
       }),
       onRehydrateStorage: () => {
         return (state) => {

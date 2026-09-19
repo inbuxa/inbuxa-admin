@@ -61,7 +61,8 @@
     "preset7d": "Last 7 days",
     "preset90d": "Last 90 days",
     "title": "Dashboard",
-    "to": "To"
+    "to": "To",
+    "liveUnavailable": "Live numbers aren't available on this server yet. The rest of the dashboard still works."
   },
   "deliveryTrace": {
     "attemptCount_one": "{{count}} attempt",
@@ -282,7 +283,8 @@
     "showing": "Showing {{from}}-{{to}} of {{total}} {{name}}",
     "showingItems": "Showing {{count}} items",
     "sort": "Sort",
-    "unknownError": "Unknown error"
+    "unknownError": "Unknown error",
+    "emptyTitle": "Nothing here yet"
   },
   "login": {
     "continue": "Continue",
@@ -382,5 +384,11 @@
   "source": {
     "download": "Source code of this version ({{id}}), AGPL-3.0",
     "menu": "Source code (AGPL-3.0)"
+  },
+  "greeting": {
+    "morning": "Good morning",
+    "afternoon": "Good afternoon",
+    "evening": "Good evening",
+    "subtitle": "Here's how your mail server is doing."
   }
 }
