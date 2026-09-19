@@ -8,11 +8,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import * as LucideIcons from 'lucide-react';
-const { ChevronDown, Lock, PanelLeftClose, PanelLeftOpen, FileCode } = LucideIcons;
+const { ChevronDown, Lock, PanelLeftClose, PanelLeftOpen } = LucideIcons;
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
-import { SourceLink } from '@/components/common/SourceLink';
 import { IconTile } from '@/components/common/IconTile';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -22,24 +21,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { sourceDownloadUrl } from '@/lib/sourceDownload';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useUIStore } from '@/stores/uiStore';
 import { useAccountStore } from '@/stores/accountStore';
 import { useSchemaStore } from '@/stores/schemaStore';
 import { visibleLayouts, isLinkEnterprise, isLinkVisible } from '@/lib/layout';
-import { sectionLandingLink } from '@/lib/lastVisited';
 import type { Layout, LayoutItem, LayoutSubItem } from '@/types/schema';
-
-function LucideIcon({ name, className }: { name: string; className?: string }) {
-  const formatted = name
-    .split('-')
-    .map((s) => s[0].toUpperCase() + s.slice(1))
-    .join('');
-  const IconComp = (LucideIcons as Record<string, unknown>)[formatted] as LucideIcons.LucideIcon | undefined;
-  if (!IconComp) return <LucideIcons.Circle className={className} />;
-  return <IconComp className={className} />;
-}
 
 function resolveViewPath(sectionName: string, viewName: string): string {
   return `/${sectionName}/${viewName}`;
@@ -404,7 +391,6 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const activeSection = useUIStore((s) => s.activeSection);
-  const setActiveSection = useUIStore((s) => s.setActiveSection);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen);
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
@@ -441,12 +427,6 @@ export function Sidebar() {
   const layout: Layout | undefined = layouts.find((l) => l.name === activeSection);
   if (!layout) return null;
 
-  const handleSectionClick = (target: Layout) => {
-    setActiveSection(target.name);
-    const canGet = (prefix: string) => permissions.includes(`${prefix}Get`);
-    const first = sectionLandingLink(schema, target, edition, canGet, hasPermission);
-    if (first) navigate(`/${target.name}/${first}`);
-  };
 
   // Folding to a rail is for wide screens; a phone keeps the slide-over.
   const collapsed = sidebarCollapsed && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches;
@@ -455,57 +435,7 @@ export function Sidebar() {
     return (
       <TooltipProvider delayDuration={150}>
         <aside className="fixed top-14 left-0 bottom-0 z-30 flex w-[4.5rem] flex-col border-r bg-background">
-          <nav className="flex flex-1 flex-col gap-1 overflow-y-auto py-3 [scrollbar-width:none]">
-            {layout.items.map((item) => (
-              <RailItem
-                key={'link' in item ? item.link.viewName : item.container.name}
-                item={item}
-                sectionName={layout.name}
-                currentPath={location.pathname}
-                navigate={navigate}
-                edition={edition}
-              />
-            ))}
-          </nav>
-          <div className="flex flex-col items-center gap-1 border-t py-2">
-            {layouts.length > 1 &&
-              layouts.map((target) => {
-                const isActive = target.name === activeSection;
-                return (
-                  <Tooltip key={target.name}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label={target.name}
-                        aria-current={isActive ? 'page' : undefined}
-                        onClick={() => handleSectionClick(target)}
-                        className={cn(
-                          'flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground',
-                          isActive && 'bg-card text-primary shadow-soft',
-                        )}
-                      >
-                        <LucideIcon name={target.icon} className="h-4 w-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">{target.name}</TooltipContent>
-                  </Tooltip>
-                );
-              })}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <a
-                  href={sourceDownloadUrl()}
-                  download
-                  aria-label="Source code of this version (AGPL-3.0)"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <FileCode className="h-4 w-4" />
-                </a>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <SourceLink />
-              </TooltipContent>
-            </Tooltip>
+          <div className="flex justify-center border-b py-2">
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -520,6 +450,18 @@ export function Sidebar() {
               <TooltipContent side="right">Expand sidebar</TooltipContent>
             </Tooltip>
           </div>
+          <nav className="flex flex-1 flex-col gap-1 overflow-y-auto py-3 [scrollbar-width:none]">
+            {layout.items.map((item) => (
+              <RailItem
+                key={'link' in item ? item.link.viewName : item.container.name}
+                item={item}
+                sectionName={layout.name}
+                currentPath={location.pathname}
+                navigate={navigate}
+                edition={edition}
+              />
+            ))}
+          </nav>
         </aside>
       </TooltipProvider>
     );
@@ -533,6 +475,18 @@ export function Sidebar() {
         onClick={() => setSidebarOpen(false)}
       />
       <aside className="fixed top-14 left-0 bottom-0 z-30 flex w-64 flex-col border-r bg-background">
+        <div className="flex items-center justify-between px-4 pt-3 pb-1">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{layout.name}</span>
+          <button
+            type="button"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+            onClick={toggleSidebarCollapsed}
+            className="hidden h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:flex"
+          >
+            <PanelLeftClose className="h-4 w-4" />
+          </button>
+        </div>
         <div className="flex-1 overflow-y-auto py-2 [scrollbar-width:thin]">
           <nav className="flex flex-col gap-0.5 px-2">
             {layout.items.map((item) => (
@@ -548,49 +502,6 @@ export function Sidebar() {
               />
             ))}
           </nav>
-        </div>
-
-        {layouts.length > 1 && (
-          <div className="border-t px-3 pt-3 pb-2">
-            <div className="flex gap-1 rounded-xl bg-muted p-1" role="tablist">
-              {layouts.map((target) => {
-                const isActive = target.name === activeSection;
-                return (
-                  <button
-                    key={target.name}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    aria-current={isActive ? 'page' : undefined}
-                    onClick={() => handleSectionClick(target)}
-                    className={cn(
-                      'flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground',
-                      isActive && 'bg-card text-foreground shadow-soft',
-                    )}
-                  >
-                    <LucideIcon name={target.icon} className={cn('h-4 w-4', isActive && 'text-primary')} />
-                    <span className="truncate">{target.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* INBUXA: the AGPL's offer, always on screen: the exact source of this version. */}
-        <div className="flex items-center gap-2 border-t px-3 py-2">
-          <p className="min-w-0 flex-1 text-[11px] leading-tight text-muted-foreground">
-            <SourceLink className="underline-offset-2 hover:text-foreground hover:underline" />
-          </p>
-          <button
-            type="button"
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            onClick={toggleSidebarCollapsed}
-            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:flex"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
         </div>
 
         <EnterpriseUpsell open={upsellOpen} onClose={() => setUpsellOpen(false)} />

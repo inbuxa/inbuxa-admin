@@ -26,10 +26,11 @@ import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
 import { sourceDownloadUrl } from '@/lib/sourceDownload';
 import { visibleLayouts } from '@/lib/layout';
 import { sectionLandingLink } from '@/lib/lastVisited';
+import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
 import { buildEndSessionUrl, getPostLogoutRedirectUri } from '@/services/auth/oauth';
-import { useEffect, useState } from 'react';
+import { createElement, useEffect, useState } from 'react';
 import { useAccountStore } from '@/stores/accountStore';
 import { useSchemaStore } from '@/stores/schemaStore';
 
@@ -50,6 +51,7 @@ export function TopBar() {
   const toggleTheme = useUIStore((s) => s.toggleTheme);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const setActiveSection = useUIStore((s) => s.setActiveSection);
+  const activeSection = useUIStore((s) => s.activeSection);
   const accounts = useAuthStore((s) => s.accounts);
   const activeAccountId = useAuthStore((s) => s.activeAccountId);
   const switchAccount = useAuthStore((s) => s.switchAccount);
@@ -123,6 +125,42 @@ export function TopBar() {
         </Button>
 
         <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+
+        {/* INBUXA: the three areas, one click away, where the eye already looks. */}
+        {schema && navigableLayouts.length > 1 && (
+          <TooltipProvider delayDuration={150}>
+            <div className="hidden items-center gap-0.5 rounded-xl bg-muted p-1 sm:flex" role="tablist" aria-label={t('sections', 'Sections')}>
+              {navigableLayouts.map((layout) => {
+                const isActive = layout.name === activeSection;
+                return (
+                  <Tooltip key={layout.name}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        aria-label={layout.name}
+                        onClick={() => {
+                          setActiveSection(layout.name);
+                          const canGet = (prefix: string) => hasObjectPermission(prefix, 'Get');
+                          const firstLink = sectionLandingLink(schema, layout, edition, canGet, hasPermission);
+                          if (firstLink) navigate(`/${layout.name}/${firstLink}`);
+                        }}
+                        className={cn(
+                          'flex h-8 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground',
+                          isActive && 'bg-card text-primary shadow-soft',
+                        )}
+                      >
+                        {createElement(getIcon(layout.icon), { className: 'h-4 w-4' })}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{layout.name}</TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </TooltipProvider>
+        )}
 
         <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={t('toggleTheme', 'Toggle theme')}>
           {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
