@@ -16,9 +16,20 @@ import { manualUrl } from './manual';
  * focus, and a way into the manual once there is one. `id` is the option's
  * stable help id, the key the manual links hang on.
  */
-export function HelpTip({ id, text, className }: { id?: string; text?: string | null; className?: string }) {
+export function HelpTip({
+  id,
+  text,
+  footnote,
+  className,
+}: {
+  id?: string;
+  text?: string | null;
+  /** A short line under the text, like the option's default. */
+  footnote?: string | null;
+  className?: string;
+}) {
   const { t } = useTranslation();
-  if (!text) return null;
+  if (!text && !footnote) return null;
   const more = id ? manualUrl(id) : null;
   return (
     <TooltipProvider delayDuration={150}>
@@ -42,8 +53,9 @@ export function HelpTip({ id, text, className }: { id?: string; text?: string | 
           className="max-w-xs space-y-1.5 border bg-popover px-3 py-2 text-xs leading-relaxed text-popover-foreground shadow-soft"
         >
           <div className="[&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_p]:m-0">
-            <ReactMarkdown>{text.replace(/\\n/g, '\n')}</ReactMarkdown>
+            {text && <ReactMarkdown>{text.replace(/\\n/g, '\n')}</ReactMarkdown>}
           </div>
+          {footnote && <p className="text-muted-foreground">{footnote}</p>}
           {more && (
             <a
               href={more}

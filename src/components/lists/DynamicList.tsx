@@ -8,6 +8,7 @@
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
 import { HelpPanel } from '@/help/HelpPanel';
+import { ObjectHoverCard } from '@/features/hovercards/ObjectHoverCard';
 import { iconForView } from '@/lib/viewIcon';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -270,7 +271,11 @@ function renderCellValue(
     case 'objectId': {
       const id = String(value);
       const display = getDisplayName(ft.objectName, id);
-      return display ?? id;
+      return (
+        <ObjectHoverCard objectName={ft.objectName} id={id}>
+          {display ?? id}
+        </ObjectHoverCard>
+      );
     }
 
     case 'set': {
@@ -1305,18 +1310,27 @@ export function DynamicList({ viewName }: DynamicListProps) {
                           />
                         </td>
                       )}
-                      {list.columns.map((col) => (
-                        <td key={col.name} className="px-3 py-2">
-                          {renderCellValue(
-                            item[col.name],
-                            fields[col.name],
-                            col.name,
-                            schema!,
-                            resolved.obj.objectName,
-                            getDisplayName,
-                          )}
-                        </td>
-                      ))}
+                      {list.columns.map((col, colIndex) => {
+                        const cell = renderCellValue(
+                          item[col.name],
+                          fields[col.name],
+                          col.name,
+                          schema!,
+                          resolved.obj.objectName,
+                          getDisplayName,
+                        );
+                        return (
+                          <td key={col.name} className="px-3 py-2">
+                            {colIndex === 0 && item[col.name] != null ? (
+                              <ObjectHoverCard objectName={resolved.obj.objectName} id={itemId}>
+                                {cell}
+                              </ObjectHoverCard>
+                            ) : (
+                              cell
+                            )}
+                          </td>
+                        );
+                      })}
                       {hasItemActions && <td className="px-3 py-2 text-right">{renderItemActions(item)}</td>}
                     </tr>
                   );

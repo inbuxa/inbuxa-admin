@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useBufferedValue, useResetOnChange } from '@/hooks/useBufferedValue';
 import { HelpTip } from '@/help/HelpTip';
 import { fieldHelp } from '@/help/texts';
+import { describeDefault, differsFromDefault } from '@/help/defaults';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -88,6 +89,15 @@ export function FieldWidget(props: FieldWidgetProps) {
   const { t } = useTranslation();
   const { field, formField, value, onChange, readOnly, error, schema, sieveScriptName, helpScope } = props;
   const helpId = helpScope ? `${helpScope}.${formField.name}` : undefined;
+  // INBUXA: the option's default, for its tooltip, and whether it has been changed.
+  const defaultValue = helpScope ? schema.fields[helpScope]?.defaults?.[formField.name] : undefined;
+  const defaultWords = describeDefault(field, defaultValue, schema, {
+    on: t('field.on', 'On'),
+    off: t('field.off', 'Off'),
+    none: t('field.none', 'None'),
+  });
+  const defaultNote = defaultWords ? t('field.default', 'Default: {{value}}', { value: defaultWords }) : null;
+  const changed = defaultWords !== null && differsFromDefault(value, defaultValue);
   const ft = field.type;
   const edition = useEffectiveEdition();
 
@@ -237,7 +247,15 @@ export function FieldWidget(props: FieldWidgetProps) {
             </span>
           )}
         </Label>
-        <HelpTip id={helpId} text={fieldHelp(helpId, field.description)} />
+        <HelpTip id={helpId} text={fieldHelp(helpId, field.description)} footnote={defaultNote} />
+        {changed && (
+          <span
+            className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary"
+            title={defaultNote ?? undefined}
+          >
+            {t('field.changed', 'changed')}
+          </span>
+        )}
       </div>
       {widget}
       {sieveScriptName !== undefined && ft.type === 'string' && (
