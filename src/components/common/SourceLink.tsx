@@ -14,7 +14,7 @@ import { sourceDownloadUrl } from '@/lib/sourceDownload';
 export function SourceLink({ className }: { className?: string }) {
   const { t } = useTranslation();
   return (
-    <a href={sourceDownloadUrl()} download className={className}>
+    <a href={sourceDownloadUrl()} target="_blank" rel="noopener noreferrer" className={className}>
       {t('source.download', 'Source code of this version ({{id}}), AGPL-3.0', { id: __SOURCE_ID__ })}
     </a>
   );

@@ -217,7 +217,7 @@ export function TopBar() {
             )}
 
             <DropdownMenuItem asChild>
-              <a href={sourceDownloadUrl()} download>
+              <a href={sourceDownloadUrl()} target="_blank" rel="noopener noreferrer">
                 <FileCode className="mr-2 h-4 w-4" />
                 {t('source.menu', 'Source code (AGPL-3.0)')}
               </a>
