@@ -7,9 +7,8 @@
 import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, CircleAlert } from 'lucide-react';
+import { CircleAlert } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { cn } from '@/lib/utils';
 import type { ServerFacts } from '../serverFacts';
 import { hrefFor, type DashLink } from '../links';
 
@@ -19,14 +18,14 @@ interface Phrase {
 }
 
 /**
- * The server's state in one sentence. Things that need a look come first
- * and turn it amber; otherwise it says what's there. Every phrase is a link
- * to where you'd deal with it.
+ * What needs a look, in one sentence: failed tasks, messages retrying,
+ * recipients given up on. Nothing shows while all is well. Every phrase is
+ * a link to where you'd deal with it.
  */
 export function StatusLine({ facts }: { facts: ServerFacts | null }) {
   const { t } = useTranslation();
   const { canViewObject } = usePermissions();
-  if (!facts) return <div className="h-12" aria-hidden />;
+  if (!facts) return null;
 
   const n = (key: string, count: number, one: string, other: string) =>
     t(key, { count, defaultValue_one: one, defaultValue_other: other });
@@ -49,38 +48,11 @@ export function StatusLine({ facts }: { facts: ServerFacts | null }) {
       link: { viewName: 'x:QueuedMessage', section: 'Management', label: '' },
     });
 
-  const present: Phrase[] = [];
-  if (facts.users !== undefined)
-    present.push({
-      text: n('status.people', facts.users, '{{count}} person', '{{count}} people'),
-      link: { viewName: 'x:Account/User', section: 'Management', label: '' },
-    });
-  if (facts.domains !== undefined)
-    present.push({
-      text: n('status.domains', facts.domains, '{{count}} domain', '{{count}} domains'),
-      link: { viewName: 'x:Domain', section: 'Management', label: '' },
-    });
-  if (facts.queued !== undefined)
-    present.push({
-      text: facts.queued
-        ? n('status.queued', facts.queued, '{{count}} message waiting to send', '{{count}} messages waiting to send')
-        : t('status.queueEmpty', 'nothing waiting to send'),
-      link: { viewName: 'x:QueuedMessage', section: 'Management', label: '' },
-    });
-  if (facts.blockedIps)
-    present.push({
-      text: n('status.blocked', facts.blockedIps, '{{count}} address blocked', '{{count}} addresses blocked'),
-      link: { viewName: 'x:BlockedIp', section: 'Settings', label: '' },
-    });
-
-  const needsLook = attention.length > 0;
-  const phrases = needsLook ? attention : present;
-  const visible = phrases.filter((p) => canViewObject(p.link.viewName));
+  // Quiet when all is well: the line only appears when something needs a look.
+  const visible = attention.filter((p) => canViewObject(p.link.viewName));
   if (visible.length === 0) return null;
 
-  const lead = needsLook
-    ? n('status.needsLook', attention.length, 'One thing needs a look:', '{{count}} things need a look:')
-    : t('status.allGood', 'All good:');
+  const lead = n('status.needsLook', visible.length, 'One thing needs a look:', '{{count}} things need a look:');
 
   const list: ReactNode[] = visible.map((p, i) => (
     <Fragment key={p.text}>
@@ -95,17 +67,8 @@ export function StatusLine({ facts }: { facts: ServerFacts | null }) {
   ));
 
   return (
-    <div
-      className={cn(
-        'flex items-center gap-3 rounded-2xl border px-5 py-3.5 text-[15px]',
-        needsLook ? 'border-highlight/40 bg-highlight-soft' : 'border-emerald-500/25 bg-emerald-500/5',
-      )}
-    >
-      {needsLook ? (
-        <CircleAlert className="h-5 w-5 shrink-0 text-highlight" />
-      ) : (
-        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-500" />
-      )}
+    <div className="flex items-center gap-3 rounded-2xl border border-highlight/40 bg-highlight-soft px-5 py-3.5 text-[15px]">
+      <CircleAlert className="h-5 w-5 shrink-0 text-highlight" />
       <p className="text-muted-foreground">
         <span className="font-medium text-foreground">{lead}</span> {list}.
       </p>
