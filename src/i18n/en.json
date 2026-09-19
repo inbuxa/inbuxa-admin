@@ -131,13 +131,7 @@
     "seconds": "Seconds"
   },
   "enterprise": {
-    "featureDisabled": "This feature requires an Enterprise license.",
-    "trialTitle": "Unlock Enterprise Features",
-    "trialDescription": "Get access to advanced features including multi-tenancy, AI-powered spam filtering, alerts, and more.",
-    "trialButton": "Start 30-Day Free Trial",
-    "requestTrial": "Request a free trial to unlock this feature.",
-    "ossHidden": "This feature is not available in the open-source edition.",
-    "whyNotFree": "Why is this not free?"
+    "featureDisabled": "This feature isn't available on this server."
   },
   "errorBoundary": {
     "title": "Something went wrong",
@@ -299,7 +293,7 @@
   },
   "logo": {
     "alt": "Logo",
-    "stalwartAlt": "INBUXA"
+    "inbuxaAlt": "INBUXA"
   },
   "logout": "Logout",
   "version": {
@@ -378,12 +372,15 @@
     "traceNotFound": "Trace not found",
     "valuePlaceholder": "Value..."
   },
-  "tryEnterprise": "Try Enterprise",
   "userMenu": "User menu",
   "view": {
     "couldNotResolve": "Could not resolve object",
     "failedToLoad": "Failed to load",
     "noGetResponse": "No get response",
     "objectNotFound": "Object not found"
+  },
+  "source": {
+    "download": "Source code of this version ({{id}}), AGPL-3.0",
+    "menu": "Source code (AGPL-3.0)"
   }
 }

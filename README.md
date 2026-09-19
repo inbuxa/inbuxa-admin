@@ -7,19 +7,18 @@
 The administration interface for the INBUXA mail server: every server setting,
 first-boot setup, and recovery, in the browser.
 
-It is a fork of [Stalwart WebUI](https://github.com/stalwartlabs/webui). Like
-upstream it is schema-driven. After signing in it fetches the server's schema
-and builds every form, list and menu from it, so it covers every setting the
+It is schema-driven. After signing in it fetches the server's schema and
+builds every form, list and menu from it, so it covers every setting the
 server has without hardcoding any of them.
 
 > **Status: in development, not released.**
 
-## What's different from upstream
+## Design
 
-- **One edition.** Nothing is hidden or marked as Enterprise-only. INBUXA
-  ships every feature to everybody. See the INBUXA server's `docs/spec/`.
-- **Runs anywhere, not on the mail server.** Upstream is installed onto the
-  mail server itself. INBUXA Admin is its own deployment, pointed at the server
+- **One edition.** Every feature the server has is available here, with
+  nothing held back. See the INBUXA server's `docs/spec/`.
+- **Runs anywhere, not on the mail server.** INBUXA Admin is its own
+  deployment, never installed onto the mail server. It's pointed at the server
   either at build time (`VITE_API_BASE_URL`) or at deploy time:
   `<meta name="api-base-url" content="https://mail.example.com">` in
   `index.html`. Hosted like that, it signs in as the OAuth client
@@ -41,8 +40,8 @@ npm run build
 
 ## Keeping up with upstream
 
-Upstream's history contains no Enterprise-only code, so this is an ordinary
-git fork. `upstream` is a fetch-only remote:
+The upstream codebase's history contains no code under a proprietary license,
+so this is an ordinary git fork. `upstream` is a fetch-only remote:
 
 ```bash
 git fetch upstream --tags
@@ -52,13 +51,22 @@ git merge v1.0.12        # the next release tag
 ## Versions
 
 INBUXA Admin has its own dated version (`inbuxa-version.json`), shown with the
-WebUI release it's based on: `INBUXA Admin 2026.9.18 (WebUI 1.0.11)`.
+upstream release it's based on: `INBUXA Admin 2026.9.18 (base 1.0.11)`.
 `package.json` keeps upstream's version, so upstream's bumps merge cleanly.
+
+## Source code
+
+Every build carries its own source. The interface links to it (the user menu
+and the sign-in page), and the build writes it next to the app as
+`source.tar.gz`: the exact tree the running version was built from.
 
 ## License and credits
 
 Free software under the [GNU Affero General Public License, version 3](./LICENSES/AGPL-3.0-only.txt).
-A fork of Stalwart WebUI, copyright © Stalwart Labs LLC. Upstream's files are
-dual-licensed AGPL-3.0-only or Stalwart's Enterprise License, and INBUXA takes
-them under the AGPL-3.0 only. Upstream's copyright notices are kept on every
-file. INBUXA isn't affiliated with or endorsed by Stalwart Labs.
+
+INBUXA Admin is forked from the upstream AGPL-3.0 web administration codebase
+originally developed by Stalwart Labs. Their copyright notices are kept on
+every file inherited from it, and INBUXA's own notice is added to the files it
+changes. Those files are offered upstream under the AGPL-3.0-only or a
+proprietary license. INBUXA uses them under the AGPL-3.0 only. INBUXA isn't
+affiliated with or endorsed by Stalwart Labs.

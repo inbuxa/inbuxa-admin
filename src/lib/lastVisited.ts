@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -13,7 +14,7 @@ import {
 } from '@/lib/layout';
 import type { Layout, Schema } from '@/types/schema';
 
-const STORAGE_KEY = 'stalwart-last-visited';
+const STORAGE_KEY = 'inbuxa-last-visited';
 
 function readAll(): Record<string, unknown> {
   try {

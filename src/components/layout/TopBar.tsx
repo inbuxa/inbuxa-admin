@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -7,7 +8,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import * as LucideIcons from 'lucide-react';
-const { Sun, Moon, User, LogOut, Check, Menu, Sparkles, Search } = LucideIcons;
+const { Sun, Moon, User, LogOut, Check, Menu, Search, FileCode } = LucideIcons;
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import {
@@ -22,6 +23,7 @@ import {
 import Logo from '@/components/common/Logo';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
+import { sourceDownloadUrl } from '@/lib/sourceDownload';
 import { visibleLayouts } from '@/lib/layout';
 import { sectionLandingLink } from '@/lib/lastVisited';
 import { useUIStore } from '@/stores/uiStore';
@@ -88,7 +90,7 @@ export function TopBar() {
             </Link>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {t('version.label', 'INBUXA Admin {{version}}', { version: __APP_VERSION__ })}
+            {t('version.label', 'INBUXA Admin {{version}}', { version: __APP_VERSION__ })} · {__SOURCE_ID__}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -176,15 +178,13 @@ export function TopBar() {
               </>
             )}
 
-            {edition !== 'enterprise' && (
-              <>
-                <DropdownMenuItem onClick={() => setUpsellOpen(true)}>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {t('tryEnterprise', 'Try Enterprise')}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
+            <DropdownMenuItem asChild>
+              <a href={sourceDownloadUrl()} download>
+                <FileCode className="mr-2 h-4 w-4" />
+                {t('source.menu', 'Source code (AGPL-3.0)')}
+              </a>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
 
             <DropdownMenuItem
               onClick={() => {

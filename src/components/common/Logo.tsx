@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -17,7 +18,7 @@ export function DefaultLogo() {
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="165 35 616 130"
-      aria-label={t('logo.stalwartAlt', 'INBUXA')}
+      aria-label={t('logo.inbuxaAlt', 'INBUXA')}
       className="h-7 w-auto max-w-[320px]"
     >
       <image x="165.85" y="35.00" width="109.39" height="130.00" href={inbuxaMark} />

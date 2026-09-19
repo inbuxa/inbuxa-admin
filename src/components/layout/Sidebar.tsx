@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -11,6 +12,7 @@ const { ChevronDown, Lock } = LucideIcons;
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
+import { SourceLink } from '@/components/common/SourceLink';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useUIStore } from '@/stores/uiStore';
@@ -398,6 +400,11 @@ export function Sidebar() {
             </div>
           </TooltipProvider>
         )}
+
+        {/* INBUXA: the AGPL's offer, always on screen: the exact source of this version. */}
+        <div className="border-t px-3 py-2 text-center text-[11px] leading-tight text-muted-foreground">
+          <SourceLink className="underline-offset-2 hover:text-foreground hover:underline" />
+        </div>
 
         <EnterpriseUpsell open={upsellOpen} onClose={() => setUpsellOpen(false)} />
       </aside>

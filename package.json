@@ -2,7 +2,7 @@
   "name": "inbuxa-admin",
   "private": true,
   "version": "1.0.11",
-  "description": "INBUXA Admin, a fork of Stalwart WebUI",
+  "description": "INBUXA Admin, the administration interface for the INBUXA mail server",
   "type": "module",
   "scripts": {
     "dev": "vite",

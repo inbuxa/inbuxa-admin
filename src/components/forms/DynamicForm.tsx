@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -826,7 +827,7 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
                           <div className="opacity-60">{widget}</div>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>{t('enterprise.featureDisabled', 'This feature requires an Enterprise license.')}</p>
+                          <p>{t('enterprise.featureDisabled', 'This feature isn\'t available on this server.')}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>

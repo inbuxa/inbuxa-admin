@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -11,7 +12,7 @@ import i18n from '@/i18n';
 
 const SCOPES = import.meta.env.VITE_OAUTH_SCOPES as string | undefined;
 
-const SESSION_PREFIX = 'stalwart-oauth-';
+const SESSION_PREFIX = 'inbuxa-oauth-';
 
 interface DiscoveryResponse {
   authorization_endpoint: string;

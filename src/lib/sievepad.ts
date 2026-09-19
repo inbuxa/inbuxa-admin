@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -10,7 +11,7 @@ const SIEVEPAD_FORMAT_VERSION = 1;
 const SIEVEPAD_MAX_NAME_LENGTH = 80;
 const SIEVEPAD_MAIN_SCRIPT = 'main';
 const BASE64_CHUNK_SIZE = 0x8000;
-const WARNING_DISMISSED_KEY = 'stalwart-sievepad-warning-dismissed';
+const WARNING_DISMISSED_KEY = 'inbuxa-sievepad-warning-dismissed';
 
 const SIEVE_SCRIPT_FIELDS: Record<string, string> = {
   'x:SieveSystemScript': 'contents',

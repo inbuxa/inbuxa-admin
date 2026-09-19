@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -14,6 +15,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { startAuthFlow } from '@/services/auth/oauth';
+import { SourceLink } from '@/components/common/SourceLink';
 
 /**
  * INBUXA: straight to the server's own sign-in page, which asks for the
@@ -72,6 +74,9 @@ export default function LoginPage() {
               </>
             )}
           </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            <SourceLink className="underline underline-offset-2 hover:text-foreground" />
+          </p>
         </CardContent>
       </Card>
     </div>

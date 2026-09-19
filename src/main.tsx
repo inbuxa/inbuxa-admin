@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -20,7 +21,7 @@ import { loadLogoOnce } from './lib/logoCache';
 
 (() => {
   try {
-    const persisted = localStorage.getItem('stalwart-ui');
+    const persisted = localStorage.getItem('inbuxa-ui');
     if (persisted) {
       const parsed = JSON.parse(persisted);
       const theme = parsed?.state?.theme;

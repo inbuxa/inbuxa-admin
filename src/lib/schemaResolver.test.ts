@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -924,7 +925,7 @@ const structSchema: Schema = {
         allowInvalidCerts: { description: '', type: { type: 'boolean' }, update: 'mutable' },
       },
       defaults: {
-        bucket: 'stalwart',
+        bucket: 'mail',
       },
     },
   },
@@ -959,7 +960,7 @@ describe('buildNewObjectValue', () => {
   it('seeds the first variant with its @type, defaults and booleans', () => {
     expect(buildNewObjectValue(structSchema, 'x:Store')).toEqual({
       '@type': 'S3',
-      bucket: 'stalwart',
+      bucket: 'mail',
       allowInvalidCerts: false,
     });
   });
