@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -32,7 +33,11 @@ export function getAccountId(objectType: string): string {
   return activeAccountId;
 }
 
-export async function jmapRequest(methodCalls: JmapMethodCall[], signal?: AbortSignal): Promise<JmapMethodResponse[]> {
+export async function jmapRequest(
+  methodCalls: JmapMethodCall[],
+  signal?: AbortSignal,
+  extraUsing: string[] = [],
+): Promise<JmapMethodResponse[]> {
   const { apiUrl } = useAuthStore.getState();
   let path = apiUrl || '/jmap';
   if (path.startsWith('http://') || path.startsWith('https://')) {
@@ -48,7 +53,7 @@ export async function jmapRequest(methodCalls: JmapMethodCall[], signal?: AbortS
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      using: JMAP_USING,
+      using: [...JMAP_USING, ...extraUsing],
       methodCalls,
     }),
     signal,

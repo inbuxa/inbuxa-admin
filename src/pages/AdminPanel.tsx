@@ -13,6 +13,7 @@ import { useSchemaStore } from '@/stores/schemaStore';
 import { useAccountStore } from '@/stores/accountStore';
 import { useUIStore } from '@/stores/uiStore';
 import { fetchSession, fetchSchema, fetchAccountInfo } from '@/services/jmap/client';
+import { loadAccountTheme, setAccountSettingsTarget } from '@/lib/accountSettings';
 import { setLocale } from '@/i18n';
 import { TopBar } from '@/components/layout/TopBar';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -144,6 +145,11 @@ export default function AdminPanel() {
         if (cancelled) return;
         setSession(accounts, primaryAccountId, apiUrl, maxObjectsInGet, maxObjectsInSet);
         useAuthStore.getState().setUsername(typeof session.username === 'string' ? session.username : null);
+        // INBUXA: the theme lives with the account, shared with the webmail.
+        setAccountSettingsTarget(session);
+        void loadAccountTheme().then((stored) => {
+          if (stored && !cancelled) useUIStore.getState().applyAccountTheme(stored.palette, stored.mode);
+        });
 
         const [schemaData, accountData] = await Promise.all([fetchSchema(), fetchAccountInfo()]);
 

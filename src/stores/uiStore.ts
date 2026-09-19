@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+import { queueAccountTheme } from '@/lib/accountSettings';
 import { applyPalette, DEFAULT_PALETTE, isPaletteId, type PaletteId } from '@/lib/palettes';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -23,6 +24,8 @@ interface UIState {
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
   setPalette: (palette: PaletteId) => void;
+  /** INBUXA: take the theme stored with the account, without writing it back. */
+  applyAccountTheme: (palette: PaletteId | null, mode: 'system' | 'light' | 'dark' | null) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebarCollapsed: () => void;
@@ -51,11 +54,13 @@ export const useUIStore = create<UIState>()(
         const next = get().theme === 'light' ? 'dark' : 'light';
         applyThemeClass(next);
         set({ theme: next });
+        queueAccountTheme(get().palette, next, next);
       },
 
       setTheme: (theme) => {
         applyThemeClass(theme);
         set({ theme });
+        queueAccountTheme(get().palette, theme, theme);
       },
 
       toggleSidebar: () => {
@@ -69,6 +74,22 @@ export const useUIStore = create<UIState>()(
       setPalette: (palette) => {
         applyPalette(palette);
         set({ palette });
+        queueAccountTheme(palette, null, get().theme);
+      },
+
+      applyAccountTheme: (palette, mode) => {
+        const next: Partial<UIState> = {};
+        if (palette) {
+          applyPalette(palette);
+          next.palette = palette;
+        }
+        if (mode) {
+          const theme: Theme =
+            mode === 'system' ? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode;
+          applyThemeClass(theme);
+          next.theme = theme;
+        }
+        set(next);
       },
 
       toggleSidebarCollapsed: () => {
