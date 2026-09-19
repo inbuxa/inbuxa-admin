@@ -143,6 +143,7 @@ export default function AdminPanel() {
 
         if (cancelled) return;
         setSession(accounts, primaryAccountId, apiUrl, maxObjectsInGet, maxObjectsInSet);
+        useAuthStore.getState().setUsername(typeof session.username === 'string' ? session.username : null);
 
         const [schemaData, accountData] = await Promise.all([fetchSchema(), fetchAccountInfo()]);
 

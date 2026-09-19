@@ -389,6 +389,7 @@
     "morning": "Good morning",
     "afternoon": "Good afternoon",
     "evening": "Good evening",
-    "subtitle": "Here's how your mail server is doing."
+    "subtitle": "Here's how your mail server is doing.",
+    "signedInAs": "Signed in as {{username}}"
   }
 }

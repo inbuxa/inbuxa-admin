@@ -26,6 +26,8 @@ interface AuthState {
   apiUrl: string | null;
   maxObjectsInGet: number;
   maxObjectsInSet: number;
+  /** INBUXA: who is signed in, from the JMAP session (`username`). */
+  username: string | null;
 
   setTokens: (
     access: string,
@@ -42,6 +44,7 @@ interface AuthState {
     maxObjectsInSet?: number,
   ) => void;
   switchAccount: (accountId: string) => void;
+  setUsername: (username: string | null) => void;
   logout: () => void;
   isAuthenticated: () => boolean;
   isTokenExpiringSoon: () => boolean;
@@ -58,6 +61,11 @@ export const useAuthStore = create<AuthState>()(
       accounts: {},
       primaryAccountId: null,
       activeAccountId: null,
+      username: null,
+
+      setUsername: (username) => {
+        set({ username });
+      },
       apiUrl: null,
       maxObjectsInGet: 500,
       maxObjectsInSet: 500,
@@ -103,6 +111,7 @@ export const useAuthStore = create<AuthState>()(
           primaryAccountId: null,
           activeAccountId: null,
           apiUrl: null,
+          username: null,
         });
       },
 
