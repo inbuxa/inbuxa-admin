@@ -57,6 +57,7 @@ import { SECRET_MASK } from '@/lib/jmapUtils';
 import { toast } from '@/hooks/use-toast';
 import { logFormChange } from '@/lib/debug';
 import { FieldWidget } from '@/components/forms/FieldWidget';
+import { DnsConnectCard } from '@/features/dns/DnsConnectCard';
 import { isSieveScriptField } from '@/lib/sievepad';
 
 import type { Field, Fields, Form, FormField, Schema } from '@/types/schema';
@@ -777,6 +778,17 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
           )}
           <CardContent className={section.title ? '' : 'pt-6'}>
             <div className="space-y-6">
+              {resolved.obj.objectName === 'x:Domain' &&
+                objectId &&
+                !readOnly &&
+                section.fields.some((sf) => sf.formField.name === 'dnsManagement') && (
+                  <DnsConnectCard
+                    domainId={objectId}
+                    automatic={
+                      (originalData.dnsManagement as { '@type'?: string } | undefined)?.['@type'] === 'Automatic'
+                    }
+                  />
+                )}
               {section.fields.map((sf) => {
                 const { formField, field, visible, enterpriseDisabled } = sf;
                 if (!visible) return null;
@@ -833,7 +845,7 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
                           <div className="opacity-60">{widget}</div>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>{t('enterprise.featureDisabled', 'This feature isn\'t available on this server.')}</p>
+                          <p>{t('enterprise.featureDisabled', "This feature isn't available on this server.")}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>

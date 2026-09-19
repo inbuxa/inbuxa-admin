@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -35,6 +36,10 @@ const TraceDetailView = lazyFeature(
   () => import('@/features/tracing/components/TraceDetailView'),
   (m) => m.TraceDetailView,
 );
+const ConnectDnsPage = lazyFeature(
+  () => import('@/features/dns/ConnectDnsPage'),
+  (m) => m.ConnectDnsPage,
+);
 const ActionPage = lazyFeature(
   () => import('@/features/actions/ActionPage'),
   (m) => m.ActionPage,
@@ -65,6 +70,19 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
   if (viewName.startsWith('Dashboard/')) {
     const dashboardId = viewName.slice('Dashboard/'.length);
     return <DashboardView dashboardId={dashboardId} section={section ?? ''} />;
+  }
+
+  // INBUXA: guided jobs. Always reached by choosing "Guide me", never by default.
+  if (viewName.startsWith('Wizard/')) {
+    const [, wizard, param] = viewName.split('/');
+    if (wizard === 'dns' && param) {
+      return <ConnectDnsPage domainId={param} />;
+    }
+    return (
+      <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
+        Unknown guide: {wizard}
+      </div>
+    );
   }
 
   if (viewName.startsWith('CustomComponent/')) {

@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -64,6 +65,11 @@ function checkSpecialLink(
 
   if (viewName.startsWith('CustomComponent/')) {
     return { visible: true, enterprise: false };
+  }
+
+  // INBUXA: guided jobs are open to whoever may manage what they change.
+  if (viewName.startsWith('Wizard/dns/')) {
+    return { visible: canGet ? canGet('sysDomain') : true, enterprise: false };
   }
 
   return null;

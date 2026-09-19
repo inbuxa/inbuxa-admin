@@ -93,6 +93,7 @@ export default function AdminPanel() {
   const pageTitle = useMemo(() => {
     if (!section) return t('dashboard.title', 'Dashboard');
     if (!viewName) return section;
+    if (viewName.startsWith('Wizard/dns/')) return `${t('dnsWizard.tabTitle', 'Publish DNS')} · ${section}`;
     let label: string | undefined;
     for (const entry of searchIndex) {
       if (entry.type !== 'link' || entry.viewName !== viewName) continue;
