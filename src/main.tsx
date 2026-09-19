@@ -27,6 +27,11 @@ import { loadLogoOnce } from './lib/logoCache';
     if (persisted) {
       const parsed = JSON.parse(persisted);
       const theme = parsed?.state?.theme;
+      // INBUXA: the palette too, before the first paint, so it doesn't flash.
+      const palette = parsed?.state?.palette;
+      if (typeof palette === 'string' && palette !== 'ihasmail' && /^[a-z-]+$/.test(palette)) {
+        document.documentElement.dataset.palette = palette;
+      }
       if (theme === 'dark' || theme === 'light') {
         document.documentElement.classList.toggle('dark', theme === 'dark');
         return;

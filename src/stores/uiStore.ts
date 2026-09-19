@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
 
+import { applyPalette, DEFAULT_PALETTE, isPaletteId, type PaletteId } from '@/lib/palettes';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -12,6 +13,8 @@ type Theme = 'light' | 'dark';
 
 interface UIState {
   theme: Theme;
+  /** INBUXA: the color palette, the same set INBUXA webmail offers. */
+  palette: PaletteId;
   sidebarOpen: boolean;
   /** INBUXA: the sidebar folded to a rail of icon tiles, on wide screens. */
   sidebarCollapsed: boolean;
@@ -19,6 +22,7 @@ interface UIState {
 
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
+  setPalette: (palette: PaletteId) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebarCollapsed: () => void;
@@ -40,6 +44,7 @@ export const useUIStore = create<UIState>()(
         typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
       sidebarOpen: typeof window !== 'undefined' ? (window.matchMedia?.('(min-width: 768px)').matches ?? true) : true,
       sidebarCollapsed: false,
+      palette: DEFAULT_PALETTE,
       activeSection: '',
 
       toggleTheme: () => {
@@ -61,6 +66,11 @@ export const useUIStore = create<UIState>()(
         set({ sidebarOpen: open });
       },
 
+      setPalette: (palette) => {
+        applyPalette(palette);
+        set({ palette });
+      },
+
       toggleSidebarCollapsed: () => {
         set({ sidebarCollapsed: !get().sidebarCollapsed });
       },
@@ -73,12 +83,14 @@ export const useUIStore = create<UIState>()(
       name: 'inbuxa-ui',
       partialize: (state) => ({
         theme: state.theme,
+        palette: state.palette,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
       onRehydrateStorage: () => {
         return (state) => {
           if (state) {
             applyThemeClass(state.theme);
+            applyPalette(isPaletteId(state.palette) ? state.palette : DEFAULT_PALETTE);
           }
         };
       },

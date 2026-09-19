@@ -8,7 +8,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import * as LucideIcons from 'lucide-react';
-const { Sun, Moon, User, LogOut, Check, Menu, Search, FileCode } = LucideIcons;
+const { Sun, Moon, User, LogOut, Check, Menu, Search, FileCode, Palette } = LucideIcons;
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import {
@@ -17,9 +17,15 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { isPaletteId, PALETTES } from '@/lib/palettes';
 import Logo from '@/components/common/Logo';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
@@ -49,6 +55,8 @@ export function TopBar() {
   const navigate = useNavigate();
   const theme = useUIStore((s) => s.theme);
   const toggleTheme = useUIStore((s) => s.toggleTheme);
+  const palette = useUIStore((s) => s.palette);
+  const setPalette = useUIStore((s) => s.setPalette);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const setActiveSection = useUIStore((s) => s.setActiveSection);
   const activeSection = useUIStore((s) => s.activeSection);
@@ -215,6 +223,31 @@ export function TopBar() {
                 <DropdownMenuSeparator />
               </>
             )}
+
+            {/* INBUXA: the same palettes as INBUXA webmail. */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Palette className="mr-2 h-4 w-4" />
+                {t('theme.menu', 'Theme')}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-52">
+                <DropdownMenuRadioGroup value={palette} onValueChange={(v) => isPaletteId(v) && setPalette(v)}>
+                  {PALETTES.map((p) => (
+                    <DropdownMenuRadioItem key={p.id} value={p.id} className="gap-2">
+                      <span
+                        aria-hidden="true"
+                        className="h-3.5 w-3.5 shrink-0 rounded-full ring-1 ring-black/10 dark:ring-white/15"
+                        style={{ background: theme === 'dark' ? p.swatch[1] : p.swatch[0] }}
+                      />
+                      <span className="notranslate" translate="no">
+                        {p.id === 'default' ? t('theme.classic', 'Classic') : p.name}
+                      </span>
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
 
             <DropdownMenuItem asChild>
               <a href={sourceDownloadUrl()} target="_blank" rel="noopener noreferrer">
