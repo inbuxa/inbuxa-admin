@@ -7,7 +7,10 @@
 
 import { IconTile } from '@/components/common/IconTile';
 import { useMemo } from 'react';
-import { Info } from 'lucide-react';
+import { ArrowUpRight, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import { hrefFor, useDashLink } from '../links';
 import { LineChart, Line } from 'recharts';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -22,20 +25,27 @@ interface StatCardProps {
   card: CardSchema;
   historySamples: Metric[];
   historyWindow: { from: Date; to: Date };
+  /** INBUXA: a value counted from the server's objects, used when live metrics aren't available. */
+  fallback?: number;
 }
 
-export function StatCard({ card, historySamples, historyWindow }: StatCardProps) {
+export function StatCard({ card, historySamples, historyWindow, fallback }: StatCardProps) {
   const liveSnapshot = useLiveMetricsStore((s) => s.snapshot);
+  const liveStatus = useLiveMetricsStore((s) => s.status);
+  const link = useDashLink(card.metrics);
 
   const value = useMemo(() => {
+    if (card.source === 'live' && fallback !== undefined && liveStatus !== 'open') return fallback;
     if (card.source === 'live') {
       const liveSamples = card.metrics.map((id) => liveSnapshot.get(id)).filter((m): m is Metric => m !== undefined);
       return cardValue(card, liveSamples);
     }
     return cardValue(card, historySamples);
-  }, [card, liveSnapshot, historySamples]);
+  }, [card, liveSnapshot, historySamples, fallback, liveStatus]);
 
-  const formattedValue = formatValue(value, card.format);
+  // INBUXA: a live number the server can't report yet reads as unknown, not as zero.
+  const unknown = card.source === 'live' && liveStatus !== 'open' && fallback === undefined;
+  const formattedValue = unknown ? '—' : formatValue(value, card.format);
 
   const { from, to } = historyWindow;
 
@@ -52,12 +62,21 @@ export function StatCard({ card, historySamples, historyWindow }: StatCardProps)
     return computeDelta(card, historySamples, from, to);
   }, [card, historySamples, from, to]);
 
-  return (
-    <Card className="transition-shadow hover:shadow-md">
+  const body = (
+    <Card
+      className={cn(
+        'h-full transition-all hover:shadow-md',
+        link &&
+          'group-hover:-translate-y-0.5 group-hover:border-primary/50 group-focus-visible:ring-2 group-focus-visible:ring-ring',
+      )}
+    >
       <CardContent className="p-5">
         <div className="flex items-center gap-2">
           <IconTile name={card.icon} size="sm" />
           <span className="text-sm font-medium text-muted-foreground">{card.title}</span>
+          {link && (
+            <ArrowUpRight className="ml-auto h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-primary" />
+          )}
           {card.description && (
             <TooltipProvider>
               <Tooltip>
@@ -101,5 +120,17 @@ export function StatCard({ card, historySamples, historyWindow }: StatCardProps)
         )}
       </CardContent>
     </Card>
+  );
+
+  return link ? (
+    <Link
+      to={hrefFor(link)}
+      className="group block focus-visible:outline-none"
+      aria-label={`${card.title}: ${link.label}`}
+    >
+      {body}
+    </Link>
+  ) : (
+    body
   );
 }

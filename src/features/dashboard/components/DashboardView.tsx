@@ -20,6 +20,18 @@ import { collectHistoryMetricIds, collectLiveMetricIds, periodKey, periodWindow,
 import { StatCard } from './StatCard';
 import { DashboardChart } from './DashboardChart';
 import { PeriodSelector } from './PeriodSelector';
+import { StatusLine } from './StatusLine';
+import { StorageTreemap } from './StorageTreemap';
+import { QueueWaiting } from './QueueWaiting';
+import { WeeklyHeatmap } from './WeeklyHeatmap';
+import { useServerFacts, type ServerFacts } from '../serverFacts';
+
+/** INBUXA: live-metric cards the server's own objects can stand in for. */
+const FALLBACKS: Record<string, keyof ServerFacts> = {
+  'user.count': 'users',
+  'domain.count': 'domains',
+  'queue.count': 'queued',
+};
 
 interface DashboardViewProps {
   dashboardId: string;
@@ -39,6 +51,7 @@ export function DashboardView({ dashboardId, section }: DashboardViewProps) {
   const unsubscribeLive = useLiveMetricsStore((s) => s.unsubscribe);
   const liveStatus = useLiveMetricsStore((s) => s.status);
   const liveError = useLiveMetricsStore((s) => s.error);
+  const { facts } = useServerFacts();
 
   const dashboards = useMemo<Dashboard[]>(() => schema?.dashboards ?? [], [schema]);
   const dashboard = dashboards.find((d) => d.id === dashboardId);
@@ -107,6 +120,7 @@ export function DashboardView({ dashboardId, section }: DashboardViewProps) {
   return (
     <div className="space-y-6">
       <Greeting />
+      <StatusLine facts={facts} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {dashboards.length > 1 && (
           <Tabs value={dashboardId} onValueChange={(id) => navigate(`/${section}/Dashboard/${id}`)}>
@@ -129,7 +143,10 @@ export function DashboardView({ dashboardId, section }: DashboardViewProps) {
           <AlertCircle className="h-4 w-4 shrink-0 text-highlight" />
           <span>
             {/404/.test(liveError)
-              ? t('dashboard.liveUnavailable', "Live numbers aren't available on this server yet. The rest of the dashboard still works.")
+              ? t(
+                  'dashboard.liveUnavailable',
+                  "Live numbers aren't available on this server yet. The rest of the dashboard still works.",
+                )
               : liveError}
           </span>
         </div>
@@ -143,10 +160,24 @@ export function DashboardView({ dashboardId, section }: DashboardViewProps) {
               card={card}
               historySamples={historySamples}
               historyWindow={historyWindow}
+              fallback={
+                card.metrics.length === 1 && FALLBACKS[card.metrics[0]]
+                  ? (facts?.[FALLBACKS[card.metrics[0]]] as number | undefined)
+                  : undefined
+              }
             />
           ))}
         </div>
       )}
+
+      {dashboard.id === 'overview' && facts && (facts.storage || facts.waiting) && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {facts.waiting && <QueueWaiting waiting={facts.waiting} />}
+          {facts.storage && <StorageTreemap storage={facts.storage} />}
+        </div>
+      )}
+
+      {dashboard.id === 'overview' && <WeeklyHeatmap samples={historySamples} />}
 
       {dashboard.charts && dashboard.charts.length > 0 && (
         <div className="space-y-4">

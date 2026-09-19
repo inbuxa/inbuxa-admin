@@ -94,6 +94,10 @@ export default function AdminPanel() {
     if (!section) return t('dashboard.title', 'Dashboard');
     if (!viewName) return section;
     if (viewName.startsWith('Wizard/dns/')) return `${t('dnsWizard.tabTitle', 'Publish DNS')} · ${section}`;
+    if (viewName.startsWith('Dashboard/')) {
+      const board = schema?.dashboards?.find((d) => d.id === viewName.slice('Dashboard/'.length));
+      return `${board?.label ?? t('dashboard.title', 'Dashboard')} · ${t('dashboard.title', 'Dashboard')}`;
+    }
     let label: string | undefined;
     for (const entry of searchIndex) {
       if (entry.type !== 'link' || entry.viewName !== viewName) continue;
@@ -106,7 +110,7 @@ export default function AdminPanel() {
     const name = label ?? friendlyName(viewName);
     const title = id === 'new' ? t('form.createTitle', 'Create {{name}}', { name }) : name;
     return `${title} · ${section}`;
-  }, [section, viewName, id, searchIndex, t]);
+  }, [section, viewName, id, searchIndex, schema, t]);
 
   useDocumentTitle(pageTitle);
 

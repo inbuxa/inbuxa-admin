@@ -1,5 +1,6 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
  */
@@ -51,6 +52,7 @@ function ChartSizedContainer({
   );
 }
 import { Info } from 'lucide-react';
+import { GoLink } from './GoLink';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { getChartColor } from '@/components/ui/chart';
@@ -242,6 +244,7 @@ export function DashboardChart({ chart, historySamples, historyWindow, period }:
               </UiTooltip>
             </TooltipProvider>
           )}
+          <GoLink metrics={chart.series.flatMap((x) => x.metrics)} />
         </div>
       </CardHeader>
       <CardContent>

@@ -27,9 +27,13 @@ function useFullName(username: string | null): string | null {
     if (!username) return;
     let live = true;
     const localPart = username.split('@')[0];
-    jmapQueryAndGet('x:Account', getAccountId('x:Account'), { filter: { name: localPart } }, ['description', 'emailAddress'])
+    jmapQueryAndGet('x:Account', getAccountId('x:Account'), { filter: { name: localPart } }, [
+      'description',
+      'emailAddress',
+    ])
       .then((responses) => {
-        const list = (responses[1]?.[1] as { list?: { description?: string | null; emailAddress?: string }[] }).list ?? [];
+        const list =
+          (responses[1]?.[1] as { list?: { description?: string | null; emailAddress?: string }[] }).list ?? [];
         const own = list.find((a) => a.emailAddress?.toLowerCase() === username.toLowerCase());
         const name = own?.description?.trim();
         if (live && name) setFullName(name);
