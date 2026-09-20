@@ -5,17 +5,17 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { sourceDownloadUrl } from '@/lib/sourceDownload';
+import { SOURCE_URL } from '@/lib/sourceDownload';
 
 /**
- * The AGPL's offer to everyone using this interface over the network: the
- * exact source of the version running, with that version named.
+ * The AGPL's offer to everyone using this interface over the network: where
+ * the source is, with the running version named beside it.
  */
 export function SourceLink({ className }: { className?: string }) {
   const { t } = useTranslation();
   return (
-    <a href={sourceDownloadUrl()} target="_blank" rel="noopener noreferrer" className={className}>
-      {t('source.download', 'Source code of this version ({{id}}), AGPL-3.0', { id: __SOURCE_ID__ })}
+    <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer" className={className}>
+      {t('source.download', 'Source code ({{version}}), AGPL-3.0', { version: __APP_VERSION__ })}
     </a>
   );
 }
