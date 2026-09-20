@@ -31,7 +31,7 @@ import { isPaletteId, PALETTES } from '@/lib/palettes';
 import Logo from '@/components/common/Logo';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
-import { sourceDownloadUrl } from '@/lib/sourceDownload';
+import { SOURCE_URL } from '@/lib/sourceDownload';
 import { visibleLayouts } from '@/lib/layout';
 import { sectionLandingLink } from '@/lib/lastVisited';
 import { cn } from '@/lib/utils';
@@ -104,7 +104,7 @@ export function TopBar() {
             </Link>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {t('version.label', 'INBUXA Admin {{version}}', { version: __APP_VERSION__ })} · {__SOURCE_ID__}
+            {t('version.label', 'INBUXA Admin {{version}}', { version: __APP_VERSION__ })}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -286,7 +286,7 @@ export function TopBar() {
             <DropdownMenuSeparator />
 
             <DropdownMenuItem asChild>
-              <a href={sourceDownloadUrl()} target="_blank" rel="noopener noreferrer">
+              <a href={SOURCE_URL} target="_blank" rel="noopener noreferrer">
                 <FileCode className="mr-2 h-4 w-4" />
                 {t('source.menu', 'Source code (AGPL-3.0)')}
               </a>
