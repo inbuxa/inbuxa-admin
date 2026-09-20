@@ -11,8 +11,6 @@ It is schema-driven. After signing in it fetches the server's schema and
 builds every form, list and menu from it, so it covers every setting the
 server has without hardcoding any of them.
 
-> **Status: in development, not released.**
-
 ## Design
 
 - **One edition.** Every feature the server has is available here, with
