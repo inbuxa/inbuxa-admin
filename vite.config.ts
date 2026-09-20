@@ -1,6 +1,7 @@
-/// <reference types="vitest/config" />
-import { configDefaults } from 'vitest/config'
-import { defineConfig } from 'vite'
+// defineConfig comes from vitest/config rather than vite, which is what puts
+// the `test` key below in scope. It replaces a triple-slash reference that did
+// the same job and that eslint rejects.
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
