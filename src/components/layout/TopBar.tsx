@@ -8,7 +8,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import * as LucideIcons from 'lucide-react';
-const { Sun, Moon, User, LogOut, Check, Menu, Search, FileCode, Palette } = LucideIcons;
+const { Sun, Moon, User, LogOut, Check, Menu, Search, FileCode, Palette, LayoutTemplate } = LucideIcons;
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/common/CommandPalette';
 import {
@@ -33,7 +33,7 @@ import { sourceDownloadUrl } from '@/lib/sourceDownload';
 import { visibleLayouts } from '@/lib/layout';
 import { sectionLandingLink } from '@/lib/lastVisited';
 import { cn } from '@/lib/utils';
-import { useUIStore } from '@/stores/uiStore';
+import { isAdminLayout, useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
 import { buildEndSessionUrl, getPostLogoutRedirectUri } from '@/services/auth/oauth';
 import { createElement, useEffect, useState } from 'react';
@@ -57,6 +57,8 @@ export function TopBar() {
   const toggleTheme = useUIStore((s) => s.toggleTheme);
   const palette = useUIStore((s) => s.palette);
   const setPalette = useUIStore((s) => s.setPalette);
+  const adminLayout = useUIStore((s) => s.adminLayout);
+  const setAdminLayout = useUIStore((s) => s.setAdminLayout);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const setActiveSection = useUIStore((s) => s.setActiveSection);
   const activeSection = useUIStore((s) => s.activeSection);
@@ -159,11 +161,12 @@ export function TopBar() {
                           if (firstLink) navigate(`/${layout.name}/${firstLink}`);
                         }}
                         className={cn(
-                          'flex h-8 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground',
+                          'flex h-8 items-center justify-center gap-1.5 rounded-lg px-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground lg:px-3',
                           isActive && 'bg-card text-primary shadow-soft',
                         )}
                       >
-                        {createElement(getIcon(layout.icon), { className: 'h-4 w-4' })}
+                        {createElement(getIcon(layout.icon), { className: 'h-4 w-4 shrink-0' })}
+                        <span className="hidden lg:inline">{layout.name}</span>
                       </button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">{layout.name}</TooltipContent>
@@ -227,6 +230,33 @@ export function TopBar() {
                 <DropdownMenuSeparator />
               </>
             )}
+
+            {/* INBUXA: the shell is the reader's choice, the way the palette is. */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <LayoutTemplate className="mr-2 h-4 w-4" />
+                {t('nav.layoutMenu', 'Layout')}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-56">
+                <DropdownMenuRadioGroup
+                  value={adminLayout}
+                  onValueChange={(v) => isAdminLayout(v) && setAdminLayout(v)}
+                >
+                  <DropdownMenuRadioItem value="modern" className="gap-2">
+                    {t('nav.layoutModern', 'Modern')}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="legacy" className="gap-2">
+                    {t('nav.layoutLegacy', 'Legacy')}
+                  </DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <p className="px-2 py-1.5 text-[11px] leading-snug text-muted-foreground">
+                  {adminLayout === 'modern'
+                    ? t('nav.layoutModernHint', 'Sections across the top; the page gets the full width.')
+                    : t('nav.layoutLegacyHint', 'The sidebar, as the old web UI had it.')}
+                </p>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
 
             {/* INBUXA: the same palettes as INBUXA webmail. */}
             <DropdownMenuSub>

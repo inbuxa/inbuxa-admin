@@ -18,6 +18,7 @@ import { loadAccountTheme, setAccountSettingsTarget } from '@/lib/accountSetting
 import { setLocale } from '@/i18n';
 import { TopBar } from '@/components/layout/TopBar';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { SectionNav } from '@/components/layout/SectionNav';
 import { MainContent } from '@/components/layout/MainContent';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
@@ -31,6 +32,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { friendlyName } from '@/hooks/useGlobalSearch';
 import { rememberLastVisited, sectionLandingLink } from '@/lib/lastVisited';
+import { fitsSectionNav } from '@/lib/navTree';
+import { cn } from '@/lib/utils';
 
 const BootstrapWizard = lazy(() =>
   import('@/components/bootstrap/BootstrapWizard').then((m) => ({ default: m.BootstrapWizard })),
@@ -83,6 +86,8 @@ export default function AdminPanel() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeAccountId = useAuthStore((s) => s.activeAccountId);
   const setActiveSection = useUIStore((s) => s.setActiveSection);
+  const activeSection = useUIStore((s) => s.activeSection);
+  const adminLayout = useUIStore((s) => s.adminLayout);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
   const { canViewObject } = usePermissions();
@@ -188,6 +193,22 @@ export default function AdminPanel() {
     };
   }, [isSchemaLoaded, setSession, setSchema, setAccountInfo, t]);
 
+  /**
+   * INBUXA: which shell draws the navigation. The modern one puts the layout's
+   * items in a bar under the top bar and drops the sidebar; a layout with too
+   * many top-level groups for a menu bar keeps the sidebar whatever the reader
+   * chose, so Settings never turns into nineteen dropdowns.
+   */
+  const currentLayout = useMemo(() => {
+    if (!schema) return null;
+    const canGet = (prefix: string) => permissions.includes(`${prefix}Get`);
+    const hasPerm = (perm: string) => permissions.includes(perm);
+    const name = (section ?? activeSection ?? '').toLowerCase();
+    return visibleLayouts(schema, edition, canGet, hasPerm).find((l) => l.name.toLowerCase() === name) ?? null;
+  }, [schema, edition, permissions, section, activeSection]);
+
+  const useSectionNav = adminLayout === 'modern' && currentLayout !== null && fitsSectionNav(currentLayout, edition);
+
   const isBootstrapMode = useMemo(() => {
     if (!schema) return false;
     if (!canViewObject('x:Bootstrap')) return false;
@@ -288,10 +309,14 @@ export default function AdminPanel() {
   return (
     <div className="flex min-h-screen flex-col">
       <TopBar />
+      {useSectionNav && currentLayout && <SectionNav layout={currentLayout} />}
       <div className="flex flex-1">
-        <Sidebar />
+        <Sidebar mobileOnly={useSectionNav} />
         <main
-          className={`flex-1 overflow-auto bg-content-background p-6 transition-[margin] ${sidebarOpen ? (sidebarCollapsed ? 'md:ml-[4.5rem]' : 'md:ml-64') : ''}`}
+          className={cn(
+            'flex-1 overflow-auto bg-content-background p-6 transition-[margin]',
+            !useSectionNav && sidebarOpen && (sidebarCollapsed ? 'md:ml-[4.5rem]' : 'md:ml-64'),
+          )}
         >
           <ErrorBoundary key={activeAccountId ?? 'none'}>
             <MainContent viewName={viewName} id={id} section={section} />

@@ -12,10 +12,26 @@ import { persist } from 'zustand/middleware';
 
 type Theme = 'light' | 'dark';
 
+/**
+ * INBUXA: which shell draws the navigation. "modern" is the two-tier shell —
+ * the layout switcher in the top bar over a section bar carrying that layout's
+ * own items, and no sidebar. "legacy" is the sidebar the old web UI had. A
+ * layout too deep for a menu bar keeps the sidebar under either setting.
+ */
+export type AdminLayout = 'modern' | 'legacy';
+
+export const DEFAULT_ADMIN_LAYOUT: AdminLayout = 'modern';
+
+export function isAdminLayout(value: unknown): value is AdminLayout {
+  return value === 'modern' || value === 'legacy';
+}
+
 interface UIState {
   theme: Theme;
   /** INBUXA: the color palette, the same set INBUXA webmail offers. */
   palette: PaletteId;
+  /** INBUXA: the navigation shell, the reader's own choice. */
+  adminLayout: AdminLayout;
   sidebarOpen: boolean;
   /** INBUXA: the sidebar folded to a rail of icon tiles, on wide screens. */
   sidebarCollapsed: boolean;
@@ -24,6 +40,7 @@ interface UIState {
   toggleTheme: () => void;
   setTheme: (theme: Theme) => void;
   setPalette: (palette: PaletteId) => void;
+  setAdminLayout: (layout: AdminLayout) => void;
   /** INBUXA: take the theme stored with the account, without writing it back. */
   applyAccountTheme: (palette: PaletteId | null, mode: 'system' | 'light' | 'dark' | null) => void;
   toggleSidebar: () => void;
@@ -48,6 +65,7 @@ export const useUIStore = create<UIState>()(
       sidebarOpen: typeof window !== 'undefined' ? (window.matchMedia?.('(min-width: 768px)').matches ?? true) : true,
       sidebarCollapsed: false,
       palette: DEFAULT_PALETTE,
+      adminLayout: DEFAULT_ADMIN_LAYOUT,
       activeSection: '',
 
       toggleTheme: () => {
@@ -75,6 +93,10 @@ export const useUIStore = create<UIState>()(
         applyPalette(palette);
         set({ palette });
         queueAccountTheme(palette, null, get().theme);
+      },
+
+      setAdminLayout: (layout) => {
+        set({ adminLayout: layout });
       },
 
       applyAccountTheme: (palette, mode) => {
@@ -105,6 +127,7 @@ export const useUIStore = create<UIState>()(
       partialize: (state) => ({
         theme: state.theme,
         palette: state.palette,
+        adminLayout: state.adminLayout,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
       onRehydrateStorage: () => {
@@ -112,6 +135,7 @@ export const useUIStore = create<UIState>()(
           if (state) {
             applyThemeClass(state.theme);
             applyPalette(isPaletteId(state.palette) ? state.palette : DEFAULT_PALETTE);
+            if (!isAdminLayout(state.adminLayout)) state.adminLayout = DEFAULT_ADMIN_LAYOUT;
           }
         };
       },

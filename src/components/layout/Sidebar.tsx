@@ -25,47 +25,17 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useUIStore } from '@/stores/uiStore';
 import { useAccountStore } from '@/stores/accountStore';
 import { useSchemaStore } from '@/stores/schemaStore';
-import { visibleLayouts, isLinkEnterprise, isLinkVisible } from '@/lib/layout';
+import { visibleLayouts } from '@/lib/layout';
+import {
+  checkIsEnterprise,
+  checkLinkVisible,
+  pathMatchesView,
+  resolveViewPath,
+  subtreeContainsActive,
+  subtreeHasVisibleLink,
+  visibleLinks,
+} from '@/lib/navTree';
 import type { Layout, LayoutItem, LayoutSubItem } from '@/types/schema';
-
-function resolveViewPath(sectionName: string, viewName: string): string {
-  return `/${sectionName}/${viewName}`;
-}
-
-function pathMatchesView(currentPath: string, sectionName: string, viewName: string): boolean {
-  const base = `/${sectionName}/${viewName}`;
-  if (currentPath === base || currentPath.startsWith(`${base}/`)) return true;
-  if (viewName === 'CustomComponent/Dashboard') {
-    const dashBase = `/${sectionName}/Dashboard/`;
-    return currentPath.startsWith(dashBase);
-  }
-  return false;
-}
-
-function subtreeContainsActive(items: LayoutSubItem[], currentPath: string, sectionName: string): boolean {
-  for (const item of items) {
-    if (item.type === 'link') {
-      if (pathMatchesView(currentPath, sectionName, item.viewName)) return true;
-    } else if (item.type === 'container') {
-      if (subtreeContainsActive(item.items, currentPath, sectionName)) return true;
-    }
-  }
-  return false;
-}
-
-function subtreeHasVisibleLink(items: LayoutSubItem[], edition: string): boolean {
-  for (const item of items) {
-    if (item.type === 'link') {
-      if (!checkLinkVisible(item.viewName)) continue;
-      const enterprise = checkIsEnterprise(item.viewName);
-      if (enterprise && edition === 'oss') continue;
-      return true;
-    } else if (item.type === 'container') {
-      if (subtreeHasVisibleLink(item.items, edition)) return true;
-    }
-  }
-  return false;
-}
 
 interface AutoOpenCollapsibleProps {
   containsActive: boolean;
@@ -84,27 +54,6 @@ function AutoOpenCollapsible({ containsActive, children }: AutoOpenCollapsiblePr
       {children}
     </Collapsible>
   );
-}
-
-function checkLinkVisible(viewName: string): boolean {
-  const schema = useSchemaStore.getState().schema;
-  if (!schema) return true;
-
-  const accountStore = useAccountStore.getState();
-  return isLinkVisible(
-    schema,
-    viewName,
-    accountStore.edition,
-    (prefix: string) => accountStore.hasObjectPermission(prefix, 'Get'),
-    (perm: string) => accountStore.hasPermission(perm),
-  );
-}
-
-function checkIsEnterprise(viewName: string): boolean {
-  const schema = useSchemaStore.getState().schema;
-  if (!schema) return false;
-  const edition = useAccountStore.getState().edition;
-  return isLinkEnterprise(schema, viewName, edition);
 }
 
 type ActiveItemRef = (el: HTMLButtonElement | null) => void;
@@ -300,22 +249,6 @@ function SidebarTopItem({
   return null;
 }
 
-/** INBUXA: every visible link under a container, flattened, for the rail's pop-out menu. */
-function visibleLinks(items: LayoutSubItem[], edition: string, prefix = ''): { name: string; viewName: string }[] {
-  const out: { name: string; viewName: string }[] = [];
-  for (const it of items) {
-    if (it.type === 'link') {
-      if (!checkLinkVisible(it.viewName)) continue;
-      const enterprise = checkIsEnterprise(it.viewName);
-      if (enterprise && edition === 'oss') continue;
-      out.push({ name: `${prefix}${it.name || 'Overview'}`, viewName: it.viewName });
-    } else if (subtreeHasVisibleLink(it.items, edition)) {
-      out.push(...visibleLinks(it.items, edition, `${prefix}${it.name} › `));
-    }
-  }
-  return out;
-}
-
 /** INBUXA: one entry of the collapsed sidebar: its tile, a label on hover, a menu for a group. */
 function RailItem({
   item,
@@ -387,7 +320,16 @@ function RailItem({
   );
 }
 
-export function Sidebar() {
+interface SidebarProps {
+  /**
+   * INBUXA: in the modern shell the section bar does the navigating on a wide
+   * screen, but a phone has no room for it — the sidebar stays as the
+   * slide-over behind the hamburger, and nothing else.
+   */
+  mobileOnly?: boolean;
+}
+
+export function Sidebar({ mobileOnly = false }: SidebarProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const activeSection = useUIStore((s) => s.activeSection);
@@ -427,9 +369,10 @@ export function Sidebar() {
   const layout: Layout | undefined = layouts.find((l) => l.name === activeSection);
   if (!layout) return null;
 
-  // Folding to a rail is for wide screens; a phone keeps the slide-over.
+  // Folding to a rail is for wide screens; a phone keeps the slide-over, and so
+  // does the modern shell, where the rail would sit under the section bar.
   const collapsed =
-    sidebarCollapsed && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches;
+    !mobileOnly && sidebarCollapsed && typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches;
 
   if (collapsed) {
     return (
@@ -474,7 +417,12 @@ export function Sidebar() {
         className="fixed inset-0 top-14 z-20 bg-black/40 md:hidden"
         onClick={() => setSidebarOpen(false)}
       />
-      <aside className="fixed top-14 left-0 bottom-0 z-30 flex w-64 flex-col border-r bg-background">
+      <aside
+        className={cn(
+          'fixed top-14 left-0 bottom-0 z-30 flex w-64 flex-col border-r bg-background',
+          mobileOnly && 'md:hidden',
+        )}
+      >
         <div className="flex items-center justify-between px-4 pt-3 pb-1">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             {layout.name}
@@ -484,7 +432,10 @@ export function Sidebar() {
             aria-label="Collapse sidebar"
             title="Collapse sidebar"
             onClick={toggleSidebarCollapsed}
-            className="hidden h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:flex"
+            className={cn(
+              'hidden h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:flex',
+              mobileOnly && 'md:hidden',
+            )}
           >
             <PanelLeftClose className="h-4 w-4" />
           </button>

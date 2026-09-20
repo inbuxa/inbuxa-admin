@@ -301,6 +301,14 @@
   "version": {
     "label": "INBUXA Admin {{version}}"
   },
+  "nav": {
+    "layoutLegacy": "Legacy",
+    "layoutLegacyHint": "The sidebar, as the old web UI had it.",
+    "layoutMenu": "Layout",
+    "layoutModern": "Modern",
+    "layoutModernHint": "Sections across the top; the page gets the full width.",
+    "more": "More"
+  },
   "oauth": {
     "backToLogin": "Back to login",
     "discoveryFailed": "Discovery failed for \"{{username}}\": {{status}} {{statusText}}",
