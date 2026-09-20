@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # One npm entry at the root, where the single lockfile is.
+  #
+  # Minor and patch arrive as one pull request a week. Majors are left out of
+  # the group on purpose: they are migrations rather than bumps, and each one
+  # deserves its own pull request and its own CI run.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "09:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - minor
+          - patch
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "09:00"
+      timezone: Etc/UTC
+    groups:
+      actions:
+        patterns:
+          - "*"

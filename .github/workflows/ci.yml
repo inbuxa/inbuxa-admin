@@ -1,0 +1,31 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to full commit SHAs, with the release in the trailing comment.
+      # A tag is a mutable pointer, so trusting `@v7` is trusting every future
+      # version of that action. Dependabot updates both halves together on its
+      # weekly run -- do not "simplify" a pin back to a tag.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      # --ignore-scripts: a postinstall script in any transitive dependency
+      # would otherwise run with the runner's token in its environment.
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
