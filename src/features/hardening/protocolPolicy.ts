@@ -38,6 +38,27 @@ export interface ProtocolPolicy {
   lockedProtocols: string[];
   /** What turning the switch off would close, whichever way it is set now (LP-16). */
   wouldClose: PolicyListener[];
+  /**
+   * Who signed in over a legacy protocol in the last 30 days (LP-15), or null
+   * from a server too old to say -- which is not the same as nobody.
+   */
+  recentLegacyUse: RecentUse[] | null;
+}
+
+/** One account's last sign-in over one legacy protocol, as the server reports it. */
+export interface RecentUse {
+  accountId: string;
+  name: string;
+  protocol: string;
+  /** Milliseconds since the epoch. */
+  lastUsedAt: number;
+}
+
+/** One account on the impact panel: every protocol it used, and when it last did. */
+export interface ImpactEntry {
+  name: string;
+  protocols: string[];
+  lastUsedAt: number;
 }
 
 /**
@@ -71,7 +92,66 @@ export function parsePolicy(raw: Record<string, unknown>): ProtocolPolicy {
       ? raw.lockedProtocols.filter((p): p is string => typeof p === 'string')
       : [],
     wouldClose: parseListeners(raw.wouldClose),
+    recentLegacyUse: Array.isArray(raw.recentLegacyUse) ? parseRecent(raw.recentLegacyUse) : null,
   };
+}
+
+function parseRecent(raw: unknown[]): RecentUse[] {
+  return raw.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') return [];
+    const r = entry as Record<string, unknown>;
+    if (typeof r.name !== 'string' || typeof r.protocol !== 'string' || typeof r.lastUsedAt !== 'number') return [];
+    return [
+      {
+        accountId: typeof r.accountId === 'string' ? r.accountId : '',
+        name: r.name,
+        protocol: r.protocol,
+        lastUsedAt: r.lastUsedAt,
+      },
+    ];
+  });
+}
+
+const PROTOCOL_LABELS: Record<string, string> = {
+  imap: 'IMAP',
+  pop3: 'POP3',
+  manageSieve: 'ManageSieve',
+  submission: 'SMTP submission',
+};
+
+/**
+ * The impact panel's lines (LP-15): one per account, naming every protocol it
+ * used and when it last used any, most recent first.
+ */
+export function impactEntries(recent: RecentUse[]): ImpactEntry[] {
+  const byAccount = new Map<string, ImpactEntry>();
+  for (const use of recent) {
+    const key = use.accountId || use.name;
+    const entry = byAccount.get(key) ?? { name: use.name, protocols: [], lastUsedAt: 0 };
+    const label = PROTOCOL_LABELS[use.protocol] ?? use.protocol;
+    if (!entry.protocols.includes(label)) entry.protocols.push(label);
+    entry.lastUsedAt = Math.max(entry.lastUsedAt, use.lastUsedAt);
+    byAccount.set(key, entry);
+  }
+  const order = Object.values(PROTOCOL_LABELS);
+  return [...byAccount.values()]
+    .map((e) => ({ ...e, protocols: e.protocols.sort((a, b) => order.indexOf(a) - order.indexOf(b)) }))
+    .sort((a, b) => b.lastUsedAt - a.lastUsedAt || a.name.localeCompare(b.name));
+}
+
+/** "2 days ago", "3 hours ago", "just now", in the reader's language. */
+export function ago(at: number, now: number, locale?: string): string {
+  const seconds = Math.round((at - now) / 1000);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  const steps: [Intl.RelativeTimeFormatUnit, number][] = [
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60],
+  ];
+  for (const [unit, size] of steps) {
+    if (Math.abs(seconds) >= size) return rtf.format(Math.round(seconds / size), unit);
+  }
+  return rtf.format(0, 'minute');
 }
 
 /** Thrown when the server has no `inbuxa:ProtocolPolicy`, so callers can stay quiet about it. */
@@ -79,6 +159,8 @@ export class PolicyUnavailable extends Error {}
 
 export async function fetchProtocolPolicy(signal?: AbortSignal): Promise<ProtocolPolicy> {
   const accountId = getAccountId('x:NetworkListener');
+  // No `properties`: the server answers with all of them, recentLegacyUse
+  // included where it has it.
   const responses = await jmapRequest([[`${OBJECT}/get`, { accountId, ids: null }, '0']], signal, [INBUXA_CAPABILITY]);
   const [name, result] = responses[0] ?? [];
   if (name !== `${OBJECT}/get`) {
