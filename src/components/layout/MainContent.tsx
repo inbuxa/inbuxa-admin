@@ -51,6 +51,10 @@ const LegacyProtocolsPage = lazyFeature(
   () => import('@/features/hardening/LegacyProtocolsPage'),
   (m) => m.LegacyProtocolsPage,
 );
+const TenantLegacyProtocols = lazyFeature(
+  () => import('@/features/hardening/TenantLegacyProtocols'),
+  (m) => m.TenantLegacyProtocols,
+);
 
 interface MainContentProps {
   viewName?: string;
@@ -150,10 +154,23 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
       return <TraceDetailView viewName={viewName} objectId={id} />;
     }
     const canUpdate = useAccountStore.getState().hasObjectPermission(resolved.permissionPrefix, 'Update');
-    if (!canUpdate) {
-      return <DynamicViewPage viewName={viewName} objectId={id} />;
+    const page = canUpdate ? (
+      <DynamicForm viewName={viewName} objectId={id} />
+    ) : (
+      <DynamicViewPage viewName={viewName} objectId={id} />
+    );
+    // INBUXA: a tenant's page carries its legacy protocols switch (LP-9). A
+    // tenant admin reads its tenant without changing it (MT-12), and may
+    // still turn the switch, so it shows on the read-only page too.
+    if (resolved.objectName === 'x:Tenant') {
+      return (
+        <div className="space-y-4">
+          <TenantLegacyProtocols tenantId={id} />
+          {page}
+        </div>
+      );
     }
-    return <DynamicForm viewName={viewName} objectId={id} />;
+    return page;
   }
 
   return <DynamicList viewName={viewName} />;
