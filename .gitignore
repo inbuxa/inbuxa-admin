@@ -20,6 +20,7 @@ scripts/
 !.prettierrc
 !.env.development
 !.github/
+!.gitlab-ci.yml
 !.vscode/
 .vscode/*
 !.vscode/extensions.json
