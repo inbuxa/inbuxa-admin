@@ -5,7 +5,15 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { CONFIRM_PHRASE, parsePolicy, phraseMatches, protocolRows, type ProtocolPolicy } from './protocolPolicy';
+import {
+  ago,
+  CONFIRM_PHRASE,
+  impactEntries,
+  parsePolicy,
+  phraseMatches,
+  protocolRows,
+  type ProtocolPolicy,
+} from './protocolPolicy';
 
 // As inbuxa:ProtocolPolicy/get sends it: listeners keyed by the policy's own property names.
 const WIRE = {
@@ -80,5 +88,35 @@ describe('phraseMatches (LP-17)', () => {
     expect(phraseMatches(' turn off legacy mail')).toBe(false);
     expect(phraseMatches('turn off legacy')).toBe(false);
     expect(phraseMatches('')).toBe(false);
+  });
+});
+
+describe('the impact panel (LP-15)', () => {
+  it('reads nothing from a server too old to say, and an empty list as nobody', () => {
+    expect(parsePolicy(WIRE).recentLegacyUse).toBeNull();
+    expect(parsePolicy({ ...WIRE, recentLegacyUse: [] }).recentLegacyUse).toEqual([]);
+  });
+
+  it('shows each account once, with every protocol it used and its latest use', () => {
+    const recent = parsePolicy({
+      ...WIRE,
+      recentLegacyUse: [
+        { accountId: 'a', name: 'maria@example.org', protocol: 'submission', lastUsedAt: 100 },
+        { accountId: 'a', name: 'maria@example.org', protocol: 'imap', lastUsedAt: 300 },
+        { accountId: 'b', name: 'ada@example.org', protocol: 'pop3', lastUsedAt: 200 },
+        { accountId: 'c', name: 'bad' },
+      ],
+    }).recentLegacyUse!;
+    expect(impactEntries(recent)).toEqual([
+      { name: 'maria@example.org', protocols: ['IMAP', 'SMTP submission'], lastUsedAt: 300 },
+      { name: 'ada@example.org', protocols: ['POP3'], lastUsedAt: 200 },
+    ]);
+  });
+
+  it('says how long ago in words', () => {
+    const now = Date.UTC(2026, 8, 21);
+    expect(ago(now - 2 * 86400_000, now, 'en')).toBe('2 days ago');
+    expect(ago(now - 3 * 3600_000, now, 'en')).toBe('3 hours ago');
+    expect(ago(now - 10_000, now, 'en')).toBe('this minute');
   });
 });

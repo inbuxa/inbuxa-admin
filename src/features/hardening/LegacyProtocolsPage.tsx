@@ -25,8 +25,10 @@ import { useAccountStore } from '@/stores/accountStore';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import {
+  ago,
   CONFIRM_PHRASE,
   describeListener,
+  impactEntries,
   fetchProtocolPolicy,
   phraseMatches,
   PolicyUnavailable,
@@ -35,6 +37,7 @@ import {
   type PolicyListener,
   type ProtocolPolicy,
   type ProtocolRow,
+  type RecentUse,
 } from './protocolPolicy';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; policy: ProtocolPolicy } | { kind: 'error'; message: string };
@@ -155,6 +158,8 @@ export function LegacyProtocolsPage() {
       )}
 
       <ProtocolTable rows={protocolRows(policy, listeners)} off={off} />
+
+      {!off && policy.recentLegacyUse && <ImpactPanel recent={policy.recentLegacyUse} />}
 
       {(off || confirming) && <Statement listeners={listeners} />}
 
@@ -313,6 +318,48 @@ function ProtocolTable({ rows, off }: { rows: ProtocolRow[]; off: boolean }) {
         )}
       </p>
     </div>
+  );
+}
+
+/**
+ * The impact panel (LP-15): who would notice, shown before anything can
+ * change. With nobody, it says so in one line.
+ */
+function ImpactPanel({ recent }: { recent: RecentUse[] }) {
+  const { t, i18n } = useTranslation();
+  const entries = impactEntries(recent);
+  // Read once, when the panel appears: "2 days ago" needn't tick.
+  const [now] = useState(() => Date.now());
+  if (entries.length === 0) {
+    return (
+      <p className="rounded-xl border px-4 py-3 text-sm text-muted-foreground">
+        {t('legacyProtocols.impactNone', 'No account used a legacy mail app in the last 30 days.')}
+      </p>
+    );
+  }
+  return (
+    <section className="space-y-2 rounded-xl border p-4 text-sm">
+      <p>
+        <strong>
+          {t('legacyProtocols.impactCount', {
+            count: entries.length,
+            defaultValue_one: '1 account used a legacy mail app in the last 30 days.',
+            defaultValue_other: '{{count}} accounts used a legacy mail app in the last 30 days.',
+          })}
+        </strong>{' '}
+        {t('legacyProtocols.impactLead', 'Their mail apps will stop working the moment you turn this on:')}
+      </p>
+      <ul className="max-h-72 space-y-1 overflow-y-auto">
+        {entries.map((entry) => (
+          <li key={entry.name} className="flex flex-wrap gap-x-2">
+            <span className="font-medium">{entry.name}</span>
+            <span className="text-muted-foreground">
+              {entry.protocols.join(', ')} · {ago(entry.lastUsedAt, now, i18n.language)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
