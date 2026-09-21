@@ -10,6 +10,7 @@ import {
   CONFIRM_PHRASE,
   impactEntries,
   parsePolicy,
+  parseTenantPolicy,
   phraseMatches,
   protocolRows,
   type ProtocolPolicy,
@@ -118,5 +119,20 @@ describe('the impact panel (LP-15)', () => {
     expect(ago(now - 2 * 86400_000, now, 'en')).toBe('2 days ago');
     expect(ago(now - 3 * 3600_000, now, 'en')).toBe('3 hours ago');
     expect(ago(now - 10_000, now, 'en')).toBe('this minute');
+  });
+});
+
+describe("a tenant's switch", () => {
+  it('reads the wire, and tells an older server from nobody', () => {
+    const p = parseTenantPolicy({
+      id: 'b',
+      tenantId: 'b',
+      legacyProtocols: 'disabled',
+      changedAt: 5,
+      recentLegacyUse: [{ accountId: 'c', name: 'u@t.example', protocol: 'imap', lastUsedAt: 9 }],
+    });
+    expect(p).toMatchObject({ id: 'b', legacyProtocols: 'disabled', changedAt: 5 });
+    expect(p.recentLegacyUse).toHaveLength(1);
+    expect(parseTenantPolicy({ id: 'b' })).toMatchObject({ legacyProtocols: 'enabled', recentLegacyUse: null });
   });
 });

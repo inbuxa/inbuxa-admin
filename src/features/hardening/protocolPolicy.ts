@@ -256,3 +256,65 @@ export function phraseMatches(typed: string): boolean {
 export function describeListener(l: PolicyListener): string {
   return l.ports.length > 0 ? `${l.name} (${l.ports.join(', ')})` : l.name;
 }
+
+// ---- A tenant's switch: inbuxa:TenantProtocolPolicy (LP-9 to LP-14) ----
+
+const TENANT_OBJECT = 'inbuxa:TenantProtocolPolicy';
+
+export interface TenantPolicy {
+  /** The tenant's id, which is also the policy's. */
+  id: string;
+  legacyProtocols: 'enabled' | 'disabled';
+  /** Milliseconds since the epoch. */
+  changedAt: number | null;
+  /** The tenant's own people who used a legacy mail app lately (LP-15), or null from an older server. */
+  recentLegacyUse: RecentUse[] | null;
+}
+
+export function parseTenantPolicy(raw: Record<string, unknown>): TenantPolicy {
+  return {
+    id: typeof raw.id === 'string' ? raw.id : '',
+    legacyProtocols: raw.legacyProtocols === 'disabled' ? 'disabled' : 'enabled',
+    changedAt: typeof raw.changedAt === 'number' ? raw.changedAt : null,
+    recentLegacyUse: Array.isArray(raw.recentLegacyUse) ? parseRecent(raw.recentLegacyUse) : null,
+  };
+}
+
+/**
+ * A tenant's switch. With no id, the caller's own tenant's -- which is how a
+ * tenant administrator reads it; a server administrator names the tenant.
+ */
+export async function fetchTenantPolicy(tenantId: string | null, signal?: AbortSignal): Promise<TenantPolicy> {
+  const accountId = getAccountId('x:Domain');
+  const responses = await jmapRequest(
+    [[`${TENANT_OBJECT}/get`, { accountId, ids: tenantId ? [tenantId] : null }, '0']],
+    signal,
+    [INBUXA_CAPABILITY],
+  );
+  const [name, result] = responses[0] ?? [];
+  if (name !== `${TENANT_OBJECT}/get`) {
+    const type = (result as { type?: string } | undefined)?.type;
+    if (type === 'unknownMethod' || type === 'unknownCapability') throw new PolicyUnavailable(type);
+    throw new Error((result as { description?: string } | undefined)?.description ?? type ?? 'Request failed');
+  }
+  const list = (result as { list?: Record<string, unknown>[] }).list ?? [];
+  // A tenant admin's /get with no ids holds exactly its own tenant's.
+  if (!list[0] || (!tenantId && list.length !== 1)) throw new PolicyUnavailable('notFound');
+  return parseTenantPolicy(list[0]);
+}
+
+/** Turns a tenant's switch. The server refuses turning it on while its own is off (LP-9). */
+export async function updateTenantPolicy(tenantId: string, legacyProtocols: 'enabled' | 'disabled'): Promise<void> {
+  const accountId = getAccountId('x:Domain');
+  const responses = await jmapRequest(
+    [[`${TENANT_OBJECT}/set`, { accountId, update: { [tenantId]: { legacyProtocols } } }, '0']],
+    undefined,
+    [INBUXA_CAPABILITY],
+  );
+  const [name, result] = responses[0] ?? [];
+  if (name !== `${TENANT_OBJECT}/set`) {
+    throw new Error((result as { description?: string } | undefined)?.description ?? 'Request failed');
+  }
+  const failed = (result as { notUpdated?: Record<string, JmapSetError> | null }).notUpdated?.[tenantId];
+  if (failed) throw new Error(failed.description ?? failed.type);
+}

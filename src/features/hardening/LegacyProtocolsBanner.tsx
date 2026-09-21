@@ -15,24 +15,43 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ShieldCheck } from 'lucide-react';
 import { useAccountStore } from '@/stores/accountStore';
-import { fetchProtocolPolicy } from './protocolPolicy';
+import { fetchProtocolPolicy, fetchTenantPolicy } from './protocolPolicy';
 
 export const LEGACY_PROTOCOLS_VIEW = 'CustomComponent/LegacyProtocols';
 
 export function LegacyProtocolsBanner() {
   const { t } = useTranslation();
-  const canGet = useAccountStore((s) => s.hasObjectPermission('sysNetworkListener', 'Get'));
-  const [off, setOff] = useState(false);
+  const canGetServer = useAccountStore((s) => s.hasObjectPermission('sysNetworkListener', 'Get'));
+  const canGetTenant = useAccountStore((s) => s.hasObjectPermission('sysDomain', 'Get'));
+  const [off, setOff] = useState<null | 'server' | 'tenant'>(null);
 
   useEffect(() => {
-    if (!canGet) return;
+    if (!canGetServer && !canGetTenant) return;
     const controller = new AbortController();
-    fetchProtocolPolicy(controller.signal)
-      .then((policy) => setOff(policy.legacyProtocols === 'disabled'))
-      // A banner is not worth an error: an older server simply has no switch.
-      .catch(() => setOff(false));
+    const signal = controller.signal;
+    (async () => {
+      // The server's switch first. Inside a tenant it can't be read, and the
+      // tenant's own is the one to report (LP-18 at tenant scope).
+      try {
+        if (canGetServer) {
+          const policy = await fetchProtocolPolicy(signal);
+          if (!signal.aborted) setOff(policy.legacyProtocols === 'disabled' ? 'server' : null);
+          return;
+        }
+      } catch {
+        // Fall through to the tenant's.
+      }
+      try {
+        if (canGetTenant) {
+          const policy = await fetchTenantPolicy(null, signal);
+          if (!signal.aborted) setOff(policy.legacyProtocols === 'disabled' ? 'tenant' : null);
+        }
+      } catch {
+        // A banner is not worth an error: an older server simply has no switch.
+      }
+    })();
     return () => controller.abort();
-  }, [canGet]);
+  }, [canGetServer, canGetTenant]);
 
   if (!off) return null;
 
@@ -42,11 +61,18 @@ export function LegacyProtocolsBanner() {
       <span>
         {t('legacyProtocols.bannerLead', 'Legacy mail protocols are')}{' '}
         <strong>{t('legacyProtocols.bannerOff', 'off')}</strong>{' '}
-        {t('legacyProtocols.bannerTail', 'on this server. Only INBUXA webmail and JMAP apps can sign in.')}
+        {off === 'server'
+          ? t('legacyProtocols.bannerTail', 'on this server. Only INBUXA webmail and JMAP apps can sign in.')
+          : t(
+              'legacyProtocols.bannerTailTenant',
+              'for your organization. Only INBUXA webmail and JMAP apps can sign in.',
+            )}
       </span>
-      <Link to={`/Settings/${LEGACY_PROTOCOLS_VIEW}`} className="font-medium text-primary hover:underline">
-        {t('legacyProtocols.review', 'Review')}
-      </Link>
+      {off === 'server' && (
+        <Link to={`/Settings/${LEGACY_PROTOCOLS_VIEW}`} className="font-medium text-primary hover:underline">
+          {t('legacyProtocols.review', 'Review')}
+        </Link>
+      )}
     </div>
   );
 }
