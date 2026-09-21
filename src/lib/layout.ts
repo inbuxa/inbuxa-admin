@@ -65,6 +65,12 @@ function checkSpecialLink(
     return { visible: allowed, enterprise: true };
   }
 
+  // INBUXA: the legacy protocols switch takes listeners away and puts them back,
+  // so whoever may see a listener may see it (legacy-protocols spec).
+  if (viewName === 'CustomComponent/LegacyProtocols') {
+    return { visible: canGet ? canGet('sysNetworkListener') : true, enterprise: false };
+  }
+
   if (viewName.startsWith('CustomComponent/')) {
     return { visible: true, enterprise: false };
   }
