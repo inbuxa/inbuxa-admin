@@ -1,20 +1,23 @@
-# CI on the self-hosted GitLab, ported from .github/workflows/ci.yml when the
-# GitHub account was suspended on 2026-09-20. The Actions file stays in the
-# tree: it is the reference this was written from and works unchanged if the
-# appeal succeeds.
+# CI on the self-hosted GitLab, ported from .github/workflows/ when the GitHub
+# account was suspended on 2026-09-20. The Actions files stay in the tree: they
+# are the reference this was written from and work unchanged if the appeal
+# succeeds.
 #
-# The image is pinned by digest, with its tag in the trailing comment -- the
-# replacement for the workflow's SHA-pinned actions, since GitLab has no
-# action allowlist.
+# Every `image:` is pinned by digest, with its tag in the trailing comment --
+# the replacement for the workflows' SHA-pinned actions, since GitLab has no
+# action allowlist. Read the comment for the version; the digest is what runs.
 #
-# Not ported here:
+# The runner is the inbuxa group runner on Web_Host, with the host docker
+# socket bound in, as ihasmail's is. Jobs reach GitLab and its registry on the
+# internal network, never through https://git.coffeylabs.org, which is
+# Cloudflare-proxied and caps request bodies at 100 MB.
+#
+# Not ported:
 #   * cleanup.yml pruned GHCR with dataaxiom/ghcr-cleanup-action; on GitLab
 #     that belongs in the project's container registry cleanup policy, not in
 #     a pipeline.
-#   * publish.yml and release.yml still need doing; they are larger and are
-#     being handled separately.
 
-stages: [build]
+stages: [build, publish, release]
 
 default:
   interruptible: true
@@ -35,5 +38,173 @@ build:
     - npm test
     - npm run build
   rules:
+    - if: $RELEASE_WEEKLY == "1"
+      when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    # A release tag is built and tested again before its image is published.
+    - if: $CI_COMMIT_TAG
+
+# ------------------------------------------------------------- publish ------
+# Port of publish.yml, to the project's own registry now that GHCR went with
+# the GitHub account: registry.coffeylabs.org/inbuxa/inbuxa-admin.
+#
+# Tag-driven. publish.yml was called from release.yml because a release cut
+# with GITHUB_TOKEN raises no event; GitLab has no such rule, so the tag the
+# weekly release creates starts a tag pipeline, and this builds from it.
+#
+# Only date tags publish (v2026.9.21, v2026.9.21.2). The repository still
+# carries the inherited v1.0.x tags, and a tag of any other shape pushed by
+# hand is not a release.
+#
+# The tag must agree with inbuxa-version.json at the commit it names -- the
+# property release.yml was built around: the tree a tag points at reports the
+# version the tag claims. A tag placed beside an unbumped file fails here
+# rather than publishing an image that reports the wrong version.
+#
+# Both architectures build under QEMU on this amd64 host, where publish.yml
+# had a native arm64 runner. That is slow -- tens of minutes for npm ci and
+# the Vite build through instruction translation -- and tolerable for a weekly
+# tag, which is why this is tag-only. If arm64 starts timing out, the fix is
+# an arm64 runner, not dropping the platform.
+publish:
+  stage: publish
+  image: docker:28-cli@sha256:625d9431a9f54c5a2bc90f24f0e1c3d55b1349fd857dd85035f98c2c9acbdd4d # 28-cli
+  needs: [build]
+  variables:
+    DOCKER_BUILDKIT: "1"
+    IMAGE: $CI_REGISTRY_IMAGE
+  before_script:
+    - apk add --no-cache jq >/dev/null
+    - |
+      set -eu
+      VERSION="$(jq -er .version inbuxa-version.json)"
+      if [ "$CI_COMMIT_TAG" != "v$VERSION" ]; then
+        echo "Tag $CI_COMMIT_TAG names a commit whose inbuxa-version.json says $VERSION." >&2
+        echo "Refusing to publish an image that would report the wrong version." >&2
+        exit 1
+      fi
+      echo "VERSION=$VERSION" > version.env
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - docker run --privileged --rm tonistiigi/binfmt --install arm64
+    - docker buildx create --use --name ci-builder --driver docker-container || docker buildx use ci-builder
+  script:
+    - . ./version.env
+    # Attestations are off, as they were in publish.yml: they add manifests of
+    # their own to the index.
+    - |
+      docker buildx build \
+        --platform linux/amd64,linux/arm64 \
+        --provenance=false --sbom=false \
+        --tag "$IMAGE:$VERSION" \
+        --tag "$IMAGE:latest" \
+        --push .
+    - docker buildx imagetools inspect "$IMAGE:$VERSION"
+  after_script:
+    - docker logout "$CI_REGISTRY" || true
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]{4}\.[0-9]+\.[0-9]+(\.[0-9]+)?$/
+
+# ------------------------------------------------------- weekly release -----
+# Port of release.yml: cut a release once a week, but only if there is
+# something in it. The decision is the workflow's, unchanged -- count the
+# commits on main since the newest published release, and skip the week if
+# there are none. A release with nothing in it moves :latest to an identical
+# build, spends a version number, and notifies everybody about nothing.
+#
+# The version is the date, YYYY.M.D unpadded, with a .N suffix from 2 for a
+# second release on one day. It is committed to main in inbuxa-version.json
+# and the tag names that commit, so the commit is the release.
+#
+# It runs from a pipeline schedule (Mondays 09:37 UTC, as release.yml did)
+# that sets RELEASE_WEEKLY=1. GitLab keeps schedules on the project, not in
+# this file, so the schedule and this job only work as a pair. Run it by hand
+# with RELEASE_WEEKLY=1, adding DRY_RUN=1 to see the decision and stop.
+#
+# Everything that writes uses RELEASE_TOKEN, a project access token
+# (Maintainer, `api` scope; protected, masked), never CI_JOB_TOKEN, which can
+# neither commit nor raise a tag pipeline:
+#   * the bump is committed through the commits API, with last_commit_id set
+#     to the commit this job counted from. If main moved meanwhile the API
+#     refuses and the job fails; run it again. Otherwise the notes and the
+#     count would describe a different commit from the one released.
+#   * the release -- and with it the tag -- is created through the releases
+#     API. A tag made that way is an ordinary push, so it starts the tag
+#     pipeline and `publish` builds the image.
+# The token's role must be allowed to push to main. The token expires; when
+# it does this fails loudly at the first API call, and a new one goes in the
+# same variable.
+weekly-release:
+  stage: release
+  image: node:22-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9 # 22-bookworm-slim
+  # One at a time: two overlapping runs would race to write the same version
+  # and create the same tag.
+  resource_group: weekly-release
+  variables:
+    GIT_DEPTH: "0"
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git curl jq ca-certificates >/dev/null
+    # The build directory is shared between jobs, and a checkout owned by
+    # another user makes git refuse with "detected dubious ownership".
+    - git config --global --add safe.directory "$CI_PROJECT_DIR"
+  script:
+    - |
+      set -euo pipefail
+      API="http://gitlab/api/v4/projects/${CI_PROJECT_ID}"
+      auth=(--header "PRIVATE-TOKEN: ${RELEASE_TOKEN}")
+      git fetch -q --tags origin
+      sha="$(git rev-parse HEAD)"
+
+      # The newest published release, or empty on a project that has never
+      # had one -- in which case everything counts as new.
+      previous="$(curl -fsS "${auth[@]}" "${API}/releases?order_by=released_at&sort=desc&per_page=1" | jq -r '.[0].tag_name // ""')"
+      # A release can outlive its tag; falling back to the whole history
+      # over-counts, which cuts a release that was due anyway. Tag lookups use
+      # show-ref, which matches an exact ref: rev-parse --verify on this git
+      # can read some tag names as describe output and "find" a tag that
+      # isn't there (see ihasmail's port).
+      if [ -n "$previous" ] && git show-ref --verify --quiet "refs/tags/${previous}"; then
+        count="$(git rev-list --count "${previous}..HEAD")"; range="${previous}..HEAD"
+      else
+        count="$(git rev-list --count HEAD)"; range="HEAD"
+      fi
+      if [ "$count" -eq 0 ]; then
+        echo "Nothing to release: no commits since ${previous}."; exit 0
+      fi
+
+      today="$(date -u +%Y.%-m.%-d)"
+      version="$today"; n=2
+      while git show-ref --verify --quiet "refs/tags/v${version}"; do
+        version="${today}.${n}"; n=$((n + 1))
+      done
+      tag="v${version}"
+      echo "Releasing ${tag} -- ${count} commit(s) since ${previous:-the beginning}, from ${sha}."
+      if [ "${DRY_RUN:-0}" = "1" ]; then echo "DRY_RUN=1: stopping here."; exit 0; fi
+
+      # The bump, written with a JSON parser rather than sed: a version put
+      # into JSON by string substitution is one stray quote from a file
+      # nothing can read.
+      VERSION="$version" node -e '
+        const fs = require("fs");
+        const f = "inbuxa-version.json";
+        const j = JSON.parse(fs.readFileSync(f, "utf8"));
+        j.version = process.env.VERSION;
+        fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+      '
+      jq -n --arg msg "Version ${version}" --arg sha "$sha" --rawfile content inbuxa-version.json \
+        '{branch:"main", commit_message:$msg, last_commit_id:$sha,
+          actions:[{action:"update", file_path:"inbuxa-version.json", content:$content}]}' > commit.json
+      bump="$(curl -fsS "${auth[@]}" --header "Content-Type: application/json" \
+                --data @commit.json "${API}/repository/commits" | jq -er .id)"
+      echo "committed the bump as ${bump}"
+
+      # Notes bounded to what is new: one line per change on main's
+      # first-parent history, which is what GitHub's generated notes listed.
+      notes="$(git log --first-parent --format='- %s' "$range")"
+      jq -n --arg tag "$tag" --arg ref "$bump" --arg name "INBUXA Admin ${version}" \
+            --arg desc "$(printf '%s commit(s) since %s.\n\n%s' "$count" "${previous:-the beginning}" "$notes")" \
+            '{tag_name:$tag, ref:$ref, name:$name, description:$desc}' > release.json
+      curl -fsS "${auth[@]}" --header "Content-Type: application/json" \
+           --data @release.json "${API}/releases" | jq -r '"created release " + .tag_name'
+  rules:
+    - if: $RELEASE_WEEKLY == "1" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
