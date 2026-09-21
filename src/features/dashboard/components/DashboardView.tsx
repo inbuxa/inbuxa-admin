@@ -15,6 +15,7 @@ import { AlertCircle } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSchemaStore } from '@/stores/schemaStore';
 import type { Dashboard } from '../types/schema';
+import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
 import { useDashboardStore } from '../stores/dashboardStore';
 import { useLiveMetricsStore } from '../stores/liveMetricsStore';
 import { useHistoryMetricsStore } from '../stores/historyMetricsStore';
@@ -123,6 +124,7 @@ export function DashboardView({ dashboardId, section }: DashboardViewProps) {
     <div className="space-y-6">
       <Greeting />
       <StatusLine facts={facts} />
+      <LegacyProtocolsBanner />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         {dashboards.length > 1 && (
           <Tabs value={dashboardId} onValueChange={(id) => navigate(`/${section}/Dashboard/${id}`)}>

@@ -16,6 +16,7 @@ import { DynamicList } from '@/components/lists/DynamicList';
 import { DynamicForm } from '@/components/forms/DynamicForm';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
+import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
 import type { Schema } from '@/types/schema';
 
 function lazyFeature<M, P>(load: () => Promise<M>, select: (module: M) => ComponentType<P>) {
@@ -45,6 +46,10 @@ const ConnectDnsPage = lazyFeature(
 const ActionPage = lazyFeature(
   () => import('@/features/actions/ActionPage'),
   (m) => m.ActionPage,
+);
+const LegacyProtocolsPage = lazyFeature(
+  () => import('@/features/hardening/LegacyProtocolsPage'),
+  (m) => m.LegacyProtocolsPage,
 );
 
 interface MainContentProps {
@@ -99,6 +104,10 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     if (componentName === 'LiveTracing') {
       return <LiveTracingPage />;
     }
+    // INBUXA: Settings › Security › Hardening (legacy-protocols spec).
+    if (componentName === 'LegacyProtocols') {
+      return <LegacyProtocolsPage />;
+    }
     return (
       <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
         Unknown component: {componentName}
@@ -120,6 +129,15 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
   }
 
   if (resolved.objectType.type === 'singleton') {
+    // INBUXA: the Security settings carry the legacy protocols banner (LP-18).
+    if (resolved.objectName === 'x:Security') {
+      return (
+        <div className="space-y-4">
+          <LegacyProtocolsBanner />
+          <DynamicForm viewName={viewName} objectId="singleton" />
+        </div>
+      );
+    }
     return <DynamicForm viewName={viewName} objectId="singleton" />;
   }
 
