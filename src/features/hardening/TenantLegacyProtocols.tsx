@@ -102,7 +102,7 @@ export function TenantLegacyProtocols({ tenantId }: { tenantId: string }) {
               {off
                 ? t(
                     'legacyProtocols.tenantOff',
-                    'Off for {{organization}}. Only INBUXA webmail and JMAP apps can sign in to its domains.',
+                    'Off for {{organization}}. Only inbuxa webmail and JMAP apps can sign in to its domains.',
                     { organization: name },
                   )
                 : t(

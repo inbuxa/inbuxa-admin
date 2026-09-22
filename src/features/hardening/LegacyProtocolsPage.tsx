@@ -115,7 +115,7 @@ export function LegacyProtocolsPage() {
         <p className="text-muted-foreground">
           {t(
             'legacyProtocols.subtitle',
-            'Turn off IMAP, POP3, ManageSieve and sending from mail apps, so that only INBUXA webmail and JMAP apps can reach this server.',
+            'Turn off IMAP, POP3, ManageSieve and sending from mail apps, so that only inbuxa webmail and JMAP apps can reach this server.',
           )}
         </p>
       </header>
@@ -206,7 +206,7 @@ function StatusCard({
           </p>
           <p className="text-sm text-muted-foreground">
             {off
-              ? t('legacyProtocols.statusOffBody', 'Only INBUXA webmail and JMAP apps can sign in.')
+              ? t('legacyProtocols.statusOffBody', 'Only inbuxa webmail and JMAP apps can sign in.')
               : t('legacyProtocols.statusOnBody', 'Mail apps can use IMAP, POP3 and ManageSieve.')}
             {policy.changedAt !== null && (
               <>
@@ -276,7 +276,7 @@ function ProtocolTable({ rows, off }: { rows: ProtocolRow[]; off: boolean }) {
       <p className="border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
         {t(
           'legacyProtocols.lockNote',
-          'Incoming mail (SMTP) and INBUXA webmail (JMAP) are locked open: closing them would stop mail arriving and lock everyone out, including you.',
+          'Incoming mail (SMTP) and inbuxa webmail (JMAP) are locked open: closing them would stop mail arriving and lock everyone out, including you.',
         )}
       </p>
     </div>

@@ -128,7 +128,7 @@ export function Statement({ scope }: { scope: StatementScope }) {
   return (
     <section className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-5 text-sm leading-relaxed">
       <p className="text-base font-semibold">
-        {t('legacyProtocols.statementTitle', 'Only INBUXA webmail and JMAP apps will work.')}
+        {t('legacyProtocols.statementTitle', 'Only inbuxa webmail and JMAP apps will work.')}
       </p>
       <p>
         {scope.kind === 'server'
@@ -152,7 +152,7 @@ export function Statement({ scope }: { scope: StatementScope }) {
         <li>
           {t(
             'legacyProtocols.statementFilters',
-            'Filters managed from a mail app (ManageSieve) will stop working. Filters set in INBUXA webmail keep working.',
+            'Filters managed from a mail app (ManageSieve) will stop working. Filters set in inbuxa webmail keep working.',
           )}
         </li>
         <li>
@@ -164,7 +164,7 @@ export function Statement({ scope }: { scope: StatementScope }) {
         <li>
           {t(
             'legacyProtocols.statementWebmail',
-            'People keep full access through INBUXA webmail, which can be installed as an app on phones and computers.',
+            'People keep full access through inbuxa webmail, which can be installed as an app on phones and computers.',
           )}
         </li>
       </ul>
@@ -183,7 +183,7 @@ export function Statement({ scope }: { scope: StatementScope }) {
       <p>
         {t(
           'legacyProtocols.statementSubmission',
-          'Sending from mail apps (SMTP submission) will stop working, but its ports stay open: mail apps will be told they cannot sign in. Incoming mail (SMTP) and INBUXA webmail (JMAP) are not affected and cannot be turned off here.',
+          'Sending from mail apps (SMTP submission) will stop working, but its ports stay open: mail apps will be told they cannot sign in. Incoming mail (SMTP) and inbuxa webmail (JMAP) are not affected and cannot be turned off here.',
         )}
       </p>
       {scope.kind === 'server' && (
@@ -191,7 +191,7 @@ export function Statement({ scope }: { scope: StatementScope }) {
           <strong>{t('legacyProtocols.firewallLead', 'This does not change your firewall or port forwarding.')}</strong>{' '}
           {t(
             'legacyProtocols.firewallBody',
-            'INBUXA stops answering on these ports; anything that still routes them to this server — firewall rules, NAT port-forwards, a load balancer or proxy — is yours to reconcile.',
+            'inbuxa stops answering on these ports; anything that still routes them to this server — firewall rules, NAT port-forwards, a load balancer or proxy — is yours to reconcile.',
           )}
         </p>
       )}

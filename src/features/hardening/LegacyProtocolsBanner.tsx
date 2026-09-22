@@ -62,10 +62,10 @@ export function LegacyProtocolsBanner() {
         {t('legacyProtocols.bannerLead', 'Legacy mail protocols are')}{' '}
         <strong>{t('legacyProtocols.bannerOff', 'off')}</strong>{' '}
         {off === 'server'
-          ? t('legacyProtocols.bannerTail', 'on this server. Only INBUXA webmail and JMAP apps can sign in.')
+          ? t('legacyProtocols.bannerTail', 'on this server. Only inbuxa webmail and JMAP apps can sign in.')
           : t(
               'legacyProtocols.bannerTailTenant',
-              'for your organization. Only INBUXA webmail and JMAP apps can sign in.',
+              'for your organization. Only inbuxa webmail and JMAP apps can sign in.',
             )}
       </span>
       {off === 'server' && (

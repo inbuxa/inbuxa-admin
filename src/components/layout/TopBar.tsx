@@ -104,7 +104,7 @@ export function TopBar() {
             </Link>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            {t('version.label', 'INBUXA Admin {{version}}', { version: __APP_VERSION__ })}
+            {t('version.label', 'inbuxa Admin {{version}}', { version: __APP_VERSION__ })}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
