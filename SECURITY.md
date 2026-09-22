@@ -32,6 +32,6 @@ session.
 
 You'll get an acknowledgement within a few days. A report that turns out to
 affect the mail server rather than this interface will be moved to
-[inbuxa-server](https://github.com/inbuxa/inbuxa-server), and one that affects
+[inbuxa-server](https://git.coffeylabs.org/inbuxa/inbuxa-server), and one that affects
 upstream Stalwart's web interface will be passed to Stalwart Labs with credit
 to you.
