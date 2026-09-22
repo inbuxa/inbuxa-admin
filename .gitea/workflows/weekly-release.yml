@@ -1,0 +1,135 @@
+# Weekly release, ported from the weekly-release job in .gitlab-ci.yml (itself
+# a port of release.yml): cut a release once a week, but only if there is
+# something in it. The decision is unchanged -- count the commits on main
+# since the newest published release, and skip the week if there are none. A
+# release with nothing in it moves :latest to an identical build, spends a
+# version number, and notifies everybody about nothing.
+#
+# The version is the date, YYYY.M.D unpadded, with a .N suffix from 2 for a
+# second release on one day. It is committed to main in inbuxa-version.json
+# and the tag names that commit, so the commit is the release.
+#
+# Mondays 09:37 UTC, as release.yml did. Run it by hand from the Actions tab
+# (workflow_dispatch); dry_run defaults to true, so a manual run shows the
+# decision and stops unless you untick it.
+#
+# SIDE-BY-SIDE PERIOD: until the GitLab cutover, GitLab's own schedule is
+# still live and still cuts the real release, and its bump commit and tag
+# reach this copy through the sync. Two releasers would race to write the same
+# version, so this workflow only ever dry-runs unless the variable
+# RELEASE_LIVE is '1'. Set RELEASE_LIVE=1 (repo or org Actions variable) at
+# cutover, when GitLab's schedule is switched off -- not before.
+#
+# Reads use the job's own token. Everything that writes uses RELEASE_TOKEN
+# (jcoffey-dev, write:repository), because a tag Gitea creates for the job
+# token raises no event (checked 2026-09-22) and the tag must start ci.yml's
+# publish job:
+#   * the bump is committed through the contents API. Gitea's API has no
+#     "only if the branch is still at X" guard like GitLab's last_commit_id,
+#     so the job checks main's head immediately before writing and refuses if
+#     it moved since the commit it counted from; run it again. Otherwise the
+#     notes and the count would describe a different commit from the one
+#     released. (The API does refuse if the file itself changed, via its blob
+#     sha.)
+#   * the release -- and with it the tag -- is created through the releases
+#     API. A tag made that way is an ordinary push, so it starts ci.yml and
+#     `publish` builds the image.
+# The token's owner must be allowed to push to main.
+name: weekly-release
+
+on:
+  schedule:
+    - cron: '37 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Show the decision and stop
+        type: boolean
+        default: true
+
+# One at a time: two overlapping runs would race to write the same version and
+# create the same tag.
+concurrency:
+  group: weekly-release
+  cancel-in-progress: false
+
+jobs:
+  weekly-release:
+    runs-on: docker
+    container:
+      image: node:22-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9 # 22-bookworm-slim
+    env:
+      READ_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+      # Live only with RELEASE_LIVE=1 AND either the schedule or a manual run
+      # with dry_run unticked.
+      DRY_RUN: ${{ (vars.RELEASE_LIVE == '1' && (github.event_name == 'schedule' || inputs.dry_run == false || inputs.dry_run == 'false')) && '0' || '1' }}
+    steps:
+      - uses: coffey-labs/actions/checkout@fab0c4d45e0162963965f1555df27b7bed5e20ec
+        with:
+          fetch-depth: 0
+      - run: apt-get update -qq && apt-get install -y -qq --no-install-recommends curl jq ca-certificates >/dev/null
+      - shell: bash
+        run: |
+          set -euo pipefail
+          API="${CI_SERVER_INTERNAL}/api/v1/repos/${GITHUB_REPOSITORY}"
+          sha="$(git rev-parse HEAD)"
+
+          # The newest published release, or empty on a project that has never
+          # had one -- in which case everything counts as new.
+          previous="$(curl -fsS -H "Authorization: token ${READ_TOKEN}" "${API}/releases?draft=false&pre-release=false&limit=1" | jq -r '.[0].tag_name // ""')"
+          # A release can outlive its tag; falling back to the whole history
+          # over-counts, which cuts a release that was due anyway. Tag lookups
+          # use show-ref, which matches an exact ref: rev-parse --verify on this
+          # git can read some tag names as describe output and "find" a tag
+          # that isn't there (see ihasmail's port).
+          if [ -n "$previous" ] && git show-ref --verify --quiet "refs/tags/${previous}"; then
+            count="$(git rev-list --count "${previous}..HEAD")"; range="${previous}..HEAD"
+          else
+            count="$(git rev-list --count HEAD)"; range="HEAD"
+          fi
+          if [ "$count" -eq 0 ]; then
+            echo "Nothing to release: no commits since ${previous}."; exit 0
+          fi
+
+          today="$(date -u +%Y.%-m.%-d)"
+          version="$today"; n=2
+          while git show-ref --verify --quiet "refs/tags/v${version}"; do
+            version="${today}.${n}"; n=$((n + 1))
+          done
+          tag="v${version}"
+          echo "Releasing ${tag} -- ${count} commit(s) since ${previous:-the beginning}, from ${sha}."
+          if [ "$DRY_RUN" = "1" ]; then echo "Dry run (RELEASE_LIVE='${{ vars.RELEASE_LIVE }}'): stopping here."; exit 0; fi
+
+          auth=(-H "Authorization: token ${RELEASE_TOKEN}")
+          # The bump, written with a JSON parser rather than sed: a version put
+          # into JSON by string substitution is one stray quote from a file
+          # nothing can read.
+          VERSION="$version" node -e '
+            const fs = require("fs");
+            const f = "inbuxa-version.json";
+            const j = JSON.parse(fs.readFileSync(f, "utf8"));
+            j.version = process.env.VERSION;
+            fs.writeFileSync(f, JSON.stringify(j, null, 2) + "\n");
+          '
+          head="$(curl -fsS "${auth[@]}" "${API}/branches/main" | jq -er .commit.id)"
+          if [ "$head" != "$sha" ]; then
+            echo "main moved from ${sha} to ${head} since this run counted; run it again." >&2
+            exit 1
+          fi
+          blob="$(curl -fsS "${auth[@]}" "${API}/contents/inbuxa-version.json?ref=${sha}" | jq -er .sha)"
+          jq -n --arg msg "Version ${version}" --arg blob "$blob" \
+                --arg content "$(base64 -w0 inbuxa-version.json)" \
+            '{branch:"main", message:$msg, sha:$blob, content:$content}' > commit.json
+          bump="$(curl -fsS "${auth[@]}" -X PUT -H "Content-Type: application/json" \
+                    --data @commit.json "${API}/contents/inbuxa-version.json" | jq -er .commit.sha)"
+          echo "committed the bump as ${bump}"
+
+          # Notes bounded to what is new: one line per change on main's
+          # first-parent history, which is what GitHub's generated notes listed.
+          notes="$(git log --first-parent --format='- %s' "$range")"
+          jq -n --arg tag "$tag" --arg ref "$bump" --arg name "INBUXA Admin ${version}" \
+                --arg body "$(printf '%s commit(s) since %s.\n\n%s' "$count" "${previous:-the beginning}" "$notes")" \
+                '{tag_name:$tag, target_commitish:$ref, name:$name, body:$body}' > release.json
+          curl -fsS "${auth[@]}" -H "Content-Type: application/json" \
+               --data @release.json "${API}/releases" | jq -r '"created release " + .tag_name'

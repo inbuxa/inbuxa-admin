@@ -1,0 +1,126 @@
+# CI on the self-hosted Gitea, ported from .gitlab-ci.yml during the move off
+# GitLab (2026-09-22). Gitea reads .gitea/workflows and ignores .github/ once
+# this directory exists; .github/workflows stays as it was for GitHub.
+#
+# Every job runs in an image pinned by digest (tag in the trailing comment),
+# and the only action used is coffey-labs/actions/checkout pinned by SHA. The
+# instance resolves short `uses:` against itself, never GitHub, so nothing
+# unreviewed can be pulled in. Read the comment for the version; the digest is
+# what runs.
+#
+# Jobs run on the runner's `ci-net` network and clone from Gitea's internal
+# address, never through the Cloudflare-proxied public name, which caps
+# request bodies at 100 MB. Images go to the registry's own DNS-only name
+# (vars.REGISTRY, an org variable).
+#
+# The weekly release is its own workflow, weekly-release.yml.
+#
+# Not ported:
+#   * cleanup.yml pruned GHCR with dataaxiom/ghcr-cleanup-action; on Gitea
+#     that belongs in the package cleanup rules (owner settings -> Packages),
+#     not in a workflow.
+name: ci
+
+on:
+  push:
+    branches: [main]
+    # Only date tags publish (v2026.9.21, v2026.9.21.2). The repository still
+    # carries the inherited v1.0.x tags, and a tag of any other shape pushed
+    # by hand is not a release.
+    tags:
+      - 'v[0-9][0-9][0-9][0-9].[0-9]+.[0-9]+'
+      - 'v[0-9][0-9][0-9][0-9].[0-9]+.[0-9]+.[0-9]+'
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # A release tag is built and tested again before its image is published.
+  build:
+    runs-on: docker
+    container:
+      image: node:22-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9 # 22-bookworm-slim
+    env:
+      NPM_CONFIG_CACHE: ${{ github.workspace }}/.npm
+    steps:
+      - uses: coffey-labs/actions/checkout@fab0c4d45e0162963965f1555df27b7bed5e20ec
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  # ----------------------------------------------------------- publish ------
+  # Port of publish.yml, to the owner's own registry now that GHCR went with
+  # the GitHub account: <REGISTRY>/inbuxa/inbuxa-admin, the same path the
+  # GitLab registry used.
+  #
+  # Tag-driven. A release cut with the job's own token raises no event on
+  # Gitea (as on GitHub), so weekly-release.yml creates its release with
+  # RELEASE_TOKEN; the tag that makes is an ordinary push, and starts this.
+  #
+  # The tag must agree with inbuxa-version.json at the commit it names -- the
+  # property release.yml was built around: the tree a tag points at reports
+  # the version the tag claims. A tag placed beside an unbumped file fails
+  # here rather than publishing an image that reports the wrong version.
+  #
+  # Both architectures build under QEMU on this amd64 host, where publish.yml
+  # had a native arm64 runner. That is slow -- tens of minutes for npm ci and
+  # the Vite build through instruction translation -- and tolerable for a
+  # weekly tag, which is why this is tag-only. If arm64 starts timing out, the
+  # fix is an arm64 runner, not dropping the platform.
+  #
+  # The push logs in with PACKAGE_TOKEN (jcoffey-dev, write:package): Gitea's
+  # per-job token is refused by the container registry. The registry hands out
+  # its push tokens from its own name, so unlike on GitLab nothing here has to
+  # be pointed at a public address.
+  publish:
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    needs: [build]
+    runs-on: docker
+    container:
+      image: docker:28-cli@sha256:625d9431a9f54c5a2bc90f24f0e1c3d55b1349fd857dd85035f98c2c9acbdd4d # 28-cli
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+    env:
+      DOCKER_BUILDKIT: "1"
+      REGISTRY: ${{ vars.REGISTRY }}
+      IMAGE: ${{ vars.REGISTRY }}/${{ github.repository }}
+      PACKAGE_TOKEN: ${{ secrets.PACKAGE_TOKEN }}
+    steps:
+      - uses: coffey-labs/actions/checkout@fab0c4d45e0162963965f1555df27b7bed5e20ec
+      - run: |
+          set -eu
+          apk add --no-cache -q jq curl
+          VERSION="$(jq -er .version inbuxa-version.json)"
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME names a commit whose inbuxa-version.json says $VERSION." >&2
+            echo "Refusing to publish an image that would report the wrong version." >&2
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+      - run: |
+          test -n "$REGISTRY"
+          echo "$PACKAGE_TOKEN" | docker login -u jcoffey-dev --password-stdin "$REGISTRY"
+          docker run --privileged --rm tonistiigi/binfmt --install arm64
+          docker buildx create --use --name gitea-builder --driver docker-container || docker buildx use gitea-builder
+      # Attestations are off, as they were in publish.yml: they add manifests
+      # of their own to the index.
+      - run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --provenance=false --sbom=false \
+            --tag "$IMAGE:$VERSION" \
+            --tag "$IMAGE:latest" \
+            --push .
+          docker buildx imagetools inspect "$IMAGE:$VERSION"
+      # Gitea keeps a container package on its owner; linking it shows it on
+      # the repository's Packages tab. Idempotent.
+      - run: |
+          curl -fsS -o /dev/null -X POST -H "Authorization: token $PACKAGE_TOKEN" \
+            "$CI_SERVER_INTERNAL/api/v1/packages/${GITHUB_REPOSITORY%%/*}/container/${GITHUB_REPOSITORY#*/}/-/link/${GITHUB_REPOSITORY#*/}" \
+            || echo "package already linked (or link refused); not fatal"
+      - if: always()
+        run: docker logout "$REGISTRY" || true
