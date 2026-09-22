@@ -11,4 +11,4 @@
  * this fork. The version shown beside the link names the build, which is what
  * makes the offer something a person can act on.
  */
-export const SOURCE_URL = 'https://github.com/inbuxa/inbuxa-admin';
+export const SOURCE_URL = 'https://git.coffeylabs.org/inbuxa/inbuxa-admin';
