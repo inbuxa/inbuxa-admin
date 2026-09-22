@@ -15,7 +15,7 @@
   "bootstrap": {
     "clipboardBlocked": "Your browser blocked clipboard access.",
     "complete": "Setup complete",
-    "configuredSuccessfully": "INBUXA has been configured successfully.",
+    "configuredSuccessfully": "inbuxa has been configured successfully.",
     "copyFailed": "Copy failed",
     "credentialsCreated": "Your administrator account has been created. Write these down now: the password will not be shown again.",
     "emptyForm": "Setup form is empty. The server did not return any bootstrap fields.",
@@ -23,11 +23,11 @@
     "failedToLoad": "Failed to load bootstrap state.",
     "finishSetup": "Finish setup",
     "loadingSetup": "Loading setup...",
-    "nextStepBody": "restart INBUXA for the new configuration to take effect. Once restarted, sign in with the credentials above to continue administering your server.",
+    "nextStepBody": "restart inbuxa for the new configuration to take effect. Once restarted, sign in with the credentials above to continue administering your server.",
     "nextStepLabel": "Next step:",
     "noConfirm": "The server did not confirm the update.",
     "stepOf": "Step {{current}} of {{total}}",
-    "welcome": "Welcome to INBUXA",
+    "welcome": "Welcome to inbuxa",
     "welcomeSubtitle": "Let's get your server set up."
   },
   "common": {
@@ -295,11 +295,11 @@
   },
   "logo": {
     "alt": "Logo",
-    "inbuxaAlt": "INBUXA"
+    "inbuxaAlt": "inbuxa"
   },
   "logout": "Logout",
   "version": {
-    "label": "INBUXA Admin {{version}}"
+    "label": "inbuxa Admin {{version}}"
   },
   "nav": {
     "layoutLegacy": "Legacy",

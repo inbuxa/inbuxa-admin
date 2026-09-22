@@ -38,7 +38,7 @@ function buildOtpAuthUrl(totp: OTPAuth.TOTP): string {
 
 function generateTotp(): { totp: OTPAuth.TOTP; url: string } {
   const totp = new OTPAuth.TOTP({
-    issuer: 'INBUXA',
+    issuer: 'inbuxa',
     label: 'account',
     algorithm: 'SHA1',
     digits: 6,

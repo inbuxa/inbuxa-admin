@@ -244,7 +244,7 @@ export function protocolRows(policy: ProtocolPolicy, listeners: PolicyListener[]
     },
     // Incoming mail and JMAP are never the switch's to close (LP-3, "Not affected, ever").
     { key: 'smtp', label: 'SMTP (incoming mail)', state: 'locked', ports: [] },
-    { key: 'jmap', label: 'JMAP (INBUXA webmail)', state: 'locked', ports: [] },
+    { key: 'jmap', label: 'JMAP (inbuxa webmail)', state: 'locked', ports: [] },
   ];
 }
 

@@ -104,7 +104,7 @@ export const PAGE_HELP: Record<string, PageHelp> = {
     about: 'Named sets of permissions. Give a role to a person to let them do more, or less.',
   },
   'x:OAuthClient': {
-    about: 'Apps allowed to sign people in through this server, like INBUXA webmail and INBUXA Admin.',
+    about: 'Apps allowed to sign people in through this server, like inbuxa webmail and inbuxa Admin.',
   },
   'x:DkimSignature': {
     about: 'The keys that sign outgoing mail so receivers can check it really came from you.',
