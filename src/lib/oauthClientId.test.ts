@@ -36,17 +36,17 @@ describe('getOAuthClientId', () => {
 
   it('falls back to the built-in default when the placeholder is empty', async () => {
     const getOAuthClientId = await loadWithMeta('<meta name="oauth-client-id" content="" />');
-    expect(getOAuthClientId()).toBe('stalwart-webui');
+    expect(getOAuthClientId()).toBe('inbuxa-webui');
   });
 
   it('falls back to the built-in default when the placeholder is only whitespace', async () => {
     const getOAuthClientId = await loadWithMeta('<meta name="oauth-client-id" content="   " />');
-    expect(getOAuthClientId()).toBe('stalwart-webui');
+    expect(getOAuthClientId()).toBe('inbuxa-webui');
   });
 
   it('falls back to the built-in default when the placeholder is absent', async () => {
     const getOAuthClientId = await loadWithMeta('');
-    expect(getOAuthClientId()).toBe('stalwart-webui');
+    expect(getOAuthClientId()).toBe('inbuxa-webui');
   });
 
   it('is inbuxa-admin when hosted apart from the server', async () => {
