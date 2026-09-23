@@ -51,6 +51,11 @@ const LegacyProtocolsPage = lazyFeature(
   () => import('@/features/hardening/LegacyProtocolsPage'),
   (m) => m.LegacyProtocolsPage,
 );
+// inbuxa: Settings › Spam Filter › Local AI (ai-spam-classification spec).
+const LocalAiPage = lazyFeature(
+  () => import('@/features/ai/LocalAiPage'),
+  (m) => m.LocalAiPage,
+);
 const TenantLegacyProtocols = lazyFeature(
   () => import('@/features/hardening/TenantLegacyProtocols'),
   (m) => m.TenantLegacyProtocols,
@@ -111,6 +116,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     // INBUXA: Settings › Security › Hardening (legacy-protocols spec).
     if (componentName === 'LegacyProtocols') {
       return <LegacyProtocolsPage />;
+    }
+    if (componentName === 'LocalAi') {
+      return <LocalAiPage />;
     }
     return (
       <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">

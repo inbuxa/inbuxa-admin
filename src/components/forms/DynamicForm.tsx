@@ -10,6 +10,7 @@
 import { humanize } from '@/lib/humanize';
 import { PageHeader } from '@/components/common/PageHeader';
 import { HelpPanel } from '@/help/HelpPanel';
+import { fieldPlaceholder, formNotices, variantPrefill } from '@/features/ai/formExtras';
 import { iconForView } from '@/lib/viewIcon';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
@@ -305,7 +306,11 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
 
       setSelectedVariant(newVariant);
 
-      const newData = buildEmbeddedDefaults(schema, obj.objectName, {}, newVariant);
+      const newData = {
+        ...buildEmbeddedDefaults(schema, obj.objectName, {}, newVariant),
+        // inbuxa: e.g. the default prompt when the AI classifier is switched on
+        ...variantPrefill(obj.objectName, newVariant),
+      };
       setFormData(newData);
     },
     [schema, resolved],
@@ -782,6 +787,21 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
         </div>
       )}
 
+      {/* inbuxa: notices for the AI objects (locality warning, AI-2) */}
+      {formNotices(resolved.obj.objectName, formData).map((notice) => (
+        <div
+          key={notice.key}
+          role={notice.tone === 'warning' ? 'alert' : 'note'}
+          className={
+            notice.tone === 'warning'
+              ? 'rounded-md border border-amber-500/30 bg-amber-500/10 p-4 text-sm'
+              : 'rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground'
+          }
+        >
+          {t(notice.key, notice.text)}
+        </div>
+      ))}
+
       {sectionsToRender.map((section, sectionIdx) => (
         <Card key={sectionIdx}>
           {section.title && (
@@ -838,7 +858,15 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
                   <FieldWidget
                     key={formField.name}
                     field={field}
-                    formField={formField}
+                    formField={
+                      formField.placeholder
+                        ? formField
+                        : {
+                            ...formField,
+                            // inbuxa: local example addresses on the AI model form
+                            placeholder: fieldPlaceholder(resolved.obj.objectName, formField.name),
+                          }
+                    }
                     value={fieldValue}
                     onChange={(v) => handleFieldChange(formField.name, v)}
                     readOnly={fieldReadOnly}
