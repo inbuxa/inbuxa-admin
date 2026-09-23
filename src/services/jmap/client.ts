@@ -15,7 +15,7 @@ import type { Schema } from '@/types/schema';
 
 const JMAP_USING = [
   'urn:ietf:params:jmap:core',
-  'urn:stalwart:jmap',
+  'urn:inbuxa:jmap:registry',
   'urn:ietf:params:jmap:blob',
   'urn:ietf:params:jmap:mail',
   'urn:ietf:params:jmap:calendars',

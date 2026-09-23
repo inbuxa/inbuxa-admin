@@ -9,10 +9,10 @@
 
 // INBUXA requires OAuth clients to be registered, and registers these two on
 // every start (inbuxa-server contract C-6). Served by the server itself, this
-// is the web interface at /admin, registered as `stalwart-webui`. Hosted
+// is the web interface at /admin, registered as `inbuxa-webui`. Hosted
 // anywhere else, with the server's address in <meta name="api-base-url">, it
 // is INBUXA Admin, registered as `inbuxa-admin` from INBUXA_ADMIN_URL.
-const SERVED_BY_SERVER_CLIENT_ID = 'stalwart-webui';
+const SERVED_BY_SERVER_CLIENT_ID = 'inbuxa-webui';
 const HOSTED_ELSEWHERE_CLIENT_ID = 'inbuxa-admin';
 
 let cached: string | undefined;
