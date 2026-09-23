@@ -71,6 +71,11 @@ function checkSpecialLink(
     return { visible: canGet ? canGet('sysNetworkListener') : true, enterprise: false };
   }
 
+  // inbuxa: the Local AI page is for whoever may see the AI classifier.
+  if (viewName === 'CustomComponent/LocalAi') {
+    return { visible: canGet ? canGet('sysSpamLlm') : true, enterprise: false };
+  }
+
   if (viewName.startsWith('CustomComponent/')) {
     return { visible: true, enterprise: false };
   }
