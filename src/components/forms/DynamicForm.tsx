@@ -63,6 +63,7 @@ import { logFormChange } from '@/lib/debug';
 import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DnsConnectCard } from '@/features/dns/DnsConnectCard';
 import { isSieveScriptField } from '@/lib/sievepad';
+import { reloadActionFor } from '@/lib/settingsApply';
 
 import type { Field, Fields, Form, FormField, Schema } from '@/types/schema';
 import type { JmapSetResponse, JmapSetError, JmapMethodCall } from '@/types/jmap';
@@ -529,10 +530,13 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
             setCreatedObjectId(newId);
             setServerCreatedProps(extraProps);
           } else {
-            toast({
-              title: t('form.createdSuccess', 'Created successfully'),
-              variant: 'success',
-            });
+            // inbuxa: a settings object says "Saved and applied" once the server has it.
+            if (!reloadActionFor(obj.objectName)) {
+              toast({
+                title: t('form.createdSuccess', 'Created successfully'),
+                variant: 'success',
+              });
+            }
             setOriginalData({ ...formData });
             navigate(`/${section}/${viewName}`);
           }
@@ -616,10 +620,13 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
         const setResult = setResponse[1] as unknown as JmapSetResponse;
 
         if (setResult.updated && updateId in setResult.updated) {
-          toast({
-            title: t('form.savedSuccess', 'Saved successfully'),
-            variant: 'success',
-          });
+          // inbuxa: a settings object says "Saved and applied" once the server has it.
+          if (!reloadActionFor(obj.objectName)) {
+            toast({
+              title: t('form.savedSuccess', 'Saved successfully'),
+              variant: 'success',
+            });
+          }
 
           if (isSingleton) {
             const getResponses = await jmapGet(obj.objectName, accountId, ['singleton'], fetchProperties);

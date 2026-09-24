@@ -22,6 +22,7 @@ import { TopBar } from '@/components/layout/TopBar';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SectionNav } from '@/components/layout/SectionNav';
 import { MainContent } from '@/components/layout/MainContent';
+import { SettingsApplyBanner } from '@/components/layout/SettingsApplyBanner';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import {
@@ -320,6 +321,7 @@ export default function AdminPanel() {
             !useSectionNav && sidebarOpen && (sidebarCollapsed ? 'md:ml-[4.5rem]' : 'md:ml-64'),
           )}
         >
+          <SettingsApplyBanner />
           <ErrorBoundary key={activeAccountId ?? 'none'}>
             <MainContent viewName={viewName} id={id} section={section} />
           </ErrorBoundary>

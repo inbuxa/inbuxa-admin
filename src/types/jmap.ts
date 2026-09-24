@@ -1,7 +1,10 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 export interface JmapRequest {
@@ -52,9 +55,15 @@ export interface JmapSetError {
   description?: string;
   properties?: string[];
   existingId?: string;
-  objectId?: string;
+  objectId?: string | JmapObjectRef;
   linkedObjects?: string[];
   validationErrors?: ValidationError[];
+}
+
+/** A registry object as the server names it in an error: its type without `x:`, and its id. */
+export interface JmapObjectRef {
+  object: string;
+  id: string;
 }
 
 export interface ValidationError {
