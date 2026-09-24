@@ -12,6 +12,7 @@ import { apiFetch } from '@/services/api';
 import { logJmapExchange } from '@/lib/debug';
 import type { JmapMethodCall, JmapMethodResponse, JmapQueryResponse, JmapResponse } from '@/types/jmap';
 import type { Schema } from '@/types/schema';
+import { writesRegistry, writtenRegistryTypes } from '@/lib/settingsApply';
 
 const JMAP_USING = [
   'urn:ietf:params:jmap:core',
@@ -35,7 +36,41 @@ export function getAccountId(objectType: string): string {
   return activeAccountId;
 }
 
+/**
+ * inbuxa: told about every registry write, so that saved settings can be
+ * applied on the server (settingsApplyStore). `started` comes before the
+ * request goes out and `finished` after it settles, with the types it changed.
+ */
+export interface RegistryWriteListener {
+  started(): void;
+  finished(objectNames: string[]): void;
+}
+
+let registryWriteListener: RegistryWriteListener | null = null;
+
+export function setRegistryWriteListener(listener: RegistryWriteListener | null) {
+  registryWriteListener = listener;
+}
+
 export async function jmapRequest(
+  methodCalls: JmapMethodCall[],
+  signal?: AbortSignal,
+  extraUsing: string[] = [],
+): Promise<JmapMethodResponse[]> {
+  const listener = writesRegistry(methodCalls) ? registryWriteListener : null;
+  if (!listener) return sendJmapRequest(methodCalls, signal, extraUsing);
+  listener.started();
+  let written: string[] = [];
+  try {
+    const responses = await sendJmapRequest(methodCalls, signal, extraUsing);
+    written = writtenRegistryTypes(responses);
+    return responses;
+  } finally {
+    listener.finished(written);
+  }
+}
+
+async function sendJmapRequest(
   methodCalls: JmapMethodCall[],
   signal?: AbortSignal,
   extraUsing: string[] = [],
