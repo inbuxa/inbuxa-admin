@@ -11,9 +11,15 @@
  * A write to the registry is stored at once, but most settings only take
  * effect when the server rebuilds its configuration from the registry: the
  * x:Action ReloadSettings action, which also carries the change to every
- * node of a cluster. The server does that by itself on a write for a few
- * types only (directories and the default authentication). Everything else
- * waited for someone to open Management > Actions and reload by hand.
+ * node of a cluster. Older servers do that by themselves on a write for a few
+ * types only (directories and the default authentication); everything else
+ * waits for a reload, which the admin sends (settingsApplyStore).
+ *
+ * Newer servers reload after every write that needs it and say how it went
+ * in the set response's `x:settingsReload` ({applied, description}), absent
+ * when the write needed no reload. A write that carries it needs nothing from
+ * the admin; the table below is what an older server, which never sends it,
+ * still needs, and it follows the server's own list of what each type needs.
  *
  * A reload is all or nothing: the new configuration replaces the running one
  * only when every settings object builds, so applying straight after a save
@@ -43,6 +49,8 @@ const OWN_ACTION: Record<string, ReloadAction> = {
   MemoryLookupKey: 'ReloadLookupStores',
   MemoryLookupKeyValue: 'ReloadLookupStores',
   BlockedIp: 'ReloadBlockedIps',
+  // Not AllowedIp: allowed addresses are part of the full settings, and only
+  // ReloadSettings rebuilds them.
 };
 
 /** Types that need no reload after a write. Anything not listed here is reloaded. */
@@ -54,15 +62,19 @@ const NOTHING_TO_APPLY = new Set<string>([
   'Account',
   'AccountPassword',
   'AccountSettings',
+  'Alert',
   'ApiKey',
   'AppPassword',
+  'DnsServer',
   'Domain',
   'DkimSignature',
+  'Enterprise',
   'MailingList',
   'MaskedEmail',
   'OAuthClient',
   'PublicKey',
   'Role',
+  'SpamLlm',
   'Tenant',
   // Operations, records and telemetry rather than settings.
   'Action',
@@ -86,7 +98,9 @@ const NOTHING_TO_APPLY = new Set<string>([
   'Coordinator',
   'DataStore',
   'InMemoryStore',
+  'MetricsStore',
   'SearchStore',
+  'TracingStore',
   // Applications are unpacked by their own manager, which no reload reaches.
   'Application',
 ]);
@@ -110,9 +124,43 @@ export function writesRegistry(methodCalls: JmapMethodCall[]): boolean {
   return methodCalls.some(([name]) => REGISTRY_SET.test(name));
 }
 
-/** The registry types a response says were created, changed or destroyed. */
-export function writtenRegistryTypes(methodResponses: JmapMethodResponse[]): string[] {
-  const types = new Set<string>();
+/** What a newer server says about applying a registry write (`x:settingsReload`). */
+export interface ServerReload {
+  /** The running settings, on every node, include the write. */
+  applied: boolean;
+  /** Why they don't, when they don't. */
+  description?: string;
+}
+
+/** A registry type a request created, changed or destroyed, and what the server said about applying it. */
+export interface RegistryWrite {
+  objectName: string;
+  /** Absent from older servers, and from newer ones when the write needed no reload. */
+  serverReload?: ServerReload;
+}
+
+/**
+ * Types whose `x:settingsReload` doesn't tell the whole story. The server
+ * answers an AllowedIp write with the blocked-IP reload, but allowed
+ * addresses are only rebuilt by a full reload, so the admin still sends one.
+ */
+const SERVER_RELOAD_INCOMPLETE = new Set<string>(['x:AllowedIp']);
+
+/** Whether a write's `x:settingsReload` means the admin has nothing to send for it. */
+export function serverAppliesWrite(write: RegistryWrite): boolean {
+  return write.serverReload !== undefined && !SERVER_RELOAD_INCOMPLETE.has(write.objectName);
+}
+
+function readServerReload(value: unknown): ServerReload | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const { applied, description } = value as { applied?: unknown; description?: unknown };
+  if (typeof applied !== 'boolean') return undefined;
+  return typeof description === 'string' && description ? { applied, description } : { applied };
+}
+
+/** The registry writes in a response: one per `x:<Type>/set` that created, changed or destroyed something. */
+export function registryWrites(methodResponses: JmapMethodResponse[]): RegistryWrite[] {
+  const writes: RegistryWrite[] = [];
   for (const [name, result] of methodResponses) {
     const match = REGISTRY_SET.exec(name);
     if (!match || !result) continue;
@@ -124,10 +172,11 @@ export function writtenRegistryTypes(methodResponses: JmapMethodResponse[]): str
       (updated && Object.keys(updated).length > 0) ||
       (destroyed && destroyed.length > 0)
     ) {
-      types.add(match[1]);
+      const serverReload = readServerReload(result['x:settingsReload']);
+      writes.push(serverReload ? { objectName: match[1], serverReload } : { objectName: match[1] });
     }
   }
-  return [...types];
+  return writes;
 }
 
 /** The actions due for a set of written types, in the order they run. */
@@ -171,4 +220,20 @@ export function describeRequestFailure(err: unknown): ApplyFailure {
     }
   }
   return { message: i18n.t('settingsApply.noAnswer', 'The server did not answer.') };
+}
+
+/** How the server starts a refused reload's description; the banner says the same in its own words. */
+const SERVER_RELOAD_PREFIX = 'Saved, but the running settings were not reloaded. ';
+/** How the server names the object that didn't build: "<Type> with id <id>: <error>". */
+const SERVER_RELOAD_OBJECT = /^([A-Z][A-Za-z0-9]*) with id ([^\s:]+): /;
+
+/** Reads a server's refused reload (`x:settingsReload` with applied: false) into something to show. */
+export function describeServerReload(reload: ServerReload): ApplyFailure {
+  let message = reload.description?.trim() ?? '';
+  if (message.startsWith(SERVER_RELOAD_PREFIX)) message = message.slice(SERVER_RELOAD_PREFIX.length).trim();
+  if (!message) {
+    return { message: i18n.t('settingsApply.notReloaded', 'The server did not reload its settings.') };
+  }
+  const match = SERVER_RELOAD_OBJECT.exec(message);
+  return match ? { message, object: { object: match[1], id: match[2] } } : { message };
 }

@@ -8,10 +8,12 @@ import { describe, it, expect } from 'vitest';
 import {
   describeApplyFailure,
   describeRequestFailure,
+  describeServerReload,
+  registryWrites,
   reloadActionFor,
   reloadActionsFor,
+  serverAppliesWrite,
   writesRegistry,
-  writtenRegistryTypes,
 } from './settingsApply';
 import type { JmapMethodResponse } from '@/types/jmap';
 
@@ -38,8 +40,26 @@ describe('reloadActionFor', () => {
     expect(reloadActionFor('x:Authentication')).toBeNull();
   });
 
+  it('reloads allowed IPs in full: they are part of the settings, not the blocked list', () => {
+    expect(reloadActionFor('x:AllowedIp')).toBe('ReloadSettings');
+  });
+
   it('skips data read live, operations and stores', () => {
-    for (const type of ['Account', 'Domain', 'DkimSignature', 'Tenant', 'Action', 'QueuedMessage', 'DataStore']) {
+    for (const type of [
+      'Account',
+      'Alert',
+      'DnsServer',
+      'Domain',
+      'DkimSignature',
+      'Enterprise',
+      'SpamLlm',
+      'Tenant',
+      'Action',
+      'QueuedMessage',
+      'DataStore',
+      'MetricsStore',
+      'TracingStore',
+    ]) {
       expect(reloadActionFor(`x:${type}`)).toBeNull();
     }
   });
@@ -78,7 +98,62 @@ describe('registry writes', () => {
       ['x:Certificate/set', { destroyed: ['c1'] }, '2'],
       ['error', { type: 'serverFail' }, '3'],
     ];
-    expect(writtenRegistryTypes(responses)).toEqual(['x:MtaRoute', 'x:Certificate']);
+    expect(registryWrites(responses)).toEqual([{ objectName: 'x:MtaRoute' }, { objectName: 'x:Certificate' }]);
+  });
+
+  it("reads the server's own reload report where there is one", () => {
+    const responses: JmapMethodResponse[] = [
+      ['x:MtaRoute/set', { updated: { a: null }, 'x:settingsReload': { applied: true } }, '0'],
+      [
+        'x:Tracer/set',
+        {
+          created: { t: { id: 't1' } },
+          'x:settingsReload': { applied: false, description: 'Saved, but the running settings were not reloaded. x' },
+        },
+        '1',
+      ],
+      ['x:Domain/set', { created: { d: { id: 'd1' } } }, '2'],
+      ['x:MtaHook/set', { updated: { h: null }, 'x:settingsReload': 'yes' }, '3'],
+    ];
+    expect(registryWrites(responses)).toEqual([
+      { objectName: 'x:MtaRoute', serverReload: { applied: true } },
+      {
+        objectName: 'x:Tracer',
+        serverReload: { applied: false, description: 'Saved, but the running settings were not reloaded. x' },
+      },
+      { objectName: 'x:Domain' },
+      // Not the shape a server sends: treated as absent.
+      { objectName: 'x:MtaHook' },
+    ]);
+  });
+
+  it('leaves applying to the server when it reported, except for allowed IPs', () => {
+    expect(serverAppliesWrite({ objectName: 'x:MtaRoute', serverReload: { applied: true } })).toBe(true);
+    expect(serverAppliesWrite({ objectName: 'x:MtaRoute', serverReload: { applied: false } })).toBe(true);
+    expect(serverAppliesWrite({ objectName: 'x:MtaRoute' })).toBe(false);
+    expect(serverAppliesWrite({ objectName: 'x:AllowedIp', serverReload: { applied: true } })).toBe(false);
+  });
+});
+
+describe('describeServerReload', () => {
+  it('drops the lead-in the banner already says and names the object', () => {
+    expect(
+      describeServerReload({
+        applied: false,
+        description:
+          'Saved, but the running settings were not reloaded. Tracer with id b: Only one console tracer is allowed',
+      }),
+    ).toEqual({
+      message: 'Tracer with id b: Only one console tracer is allowed',
+      object: { object: 'Tracer', id: 'b' },
+    });
+  });
+
+  it('keeps a description it does not recognize, and copes with none', () => {
+    expect(describeServerReload({ applied: false, description: 'Store unavailable' })).toEqual({
+      message: 'Store unavailable',
+    });
+    expect(describeServerReload({ applied: false })).toEqual({ message: 'The server did not reload its settings.' });
   });
 });
 
