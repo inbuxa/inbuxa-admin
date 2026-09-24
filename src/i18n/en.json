@@ -353,6 +353,7 @@
     "failedObject": "The problem is in {{object}}.",
     "noAnswer": "The server did not answer.",
     "notConfirmed": "The server did not confirm the reload.",
+    "notReloaded": "The server did not reload its settings.",
     "openObject": "Open it",
     "stillRunning": "The server keeps running on the settings it had. Your changes are saved and apply once this is fixed."
   },
