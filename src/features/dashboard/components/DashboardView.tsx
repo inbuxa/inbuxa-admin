@@ -28,6 +28,8 @@ import { StorageTreemap } from './StorageTreemap';
 import { QueueWaiting } from './QueueWaiting';
 import { WeeklyHeatmap } from './WeeklyHeatmap';
 import { useServerFacts, type ServerFacts } from '../serverFacts';
+import { useClusterHealth } from '../clusterHealth';
+import { ClusterHealthCard } from './ClusterHealthCard';
 
 /** INBUXA: live-metric cards the server's own objects can stand in for. */
 const FALLBACKS: Record<string, keyof ServerFacts> = {
@@ -35,6 +37,9 @@ const FALLBACKS: Record<string, keyof ServerFacts> = {
   'domain.count': 'domains',
   'queue.count': 'queued',
 };
+
+/** INBUXA: in a cluster, this card gives way to Cluster Health. */
+const replacedInCluster = (metrics: string[]) => metrics.length === 1 && metrics[0] === 'server.memory';
 
 interface DashboardViewProps {
   dashboardId: string;
@@ -55,6 +60,7 @@ export function DashboardView({ dashboardId, section }: DashboardViewProps) {
   const liveStatus = useLiveMetricsStore((s) => s.status);
   const liveError = useLiveMetricsStore((s) => s.error);
   const { facts } = useServerFacts();
+  const clusterHealth = useClusterHealth();
 
   const dashboards = useMemo<Dashboard[]>(() => schema?.dashboards ?? [], [schema]);
   const dashboard = dashboards.find((d) => d.id === dashboardId);
@@ -158,19 +164,23 @@ export function DashboardView({ dashboardId, section }: DashboardViewProps) {
 
       {dashboard.cards && dashboard.cards.length > 0 && (
         <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
-          {dashboard.cards.map((card, i) => (
-            <StatCard
-              key={`${card.title}-${i}`}
-              card={card}
-              historySamples={historySamples}
-              historyWindow={historyWindow}
-              fallback={
-                card.metrics.length === 1 && FALLBACKS[card.metrics[0]]
-                  ? (facts?.[FALLBACKS[card.metrics[0]]] as number | undefined)
-                  : undefined
-              }
-            />
-          ))}
+          {dashboard.cards.map((card, i) =>
+            clusterHealth && replacedInCluster(card.metrics) ? (
+              <ClusterHealthCard key={`cluster-health-${i}`} health={clusterHealth} />
+            ) : (
+              <StatCard
+                key={`${card.title}-${i}`}
+                card={card}
+                historySamples={historySamples}
+                historyWindow={historyWindow}
+                fallback={
+                  card.metrics.length === 1 && FALLBACKS[card.metrics[0]]
+                    ? (facts?.[FALLBACKS[card.metrics[0]]] as number | undefined)
+                    : undefined
+                }
+              />
+            ),
+          )}
         </div>
       )}
 
