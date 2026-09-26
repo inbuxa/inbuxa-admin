@@ -23,6 +23,7 @@ import {
   spamVerdictSubject,
   valueText,
 } from './explain';
+import { normalizeTraceEvents } from '@/features/tracing/normalize';
 
 beforeEach(() => jmapRequest.mockReset());
 
@@ -55,6 +56,22 @@ describe('subjects', () => {
     expect(JSON.stringify(subject)).not.toContain('hunter2');
     expect(subject.keyValues[0]).toEqual({ key: 'remoteIp', value: '192.0.2.1' });
     expect(subject.keyValues[1].value.length).toBeLessThanOrEqual(500);
+  });
+
+  it('takes a live event as the stream sends it, key-values as a JMAP map', () => {
+    const [event] = normalizeTraceEvents(
+      JSON.parse(
+        '[{"event":"http.response-body","timestamp":"2026-09-26T08:07:09Z","keyValues":{' +
+          '"0":{"key":"spanId","value":{"value":331622707493871616,"@type":"UnsignedInt"}},' +
+          '"1":{"key":"contents","value":{"value":"{\\"accessToken\\":\\"secret\\"}","@type":"String"}},' +
+          '"2":{"key":"code","value":{"value":200,"@type":"UnsignedInt"}}}}]',
+      ),
+    );
+    const subject = liveEventSubject(event);
+    if (!('keyValues' in subject)) throw new Error('not a live event');
+    expect(subject.keyValues.map((kv) => kv.key)).toEqual(['spanId', 'code']);
+    expect(subject.keyValues[1]).toEqual({ key: 'code', value: '200' });
+    expect(JSON.stringify(subject)).not.toContain('secret');
   });
 
   it('flattens typed values the way the server does', () => {
