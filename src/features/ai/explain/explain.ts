@@ -12,6 +12,7 @@
  */
 
 import { getAccountId, jmapRequest } from '@/services/jmap/client';
+import { apiFetch } from '@/services/api';
 import { INBUXA_CAPABILITY } from '../localAi';
 
 /** What to explain: the `subject` of an `inbuxa:Explanation`. */
@@ -33,6 +34,25 @@ export interface Explanation {
   model: string;
   node: string;
   elapsedMs: number;
+  /** Where it came from (EX-27): asked now, remembered, or prepared for the release. */
+  source: 'model' | 'remembered' | 'prepared';
+  /** When a remembered answer was first given. */
+  answeredAt?: string;
+  /** The release a prepared answer ships with. */
+  preparedFor?: string;
+}
+
+function explanationFrom(created: Partial<Explanation> & Record<string, unknown>): Explanation {
+  const source = created.source === 'remembered' || created.source === 'prepared' ? created.source : 'model';
+  return {
+    text: String(created.text ?? ''),
+    model: String(created.model ?? ''),
+    node: String(created.node ?? ''),
+    elapsedMs: Number(created.elapsedMs ?? 0),
+    source,
+    answeredAt: typeof created.answeredAt === 'string' ? created.answeredAt : undefined,
+    preparedFor: typeof created.preparedFor === 'string' ? created.preparedFor : undefined,
+  };
 }
 
 /** Why there's no explanation, in the few kinds the panel words differently (EX-20). */
@@ -133,17 +153,74 @@ export async function requestExplanation(subject: ExplainSubject, signal?: Abort
   };
   const created = body.created?.e;
   if (created && typeof created.text === 'string') {
-    return {
-      ok: true,
-      explanation: {
-        text: created.text,
-        model: String(created.model ?? ''),
-        node: String(created.node ?? ''),
-        elapsedMs: Number(created.elapsedMs ?? 0),
-      },
-    };
+    return { ok: true, explanation: explanationFrom(created as Partial<Explanation> & Record<string, unknown>) };
   }
   return { ok: false, failure: failureFrom(body.notCreated?.e) };
+}
+
+/**
+ * Asks for one explanation and shows it as the model writes it (EX-23):
+ * `onText` gets the answer so far after each piece. A server without the
+ * streaming route gets the ordinary request instead.
+ */
+export async function streamExplanation(
+  subject: ExplainSubject,
+  onText: (textSoFar: string) => void,
+  signal?: AbortSignal,
+): Promise<ExplainResult> {
+  const response = await apiFetch('/api/explain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify({ subject }),
+    signal,
+  });
+  if (response.status === 404 || response.status === 405 || !response.body) {
+    return requestExplanation(subject, signal);
+  }
+  if (!response.ok) {
+    return { ok: false, failure: failureFrom({ type: 'serverFail', description: 'unavailable' }) };
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let soFar = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let end: number;
+    while ((end = buffer.indexOf('\n\n')) !== -1) {
+      const block = buffer.slice(0, end);
+      buffer = buffer.slice(end + 2);
+      const event = parseEvent(block);
+      if (!event) continue;
+      if (event.name === 'delta' && typeof event.data.text === 'string') {
+        soFar += event.data.text;
+        onText(soFar);
+      } else if (event.name === 'done') {
+        return { ok: true, explanation: explanationFrom(event.data as Partial<Explanation> & Record<string, unknown>) };
+      } else if (event.name === 'error') {
+        return { ok: false, failure: failureFrom(event.data as { type?: string; description?: string }) };
+      }
+    }
+  }
+  return { ok: false, failure: { kind: 'unavailable' } };
+}
+
+/** One server-sent event: its name and JSON data. */
+export function parseEvent(block: string): { name: string; data: Record<string, unknown> } | null {
+  let name = 'message';
+  const data: string[] = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) name = line.slice(6).trim();
+    else if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+  }
+  if (!data.length) return null;
+  try {
+    return { name, data: JSON.parse(data.join('\n')) as Record<string, unknown> };
+  } catch {
+    return null;
+  }
 }
 
 /** The result of Actions › Classify a message, sent back as a verdict. */

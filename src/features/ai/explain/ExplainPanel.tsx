@@ -10,7 +10,7 @@ import type { TFunction } from 'i18next';
 import { Check, Copy, Loader2, Sparkles, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useExplainStore } from './explainStore';
-import type { ExplainFailure } from './explain';
+import type { ExplainFailure, Explanation } from './explain';
 
 /**
  * inbuxa: the explanation, beside the page rather than over it, so the
@@ -63,12 +63,19 @@ export function ExplainPanel() {
 
       <div className="overflow-y-auto px-4 py-3 text-sm" aria-live="polite">
         {panel.status === 'asking' && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>{t('explain.asking', 'Asking the local model…')}</span>
-            <Button type="button" variant="ghost" size="sm" className="ml-auto h-7" onClick={close}>
-              {t('explain.cancel', 'Cancel')}
-            </Button>
+          <div className="space-y-3">
+            {panel.soFar && <div className="whitespace-pre-line leading-relaxed">{panel.soFar}</div>}
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>
+                {panel.soFar
+                  ? t('explain.writing', 'Still writing…')
+                  : t('explain.asking', 'Asking the local model…')}
+              </span>
+              <Button type="button" variant="ghost" size="sm" className="ml-auto h-7" onClick={close}>
+                {t('explain.cancel', 'Cancel')}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -86,12 +93,7 @@ export function ExplainPanel() {
         {panel.status === 'done' && (
           <div className="space-y-3">
             <div className="space-y-2 whitespace-pre-line leading-relaxed">{panel.explanation.text}</div>
-            <p className="text-xs text-muted-foreground">
-              {t('explain.byline', 'Local AI · {{model}} · {{node}}', {
-                model: panel.explanation.model,
-                node: panel.explanation.node,
-              })}
-            </p>
+            <p className="text-xs text-muted-foreground">{byline(t, panel.explanation)}</p>
             <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
               {t(
                 'explain.caution',
@@ -117,6 +119,27 @@ export function ExplainPanel() {
       </div>
     </aside>
   );
+}
+
+/** Where the answer came from, in plain words (EX-27). */
+function byline(t: TFunction, explanation: Explanation): string {
+  switch (explanation.source) {
+    case 'prepared':
+      return t('explain.bylinePrepared', 'Prepared for release {{release}} with {{model}}', {
+        release: explanation.preparedFor ?? '',
+        model: explanation.model,
+      });
+    case 'remembered':
+      return t('explain.bylineRemembered', 'Local AI · {{model}} · answered earlier on {{node}}', {
+        model: explanation.model,
+        node: explanation.node,
+      });
+    default:
+      return t('explain.byline', 'Local AI · {{model}} · {{node}}', {
+        model: explanation.model,
+        node: explanation.node,
+      });
+  }
 }
 
 function failureText(t: TFunction, failure: ExplainFailure): string {

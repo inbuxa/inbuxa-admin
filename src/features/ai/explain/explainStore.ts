@@ -8,15 +8,15 @@
  * inbuxa: whether Explain is offered (the session's `aiExplain`), and the one
  * explanation panel. Asking again replaces what the panel shows; a request
  * left behind is abandoned in the console (EX-19), and the server finishes
- * or times out on its own.
+ * or times out on its own. The answer shows as the model writes it (EX-23).
  */
 
 import { create } from 'zustand';
-import { requestExplanation, type ExplainFailure, type ExplainSubject, type Explanation } from './explain';
+import { streamExplanation, type ExplainFailure, type ExplainSubject, type Explanation } from './explain';
 
 type PanelState =
   | { status: 'closed' }
-  | { status: 'asking'; title: string; subject: ExplainSubject }
+  | { status: 'asking'; title: string; subject: ExplainSubject; soFar: string }
   | { status: 'done'; title: string; subject: ExplainSubject; explanation: Explanation }
   | { status: 'failed'; title: string; subject: ExplainSubject; failure: ExplainFailure };
 
@@ -41,8 +41,14 @@ export const useExplainStore = create<ExplainState>()((set, get) => ({
     controller?.abort();
     const mine = new AbortController();
     controller = mine;
-    set({ panel: { status: 'asking', title, subject } });
-    requestExplanation(subject, mine.signal)
+    set({ panel: { status: 'asking', title, subject, soFar: '' } });
+    streamExplanation(
+      subject,
+      (soFar) => {
+        if (controller === mine) set({ panel: { status: 'asking', title, subject, soFar } });
+      },
+      mine.signal,
+    )
       .then((result) => {
         if (controller !== mine) return;
         set({
