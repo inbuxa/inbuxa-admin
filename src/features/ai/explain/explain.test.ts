@@ -11,9 +11,15 @@ vi.mock('@/services/jmap/client', () => ({
   getAccountId: () => 'a',
   jmapRequest: (...args: unknown[]) => jmapRequest(...args),
 }));
+const apiFetch = vi.fn();
+vi.mock('@/services/api', () => ({
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+}));
 
 import {
   DEFAULT_EXPLAIN,
+  parseEvent,
+  streamExplanation,
   explainAvailable,
   failedRecipients,
   isRawEvent,
@@ -137,7 +143,7 @@ describe('requestExplanation', () => {
     const result = await requestExplanation(setting);
     expect(result).toEqual({
       ok: true,
-      explanation: { text: 'It turns it on.', model: 'qwen', node: 'host2', elapsedMs: 900 },
+      explanation: { text: 'It turns it on.', model: 'qwen', node: 'host2', elapsedMs: 900, source: 'model' },
     });
     const [calls, , using] = jmapRequest.mock.calls[0];
     expect(calls[0][1]).toEqual({ accountId: 'a', create: { e: { subject: setting } } });
@@ -185,3 +191,68 @@ describe('saveExplainSettings', () => {
     expect(jmapRequest).not.toHaveBeenCalled();
   });
 });
+
+describe('streamExplanation (EX-23)', () => {
+  const setting = { '@type': 'Setting', object: 'x:Domain', id: 'b', property: 'isEnabled' } as const;
+
+  function streamed(chunks: string[], status = 200): Response {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        controller.close();
+      },
+    });
+    return new Response(body, { status, headers: { 'Content-Type': 'text/event-stream' } });
+  }
+
+  it('shows the text as it arrives, then the whole explanation', async () => {
+    apiFetch.mockResolvedValue(
+      streamed([
+        'event: delta\ndata: {"text":"It turns"}\n\nevent: de',
+        'lta\ndata: {"text":" it on."}\n\n',
+        'event: done\ndata: {"text":"It turns it on.","model":"qwen","node":"host2","elapsedMs":900,"source":"model"}\n\n',
+      ]),
+    );
+    const seen: string[] = [];
+    const result = await streamExplanation(setting, (t) => seen.push(t));
+    expect(seen).toEqual(['It turns', 'It turns it on.']);
+    expect(result).toEqual({
+      ok: true,
+      explanation: { text: 'It turns it on.', model: 'qwen', node: 'host2', elapsedMs: 900, source: 'model' },
+    });
+    const [path, init] = apiFetch.mock.calls.at(-1)!;
+    expect(path).toBe('/api/explain');
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ subject: setting });
+  });
+
+  it('keeps where a remembered or prepared answer came from (EX-27)', async () => {
+    apiFetch.mockResolvedValue(
+      streamed([
+        'event: done\ndata: {"text":"Prepared.","model":"qwen","node":"n","elapsedMs":0,"source":"prepared","preparedFor":"2026.9.27"}\n\n',
+      ]),
+    );
+    const result = await streamExplanation(setting, () => {});
+    expect(result).toMatchObject({ ok: true, explanation: { source: 'prepared', preparedFor: '2026.9.27' } });
+  });
+
+  it('words a refusal as the JMAP call does', async () => {
+    apiFetch.mockResolvedValue(streamed(['event: error\ndata: {"type":"serverFail","description":"busy"}\n\n']));
+    expect(await streamExplanation(setting, () => {})).toEqual({ ok: false, failure: { kind: 'busy' } });
+  });
+
+  it('falls back to the JMAP call on a server without the stream', async () => {
+    apiFetch.mockResolvedValue(new Response('not found', { status: 404 }));
+    jmapRequest.mockResolvedValue([
+      ['inbuxa:Explanation/set', { created: { e: { text: 'Old.', model: 'q', node: 'n', elapsedMs: 1 } } }],
+    ]);
+    expect(await streamExplanation(setting, () => {})).toMatchObject({ ok: true, explanation: { text: 'Old.' } });
+  });
+
+  it('parses one event block', () => {
+    expect(parseEvent('event: delta\ndata: {"text":"x"}')).toEqual({ name: 'delta', data: { text: 'x' } });
+    expect(parseEvent(': keep-alive')).toBeNull();
+    expect(parseEvent('data: {broken')).toBeNull();
+  });
+});
+
