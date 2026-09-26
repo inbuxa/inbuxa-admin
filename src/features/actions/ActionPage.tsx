@@ -19,6 +19,8 @@ import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DynamicView } from '@/components/views/DynamicView';
 import type { Schema, ObjectVariant } from '@/types/schema';
 import type { JmapSetResponse } from '@/types/jmap';
+import { ExplainButton } from '@/features/ai/explain/ExplainButton';
+import { spamVerdictSubject } from '@/features/ai/explain/explain';
 
 type ActionState =
   | { kind: 'pick' }
@@ -464,6 +466,14 @@ function ActionResultView({
           viewName={variant.schemaName}
           data={mergedData}
           visibleFields={visibleFields}
+        />
+      )}
+
+      {/* inbuxa: "Explain this" for a spam verdict (ai-explain EX-17) */}
+      {variant.name === 'ClassifySpam' && props && (
+        <ExplainButton
+          subject={() => spamVerdictSubject(props)}
+          title={t('explain.spamVerdictTitle', 'Spam verdict: {{result}}', { result: String(props.result ?? '') })}
         />
       )}
 

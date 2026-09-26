@@ -10,6 +10,8 @@ import { Link } from 'react-router-dom';
 import { CircleDot, CircleX, Clock } from 'lucide-react';
 import { useSchemaStore } from '@/stores/schemaStore';
 import type { TraceEvent, TraceKeyValue, TraceValue } from '../types';
+import { ExplainButton } from '@/features/ai/explain/ExplainButton';
+import { isRawEvent, type ExplainSubject } from '@/features/ai/explain/explain';
 
 const BASE32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz792013';
 
@@ -36,9 +38,11 @@ function isIdKey(key: string): boolean {
 interface TraceTimelineProps {
   events: TraceEvent[];
   anchorTimestamp?: string;
+  /** inbuxa: what "Explain this" asks about an event (ai-explain EX-17). */
+  explainSubject?: (event: TraceEvent, index: number) => ExplainSubject;
 }
 
-export function TraceTimeline({ events, anchorTimestamp }: TraceTimelineProps) {
+export function TraceTimeline({ events, anchorTimestamp, explainSubject }: TraceTimelineProps) {
   const { t } = useTranslation();
   const schema = useSchemaStore((s) => s.schema);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -139,9 +143,20 @@ export function TraceTimeline({ events, anchorTimestamp }: TraceTimelineProps) {
                       )}
                       {explanation && <p className="text-xs text-muted-foreground mt-0.5">{explanation}</p>}
                     </div>
-                    <div className="shrink-0 text-right">
-                      <div className="text-xs text-muted-foreground">{formatAbsoluteTime(event.timestamp)}</div>
-                      <div className="text-xs text-muted-foreground/60">{formatRelativeTime(event.timestamp)}</div>
+                    <div className="flex shrink-0 items-start gap-2">
+                      {/* inbuxa: raw protocol traffic isn't sent to the model (EX-9) */}
+                      {explainSubject && !isRawEvent(event.event) && (
+                        <ExplainButton
+                          icon
+                          className="mt-0.5"
+                          title={label}
+                          subject={() => explainSubject(event, idx)}
+                        />
+                      )}
+                      <div className="text-right">
+                        <div className="text-xs text-muted-foreground">{formatAbsoluteTime(event.timestamp)}</div>
+                        <div className="text-xs text-muted-foreground/60">{formatRelativeTime(event.timestamp)}</div>
+                      </div>
                     </div>
                   </div>
 

@@ -16,6 +16,7 @@ import { useSchemaStore } from '@/stores/schemaStore';
 import { apiFetch, getApiBaseUrl } from '@/services/api';
 import type { TraceEvent } from '../types';
 import { TraceTimeline } from './TraceTimeline';
+import { liveEventSubject } from '@/features/ai/explain/explain';
 
 const MAX_EVENTS = 1000;
 const MAX_RECONNECT = 5;
@@ -336,7 +337,7 @@ export function LiveTracingPage() {
 
       <Card>
         <CardContent className="p-4">
-          <TraceTimeline events={events} anchorTimestamp={anchor} />
+          <TraceTimeline events={events} anchorTimestamp={anchor} explainSubject={(event) => liveEventSubject(event)} />
         </CardContent>
       </Card>
 

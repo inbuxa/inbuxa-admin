@@ -200,7 +200,11 @@ export function TraceDetailView({ viewName, objectId }: TraceDetailViewProps) {
 
       <Card>
         <CardContent className="p-4">
-          <TraceTimeline events={events} anchorTimestamp={firstEvent?.timestamp} />
+          <TraceTimeline
+            events={events}
+            anchorTimestamp={firstEvent?.timestamp}
+            explainSubject={(_, index) => ({ '@type': 'TraceEvent', traceId: objectId, index })}
+          />
         </CardContent>
       </Card>
     </div>

@@ -73,6 +73,8 @@ import { jmapGetBatched, jmapQueryAll, jmapQueryAndGet, jmapSet, getAccountId } 
 import type { Schema, Field, MassAction, ItemAction, Filter as FilterDef } from '@/types/schema';
 import type { JmapSetResponse, JmapSetError } from '@/types/jmap';
 import type { ResolvedSchema } from '@/lib/schemaResolver';
+import { ExplainButton } from '@/features/ai/explain/ExplainButton';
+import { useExplainStore } from '@/features/ai/explain/explainStore';
 
 const ENUM_FILTER_COMBOBOX_THRESHOLD = 15;
 
@@ -359,6 +361,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
   const viewToSection = useSchemaStore((s) => s.viewToSection);
   const hasObjectPermission = useAccountStore((s) => s.hasObjectPermission);
   const edition = useAccountStore((s) => s.edition);
+  const explainAvailable = useExplainStore((s) => s.available);
   const [upsellOpen, setUpsellOpen] = useState(false);
 
   const resolved = useMemo(() => {
@@ -856,6 +859,9 @@ export function DynamicList({ viewName }: DynamicListProps) {
 
   const hasMassActions = effectiveMassActions.length > 0;
   const hasItemActions = (list.itemActions?.length ?? 0) > 0;
+  // inbuxa: "Explain this" on each log entry (ai-explain EX-17)
+  const explainLogs = explainAvailable && obj.objectName === 'x:Log';
+  const hasRowCell = hasItemActions || explainLogs;
 
   const pageStart = anchorStack.length * PAGE_SIZE;
   const rangeStart = pageStart + 1;
@@ -1265,7 +1271,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
                     </div>
                   </th>
                 ))}
-                {hasItemActions && (
+                {hasRowCell && (
                   <th className="w-12 px-3 py-3 text-right font-medium text-muted-foreground">
                     {t('list.actions', 'Actions')}
                   </th>
@@ -1276,7 +1282,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
               {loading && items.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasItemActions ? 1 : 0)}
+                    colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasRowCell ? 1 : 0)}
                     className="px-3 py-12 text-center"
                   >
                     <Loader2 className="mx-auto h-6 w-6 animate-spin" />
@@ -1284,10 +1290,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasItemActions ? 1 : 0)}
-                    className="px-3"
-                  >
+                  <td colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasRowCell ? 1 : 0)} className="px-3">
                     <EmptyState
                       title={t('list.emptyTitle', 'Nothing here yet')}
                       hint={t('list.noResults', 'No results found')}
@@ -1333,7 +1336,21 @@ export function DynamicList({ viewName }: DynamicListProps) {
                           </td>
                         );
                       })}
-                      {hasItemActions && <td className="px-3 py-2 text-right">{renderItemActions(item)}</td>}
+                      {hasRowCell && (
+                        <td className="px-3 py-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            {explainLogs && item.id != null && (
+                              <ExplainButton
+                                icon
+                                className="h-8 w-8"
+                                title={String(item.event ?? item.id)}
+                                subject={{ '@type': 'LogEntry', logId: String(item.id) }}
+                              />
+                            )}
+                            {renderItemActions(item)}
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })
