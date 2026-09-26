@@ -2,6 +2,8 @@
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { useEffect, useState } from 'react';
@@ -13,41 +15,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useSchemaStore } from '@/stores/schemaStore';
 import { jmapGet, getAccountId } from '@/services/jmap/client';
 import { resolveObject } from '@/lib/schemaResolver';
-import type { TraceEvent, TraceKeyValue, TraceValue } from '../types';
+import type { TraceEvent } from '../types';
+import { normalizeTraceEvents } from '../normalize';
 import { TraceTimeline } from './TraceTimeline';
 
-import { jmapMapToArray } from '@/lib/jmapUtils';
-
-function normalizeTraceEvents(raw: unknown): TraceEvent[] {
-  const events = jmapMapToArray<Record<string, unknown>>(raw);
-  return events.map((evt) => ({
-    event: String(evt.event ?? ''),
-    timestamp: String(evt.timestamp ?? ''),
-    keyValues: normalizeKeyValues(evt.keyValues),
-  }));
-}
-
-function normalizeKeyValues(raw: unknown): TraceKeyValue[] {
-  const kvs = jmapMapToArray<Record<string, unknown>>(raw);
-  return kvs.map((kv) => ({
-    key: String(kv.key ?? ''),
-    value: normalizeTraceValue(kv.value),
-  }));
-}
-
-function normalizeTraceValue(raw: unknown): TraceValue {
-  if (!raw || typeof raw !== 'object') return { '@type': 'Null' };
-  const obj = raw as Record<string, unknown>;
-  const type = obj['@type'] as string;
-
-  if (type === 'List') {
-    return { '@type': 'List', value: jmapMapToArray<unknown>(obj.value).map(normalizeTraceValue) };
-  }
-  if (type === 'Event') {
-    return { '@type': 'Event', event: String(obj.event ?? ''), value: normalizeKeyValues(obj.value) };
-  }
-  return raw as TraceValue;
-}
 
 interface TraceDetailViewProps {
   viewName: string;
@@ -200,7 +171,11 @@ export function TraceDetailView({ viewName, objectId }: TraceDetailViewProps) {
 
       <Card>
         <CardContent className="p-4">
-          <TraceTimeline events={events} anchorTimestamp={firstEvent?.timestamp} />
+          <TraceTimeline
+            events={events}
+            anchorTimestamp={firstEvent?.timestamp}
+            explainSubject={(_, index) => ({ '@type': 'TraceEvent', traceId: objectId, index })}
+          />
         </CardContent>
       </Card>
     </div>

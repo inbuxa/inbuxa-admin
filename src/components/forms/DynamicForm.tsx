@@ -11,6 +11,7 @@ import { humanize } from '@/lib/humanize';
 import { PageHeader } from '@/components/common/PageHeader';
 import { HelpPanel } from '@/help/HelpPanel';
 import { fieldPlaceholder, formNotices, variantPrefill } from '@/features/ai/formExtras';
+import { FailedRecipients } from '@/features/ai/explain/FailedRecipients';
 import { iconForView } from '@/lib/viewIcon';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { flushSync } from 'react-dom';
@@ -809,6 +810,11 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
         </div>
       ))}
 
+      {/* inbuxa: "Explain this" for each failed recipient (ai-explain EX-17) */}
+      {resolved.obj.objectName === 'x:QueuedMessage' && objectId && (
+        <FailedRecipients queueId={objectId} recipients={formData.recipients} />
+      )}
+
       {sectionsToRender.map((section, sectionIdx) => (
         <Card key={sectionIdx}>
           {section.title && (
@@ -883,6 +889,11 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
                       isSieveScriptField(resolved.obj.objectName, formField.name) ? scriptName : undefined
                     }
                     helpScope={helpScope}
+                    explainTarget={
+                      isCreate
+                        ? undefined
+                        : { object: resolved.obj.objectName, id: isSingleton ? 'singleton' : String(objectId) }
+                    }
                   />
                 );
 

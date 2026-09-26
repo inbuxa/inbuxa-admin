@@ -2,6 +2,8 @@
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { useState, useMemo, useCallback } from 'react';
@@ -19,6 +21,8 @@ import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DynamicView } from '@/components/views/DynamicView';
 import type { Schema, ObjectVariant } from '@/types/schema';
 import type { JmapSetResponse } from '@/types/jmap';
+import { ExplainButton } from '@/features/ai/explain/ExplainButton';
+import { spamVerdictSubject } from '@/features/ai/explain/explain';
 
 type ActionState =
   | { kind: 'pick' }
@@ -464,6 +468,14 @@ function ActionResultView({
           viewName={variant.schemaName}
           data={mergedData}
           visibleFields={visibleFields}
+        />
+      )}
+
+      {/* inbuxa: "Explain this" for a spam verdict (ai-explain EX-17) */}
+      {variant.name === 'ClassifySpam' && props && (
+        <ExplainButton
+          subject={() => spamVerdictSubject(props)}
+          title={t('explain.spamVerdictTitle', 'Spam verdict: {{result}}', { result: String(props.result ?? '') })}
         />
       )}
 

@@ -44,6 +44,7 @@ import {
   type Status,
 } from './localAi';
 import { formNotices } from './formExtras';
+import { ExplanationsCard } from './explain/ExplanationsCard';
 
 export const LOCAL_AI_VIEW = 'CustomComponent/LocalAi';
 
@@ -148,6 +149,7 @@ export function LocalAiPage() {
       )}
 
       <LimitsCard canUpdate={canUpdate} />
+      <ExplanationsCard canUpdate={canUpdate} models={status.kind === 'ready' ? status.value.models : []} />
     </div>
   );
 }

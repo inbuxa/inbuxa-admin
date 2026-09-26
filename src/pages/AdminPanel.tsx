@@ -23,6 +23,9 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { SectionNav } from '@/components/layout/SectionNav';
 import { MainContent } from '@/components/layout/MainContent';
 import { SettingsApplyBanner } from '@/components/layout/SettingsApplyBanner';
+import { ExplainPanel } from '@/features/ai/explain/ExplainPanel';
+import { useExplainStore } from '@/features/ai/explain/explainStore';
+import { explainAvailable } from '@/features/ai/explain/explain';
 import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import {
@@ -164,6 +167,8 @@ export default function AdminPanel() {
 
         if (cancelled) return;
         setSession(accounts, primaryAccountId, apiUrl, maxObjectsInGet, maxObjectsInSet);
+        // inbuxa: whether "Explain this" is offered (ai-explain EX-1 to EX-4)
+        useExplainStore.getState().setAvailable(explainAvailable(session, primaryAccountId));
         useAuthStore.getState().setUsername(typeof session.username === 'string' ? session.username : null);
         // INBUXA: the theme lives with the account, shared with the webmail.
         setAccountSettingsTarget(session);
@@ -327,6 +332,7 @@ export default function AdminPanel() {
           </ErrorBoundary>
         </main>
       </div>
+      <ExplainPanel />
     </div>
   );
 }

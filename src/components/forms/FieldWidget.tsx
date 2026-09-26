@@ -12,6 +12,7 @@ import { useState, useEffect, useMemo, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBufferedValue, useResetOnChange } from '@/hooks/useBufferedValue';
 import { HelpTip } from '@/help/HelpTip';
+import { ExplainButton } from '@/features/ai/explain/ExplainButton';
 import { fieldHelp } from '@/help/texts';
 import { describeDefault, differsFromDefault } from '@/help/defaults';
 import { Input } from '@/components/ui/input';
@@ -69,6 +70,8 @@ export interface FieldWidgetProps {
   sieveScriptName?: string;
   /** INBUXA: the object or schema that owns this field, for its help id (`scope.field`). */
   helpScope?: string;
+  /** inbuxa: the saved record this field belongs to, for "Explain this" (ai-explain EX-17). */
+  explainTarget?: { object: string; id: string };
 }
 
 function getRequiredMarker(field: Field, readOnly: boolean): 'required' | 'optional' | null {
@@ -89,7 +92,8 @@ function getRequiredMarker(field: Field, readOnly: boolean): 'required' | 'optio
 
 export function FieldWidget(props: FieldWidgetProps) {
   const { t } = useTranslation();
-  const { field, formField, value, onChange, readOnly, error, schema, sieveScriptName, helpScope } = props;
+  const { field, formField, value, onChange, readOnly, error, schema, sieveScriptName, helpScope, explainTarget } =
+    props;
   const helpId = helpScope ? `${helpScope}.${formField.name}` : undefined;
   // INBUXA: the option's default, for its tooltip, and whether it has been changed.
   const defaultValue = helpScope ? schema.fields[helpScope]?.defaults?.[formField.name] : undefined;
@@ -250,6 +254,19 @@ export function FieldWidget(props: FieldWidgetProps) {
           )}
         </Label>
         <HelpTip id={helpId} text={fieldHelp(helpId, field.description)} footnote={defaultNote} />
+        {/* inbuxa: the server refuses any setting that holds a secret (EX-9); a plain secret isn't offered */}
+        {explainTarget && !(ft.type === 'string' && ft.format === 'secret') && (
+          <ExplainButton
+            icon
+            title={String(formField.label ?? formField.name)}
+            subject={{
+              '@type': 'Setting',
+              object: explainTarget.object,
+              id: explainTarget.id,
+              property: formField.name,
+            }}
+          />
+        )}
         {changed && (
           <span
             className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary"

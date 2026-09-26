@@ -2,6 +2,8 @@
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -15,7 +17,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useSchemaStore } from '@/stores/schemaStore';
 import { apiFetch, getApiBaseUrl } from '@/services/api';
 import type { TraceEvent } from '../types';
+import { normalizeTraceEvents } from '../normalize';
 import { TraceTimeline } from './TraceTimeline';
+import { liveEventSubject } from '@/features/ai/explain/explain';
 
 const MAX_EVENTS = 1000;
 const MAX_RECONNECT = 5;
@@ -87,7 +91,7 @@ export function LiveTracingPage() {
 
         es.addEventListener('trace', (event) => {
           try {
-            const batch = JSON.parse(event.data) as TraceEvent[];
+            const batch = normalizeTraceEvents(JSON.parse(event.data));
             const currentEvents = eventsRef.current;
 
             for (const evt of batch) {
@@ -336,7 +340,7 @@ export function LiveTracingPage() {
 
       <Card>
         <CardContent className="p-4">
-          <TraceTimeline events={events} anchorTimestamp={anchor} />
+          <TraceTimeline events={events} anchorTimestamp={anchor} explainSubject={(event) => liveEventSubject(event)} />
         </CardContent>
       </Card>
 
