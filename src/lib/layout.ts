@@ -76,6 +76,11 @@ function checkSpecialLink(
     return { visible: canGet ? canGet('sysSpamLlm') : true, enterprise: false };
   }
 
+  // inbuxa: the audit log, for whoever may read it (AU-9).
+  if (viewName === 'CustomComponent/AuditLog') {
+    return { visible: canGet ? canGet('sysAudit') : true, enterprise: false };
+  }
+
   if (viewName.startsWith('CustomComponent/')) {
     return { visible: true, enterprise: false };
   }
