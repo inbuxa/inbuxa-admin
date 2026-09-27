@@ -56,6 +56,11 @@ const LocalAiPage = lazyFeature(
   () => import('@/features/ai/LocalAiPage'),
   (m) => m.LocalAiPage,
 );
+// inbuxa: Management › Compliance › Audit Log (audit-hold-lock spec, AU-9).
+const AuditLogPage = lazyFeature(
+  () => import('@/features/audit/AuditLogPage'),
+  (m) => m.AuditLogPage,
+);
 const TenantLegacyProtocols = lazyFeature(
   () => import('@/features/hardening/TenantLegacyProtocols'),
   (m) => m.TenantLegacyProtocols,
@@ -119,6 +124,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     }
     if (componentName === 'LocalAi') {
       return <LocalAiPage />;
+    }
+    if (componentName === 'AuditLog') {
+      return <AuditLogPage />;
     }
     return (
       <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
