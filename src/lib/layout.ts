@@ -81,6 +81,11 @@ function checkSpecialLink(
     return { visible: canGet ? canGet('sysAudit') : true, enterprise: false };
   }
 
+  // inbuxa: locked accounts, for whoever may see them (AL-12).
+  if (viewName === 'CustomComponent/AccountLocks') {
+    return { visible: canGet ? canGet('sysAccountLock') : true, enterprise: false };
+  }
+
   if (viewName.startsWith('CustomComponent/')) {
     return { visible: true, enterprise: false };
   }
