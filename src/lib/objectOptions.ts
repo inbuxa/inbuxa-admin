@@ -2,6 +2,8 @@
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -20,6 +22,21 @@ interface PendingBatch {
 }
 
 const pendingByType = new Map<string, PendingBatch>();
+
+// INBUXA: an account's name is only its local part, so two domains' "leslie"
+// look alike in a picker. Label accounts by their full address instead.
+const ADDRESS_LABELED = new Set(['x:Account']);
+
+function labelOf(objectName: string, item: Record<string, unknown>, displayProp: string, id: string): string {
+  if (ADDRESS_LABELED.has(objectName) && typeof item.emailAddress === 'string' && item.emailAddress) {
+    return item.emailAddress;
+  }
+  return coerceLabel(item[displayProp], id);
+}
+
+function labelProperties(objectName: string, displayProp: string): string[] {
+  return ADDRESS_LABELED.has(objectName) ? ['id', displayProp, 'emailAddress'] : ['id', displayProp];
+}
 
 export function coerceLabel(value: unknown, fallback: string): string {
   if (value == null) return fallback;
@@ -67,12 +84,17 @@ async function executeBatch(parentObjectName: string, batch: PendingBatch): Prom
 
   try {
     const accountId = getAccountId(parentObjectName);
-    const list = await jmapGetBatched(parentObjectName, accountId, ids, ['id', batch.displayProp]);
+    const list = await jmapGetBatched(
+      parentObjectName,
+      accountId,
+      ids,
+      labelProperties(parentObjectName, batch.displayProp),
+    );
     const entries: Record<string, string> = {};
     for (const item of list) {
       const itemId = item.id as string;
       if (!itemId) continue;
-      entries[itemId] = coerceLabel(item[batch.displayProp], itemId);
+      entries[itemId] = labelOf(parentObjectName, item, batch.displayProp, itemId);
     }
     for (const id of ids) {
       if (!(id in entries)) entries[id] = id;
@@ -103,7 +125,7 @@ async function fetchObjectList(viewOrObjectName: string, schema: Schema): Promis
       objectName,
       accountId,
       { filter: filtersStatic && Object.keys(filtersStatic).length > 0 ? filtersStatic : undefined },
-      ['id', displayProp],
+      labelProperties(objectName, displayProp),
     );
     items = result.list;
   } catch (err) {
@@ -113,7 +135,7 @@ async function fetchObjectList(viewOrObjectName: string, schema: Schema): Promis
 
   return items.map((item) => ({
     id: item.id as string,
-    label: coerceLabel(item[displayProp], item.id as string),
+    label: labelOf(objectName, item, displayProp, item.id as string),
   }));
 }
 

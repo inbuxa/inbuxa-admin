@@ -61,6 +61,15 @@ const AuditLogPage = lazyFeature(
   () => import('@/features/audit/AuditLogPage'),
   (m) => m.AuditLogPage,
 );
+// inbuxa: Management › Compliance › Locked accounts (audit-hold-lock spec, AL-1).
+const AccountLocksPage = lazyFeature(
+  () => import('@/features/lock/AccountLocksPage'),
+  (m) => m.AccountLocksPage,
+);
+const AccountLockBanner = lazyFeature(
+  () => import('@/features/lock/AccountLockBanner'),
+  (m) => m.AccountLockBanner,
+);
 const TenantLegacyProtocols = lazyFeature(
   () => import('@/features/hardening/TenantLegacyProtocols'),
   (m) => m.TenantLegacyProtocols,
@@ -128,6 +137,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     if (componentName === 'AuditLog') {
       return <AuditLogPage />;
     }
+    if (componentName === 'AccountLocks') {
+      return <AccountLocksPage />;
+    }
     return (
       <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
         Unknown component: {componentName}
@@ -182,6 +194,15 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
       return (
         <div className="space-y-4">
           <TenantLegacyProtocols tenantId={id} />
+          {page}
+        </div>
+      );
+    }
+    // INBUXA: a person's page says whether it is locked (AL-1)
+    if (viewName === 'x:Account/User') {
+      return (
+        <div className="space-y-4">
+          <AccountLockBanner accountId={id} />
           {page}
         </div>
       );
