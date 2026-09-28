@@ -17,6 +17,7 @@ import { DynamicForm } from '@/components/forms/DynamicForm';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
+import { AlertsPage } from '@/features/alerts/AlertsPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
 import { RetentionPage } from '@/features/retention/RetentionPage';
 import { LimitsSummary } from '@/features/limits/LimitsSummary';
@@ -357,6 +358,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
         <DynamicList viewName={viewName} />
       </div>
     );
+  }
+  if (viewName === 'x:Alert') {
+    return <AlertsPage viewName={viewName} />;
   }
   return <DynamicList viewName={viewName} />;
 }
