@@ -5,9 +5,11 @@
  */
 
 /**
- * INBUXA: `inbuxa:ProtocolPolicy`, the server-wide legacy mail protocols switch
- * (legacy-protocols spec). This module is the wire and the rules; the screen
- * and the banner draw from it.
+ * INBUXA: `inbuxa:ProtocolPolicy`, the server-wide legacy mail protocols
+ * switches (legacy-protocols spec). IMAP, POP3 and ManageSieve each have their
+ * own; `legacyProtocols` is the kill-all, which sets all three and reads
+ * `disabled` when all three are off. This module is the wire and the rules;
+ * the screen and the banner draw from it.
  */
 
 import { getAccountId, jmapRequest } from '@/services/jmap/client';
@@ -19,6 +21,31 @@ const OBJECT = 'inbuxa:ProtocolPolicy';
 /** The phrase that turns legacy protocols off (LP-17). Turning them back on needs none. */
 export const CONFIRM_PHRASE = 'turn off legacy mail';
 
+export type Switch = 'enabled' | 'disabled';
+
+/** The protocols with a switch of their own, as the server names them. */
+export const SWITCHED = ['imap', 'pop3', 'manageSieve'] as const;
+export type SwitchedProtocol = (typeof SWITCHED)[number];
+export type Switches = Record<SwitchedProtocol, Switch>;
+
+/** What a /set may change: the kill-all, any of the three, or both. */
+export type SwitchUpdate = Partial<Record<'legacyProtocols' | SwitchedProtocol, Switch>>;
+
+/**
+ * Each protocol's switch. A server from before the per-protocol switches
+ * sends only `legacyProtocols`, which then stands for all three.
+ */
+function parseSwitches(raw: Record<string, unknown>): Switches {
+  const all: Switch = raw.legacyProtocols === 'disabled' ? 'disabled' : 'enabled';
+  const one = (value: unknown): Switch => (value === 'disabled' ? 'disabled' : value === 'enabled' ? 'enabled' : all);
+  return { imap: one(raw.imap), pop3: one(raw.pop3), manageSieve: one(raw.manageSieve) };
+}
+
+/** The protocols switched off, in the order the screen lists them. */
+export function offProtocols(switches: Switches): SwitchedProtocol[] {
+  return SWITCHED.filter((p) => switches[p] === 'disabled');
+}
+
 /** A listener the switch closed, or would close, by name and port (LP-16). */
 export interface PolicyListener {
   name: string;
@@ -27,7 +54,9 @@ export interface PolicyListener {
 }
 
 export interface ProtocolPolicy {
-  legacyProtocols: 'enabled' | 'disabled';
+  /** The kill-all: `disabled` only when all three protocols are off. */
+  legacyProtocols: Switch;
+  switches: Switches;
   closeSubmission: boolean;
   /** Listeners taken away and not yet put back. Non-empty while enabled means some failed to reopen (LP-5). */
   savedListeners: PolicyListener[];
@@ -84,6 +113,7 @@ function parseListeners(raw: unknown): PolicyListener[] {
 export function parsePolicy(raw: Record<string, unknown>): ProtocolPolicy {
   return {
     legacyProtocols: raw.legacyProtocols === 'disabled' ? 'disabled' : 'enabled',
+    switches: parseSwitches(raw),
     closeSubmission: raw.closeSubmission === true,
     savedListeners: parseListeners(raw.savedListeners),
     changedAt: typeof raw.changedAt === 'number' ? raw.changedAt : null,
@@ -112,7 +142,7 @@ function parseRecent(raw: unknown[]): RecentUse[] {
   });
 }
 
-const PROTOCOL_LABELS: Record<string, string> = {
+export const PROTOCOL_LABELS: Record<string, string> = {
   imap: 'IMAP',
   pop3: 'POP3',
   manageSieve: 'ManageSieve',
@@ -137,6 +167,11 @@ export function impactEntries(recent: RecentUse[]): ImpactEntry[] {
   return [...byAccount.values()]
     .map((e) => ({ ...e, protocols: e.protocols.sort((a, b) => order.indexOf(a) - order.indexOf(b)) }))
     .sort((a, b) => b.lastUsedAt - a.lastUsedAt || a.name.localeCompare(b.name));
+}
+
+/** The accounts that used one protocol lately (or `submission`), for its row and its switch. */
+export function usersOf(recent: RecentUse[], protocol: SwitchedProtocol | 'submission'): ImpactEntry[] {
+  return impactEntries(recent.filter((use) => use.protocol === protocol));
 }
 
 /** "2 days ago", "3 hours ago", "just now", in the reader's language. */
@@ -179,7 +214,7 @@ export interface SetOutcome {
 }
 
 export async function updateProtocolPolicy(
-  update: Partial<Pick<ProtocolPolicy, 'legacyProtocols' | 'closeSubmission'>>,
+  update: SwitchUpdate & Partial<Pick<ProtocolPolicy, 'closeSubmission'>>,
 ): Promise<SetOutcome> {
   const accountId = getAccountId('x:NetworkListener');
   const responses = await jmapRequest(
@@ -210,6 +245,8 @@ export interface ProtocolRow {
   state: RowState;
   /** Ports that close with the switch; empty when nothing is listening or the row doesn't close. */
   ports: number[];
+  /** For a protocol with its own switch: whether it is off now. */
+  off?: boolean;
 }
 
 function portsOf(listeners: PolicyListener[], protocol: string): number[] {
@@ -218,29 +255,36 @@ function portsOf(listeners: PolicyListener[], protocol: string): number[] {
 }
 
 /**
- * Every mail protocol the server speaks, in one place, with what the switch
- * does to each. The locked set comes from the server, so unlocking later is
- * a server change and no admin release (LP-21).
+ * Every mail protocol the server speaks, in one place, with what the switches
+ * do to each. The locked set comes from the server, so unlocking later is a
+ * server change and no admin release (LP-21).
  *
- * `listeners` is what the switch closes: `wouldClose` while it's on, or
- * `savedListeners` once it's off.
+ * A protocol that is off shows the ports it closed (`savedListeners`); one
+ * that is on, the ports turning it off would close (`wouldClose`).
  */
-export function protocolRows(policy: ProtocolPolicy, listeners: PolicyListener[]): ProtocolRow[] {
+export function protocolRows(policy: ProtocolPolicy): ProtocolRow[] {
   const locked = new Set(policy.lockedProtocols.map((p) => p.toLowerCase()));
-  const legacy: ProtocolRow[] = [
-    { key: 'imap', label: 'IMAP', state: 'closes', ports: portsOf(listeners, 'imap') },
-    { key: 'pop3', label: 'POP3', state: 'closes', ports: portsOf(listeners, 'pop3') },
-    { key: 'manageSieve', label: 'ManageSieve', state: 'closes', ports: portsOf(listeners, 'manageSieve') },
-  ];
+  const legacy: ProtocolRow[] = SWITCHED.map((key) => {
+    const off = policy.switches[key] === 'disabled';
+    return {
+      key,
+      label: PROTOCOL_LABELS[key] ?? key,
+      state: 'closes',
+      ports: portsOf(off ? policy.savedListeners : policy.wouldClose, key),
+      off,
+    };
+  });
   const smtpLocked = locked.has('smtp');
+  const allOff = policy.legacyProtocols === 'disabled';
   return [
     ...legacy,
     {
       key: 'submission',
       label: 'SMTP submission',
-      // Locked submission keeps its ports; sign-in over them is refused instead.
+      // Locked submission keeps its ports; sign-in over them is refused
+      // instead, and only with all three protocols off.
       state: smtpLocked ? 'locked' : policy.closeSubmission ? 'closes' : 'refused',
-      ports: smtpLocked ? [] : portsOf(listeners, 'smtp'),
+      ports: smtpLocked ? [] : portsOf(allOff ? policy.savedListeners : policy.wouldClose, 'smtp'),
     },
     // Incoming mail and JMAP are never the switch's to close (LP-3, "Not affected, ever").
     { key: 'smtp', label: 'SMTP (incoming mail)', state: 'locked', ports: [] },
@@ -264,7 +308,9 @@ const TENANT_OBJECT = 'inbuxa:TenantProtocolPolicy';
 export interface TenantPolicy {
   /** The tenant's id, which is also the policy's. */
   id: string;
-  legacyProtocols: 'enabled' | 'disabled';
+  /** The kill-all: `disabled` only when all three protocols are off. */
+  legacyProtocols: Switch;
+  switches: Switches;
   /** Milliseconds since the epoch. */
   changedAt: number | null;
   /** The tenant's own people who used a legacy mail app lately (LP-15), or null from an older server. */
@@ -275,6 +321,7 @@ export function parseTenantPolicy(raw: Record<string, unknown>): TenantPolicy {
   return {
     id: typeof raw.id === 'string' ? raw.id : '',
     legacyProtocols: raw.legacyProtocols === 'disabled' ? 'disabled' : 'enabled',
+    switches: parseSwitches(raw),
     changedAt: typeof raw.changedAt === 'number' ? raw.changedAt : null,
     recentLegacyUse: Array.isArray(raw.recentLegacyUse) ? parseRecent(raw.recentLegacyUse) : null,
   };
@@ -303,11 +350,14 @@ export async function fetchTenantPolicy(tenantId: string | null, signal?: AbortS
   return parseTenantPolicy(list[0]);
 }
 
-/** Turns a tenant's switch. The server refuses turning it on while its own is off (LP-9). */
-export async function updateTenantPolicy(tenantId: string, legacyProtocols: 'enabled' | 'disabled'): Promise<void> {
+/**
+ * Turns a tenant's switches. The server refuses turning a protocol on while
+ * its own switch for it is off (LP-9), and says which.
+ */
+export async function updateTenantPolicy(tenantId: string, update: SwitchUpdate): Promise<void> {
   const accountId = getAccountId('x:Domain');
   const responses = await jmapRequest(
-    [[`${TENANT_OBJECT}/set`, { accountId, update: { [tenantId]: { legacyProtocols } } }, '0']],
+    [[`${TENANT_OBJECT}/set`, { accountId, update: { [tenantId]: update } }, '0']],
     undefined,
     [INBUXA_CAPABILITY],
   );
