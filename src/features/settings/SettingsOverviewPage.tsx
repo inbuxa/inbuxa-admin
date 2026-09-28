@@ -23,6 +23,8 @@ import { SETTINGS_CATEGORIES, SETTINGS_LAYOUT_NAME } from '@/lib/settingsLayout'
 import { resolveObject } from '@/lib/schemaResolver';
 import { countChanged, singletonPages, type SettingsPageRef } from './changedFromDefault';
 import { SENDING_WIZARD_VIEW, SendingLaunchChoice } from '@/features/sending/SendingSetupCard';
+import { DIRECTORY_WIZARD_VIEW, DirectoryLaunchChoice } from '@/features/directory/DirectorySetupCard';
+import { LIMITS_WIZARD_VIEW, LimitsLaunchChoice } from '@/features/limits/LimitsSummary';
 import { CERTIFICATE_WIZARD_VIEW, CertificateLaunchChoice } from '@/features/certificates/CertificateSetupCard';
 
 /** Calls per JMAP request; the protocol's own floor, so any server takes it. */
@@ -50,6 +52,31 @@ async function anyExist(objectName: string): Promise<boolean> {
 
 /** Each guided setup registers here as it lands. */
 const GUIDED_SETUPS: GuidedSetup[] = [
+  {
+    id: 'limits',
+    title: 'Sending and receiving limits',
+    blurb: 'Rate limits that suit who uses this server, so one stolen password can’t send without end.',
+    to: { choice: (props) => <LimitsLaunchChoice {...props} /> },
+    gate: LIMITS_WIZARD_VIEW,
+    isDone: async () => {
+      const [res] = await jmapRequest([
+        [
+          'x:MtaInboundThrottle/get',
+          { accountId: getAccountId('x:MtaInboundThrottle'), ids: null, properties: ['id'] },
+          '0',
+        ],
+      ]);
+      return ((res?.[1]?.list as unknown[] | undefined)?.length ?? 0) > 0;
+    },
+  },
+  {
+    id: 'directory',
+    title: 'Connect a sign-in directory',
+    blurb:
+      'Let people sign in with Active Directory, LDAP or an OpenID Connect provider, tested before anything moves.',
+    to: { choice: (props) => <DirectoryLaunchChoice {...props} /> },
+    gate: DIRECTORY_WIZARD_VIEW,
+  },
   {
     id: 'certificates',
     title: 'Certificates, automatically',

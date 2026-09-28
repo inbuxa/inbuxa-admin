@@ -15,6 +15,35 @@ import { cn } from '@/lib/utils';
 
 export const DIRECTORY_WIZARD_VIEW = 'Wizard/directory';
 
+/** "Guided or manual?" for connecting a directory. Manual opens Directories unless told otherwise. */
+export function DirectoryLaunchChoice({
+  open,
+  onOpenChange,
+  onManual,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onManual?: () => void;
+}) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const section = useSchemaStore((s) => s.viewToSection['x:Directory']) ?? 'Settings';
+  return (
+    <LaunchChoice
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('dirCard.chooseTitle', 'Connect a sign-in directory')}
+      guidedHint={t(
+        'dirCard.guidedHint',
+        'Pick your directory, fill in the connection, test a person, then choose domains. Nothing moves until the test passes.',
+      )}
+      manualHint={t('dirCard.manualHint', 'Create the directory and set each domain’s directory yourself.')}
+      onGuided={() => navigate(`/${section}/${DIRECTORY_WIZARD_VIEW}`)}
+      onManual={onManual ?? (() => navigate(`/${section}/x:Directory`))}
+    />
+  );
+}
+
 /**
  * inbuxa: at the top of Directories and Authentication, an invitation to
  * connect a directory with the guide (settings-reorg, first wave). Manual
@@ -22,8 +51,6 @@ export const DIRECTORY_WIZARD_VIEW = 'Wizard/directory';
  */
 export function DirectorySetupCard({ className }: { className?: string }) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const section = useSchemaStore((s) => s.viewToSection['x:Directory']) ?? 'Settings';
   const [open, setOpen] = useState(false);
   return (
     <div
@@ -45,18 +72,7 @@ export function DirectorySetupCard({ className }: { className?: string }) {
       <Button type="button" onClick={() => setOpen(true)}>
         {t('dirCard.start', 'Set it up')}
       </Button>
-      <LaunchChoice
-        open={open}
-        onOpenChange={setOpen}
-        title={t('dirCard.chooseTitle', 'Connect a sign-in directory')}
-        guidedHint={t(
-          'dirCard.guidedHint',
-          'Pick your directory, fill in the connection, test a person, then choose domains. Nothing moves until the test passes.',
-        )}
-        manualHint={t('dirCard.manualHint', 'Create the directory and set each domain’s directory yourself.')}
-        onGuided={() => navigate(`/${section}/${DIRECTORY_WIZARD_VIEW}`)}
-        onManual={() => undefined}
-      />
+      <DirectoryLaunchChoice open={open} onOpenChange={setOpen} onManual={() => undefined} />
     </div>
   );
 }
