@@ -31,7 +31,13 @@ export function resolveViewPath(sectionName: string, viewName: string): string {
 
 export function pathMatchesView(currentPath: string, sectionName: string, viewName: string): boolean {
   const base = `/${sectionName}/${viewName}`;
-  if (currentPath === base || currentPath.startsWith(`${base}/`)) return true;
+  if (currentPath === base) return true;
+  if (currentPath.startsWith(`${base}/`)) {
+    // inbuxa: /Settings/x:Metrics/CollectorPrometheus is its own page, not a record of
+    // x:Metrics, so General and Prometheus aren't both highlighted.
+    const next = decodeURIComponent(currentPath.slice(base.length + 1).split('/')[0]);
+    return !useSchemaStore.getState().schema?.objects[`${viewName}/${next}`];
+  }
   if (viewName === 'CustomComponent/Dashboard') {
     const dashBase = `/${sectionName}/Dashboard/`;
     return currentPath.startsWith(dashBase);

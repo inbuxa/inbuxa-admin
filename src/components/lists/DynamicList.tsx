@@ -77,6 +77,8 @@ import type { ResolvedSchema } from '@/lib/schemaResolver';
 import { ExplainButton } from '@/features/ai/explain/ExplainButton';
 import { useExplainStore } from '@/features/ai/explain/explainStore';
 import { useDirectoryLocks } from '@/features/lock/useDirectoryLocks';
+import { alertConditionWords } from '@/features/alerts/templates';
+import { expressionCell } from '@/components/expression/cell';
 
 const ENUM_FILTER_COMBOBOX_THRESHOLD = 15;
 
@@ -303,6 +305,21 @@ function renderCellValue(
     }
 
     case 'object': {
+      // inbuxa: an expression in words, or as written (an alert's condition, for one).
+      if (ft.objectName === 'x:Expression') {
+        const known =
+          objectName === 'x:Alert'
+            ? alertConditionWords(value as { match?: Record<string, unknown>; else?: string })
+            : null;
+        if (known) return known;
+        const cell = expressionCell(value, ft.expression);
+        if (!cell) return <span className="text-muted-foreground">-</span>;
+        return cell.code ? (
+          <code className="break-all rounded bg-muted/50 px-1.5 py-0.5 font-mono text-xs">{cell.text}</code>
+        ) : (
+          cell.text
+        );
+      }
       if (value && typeof value === 'object' && !Array.isArray(value)) {
         const typeName = (value as Record<string, unknown>)['@type'];
         if (typeof typeName === 'string') {

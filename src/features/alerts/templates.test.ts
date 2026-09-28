@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { describeAlert, recognize, templateCondition, TEMPLATES } from './templates';
+import { alertConditionWords, describeAlert, recognize, templateCondition, TEMPLATES } from './templates';
 
 const byId = (id: string) => TEMPLATES.find((t) => t.id === id)!;
 
@@ -42,5 +42,13 @@ describe('alert templates', () => {
         eventAlert: { '@type': 'Enabled' },
       }),
     ).toBe("When the condition metric('smtp.connection-start') > 9 is true, raise an event for webhooks. (off)");
+  });
+});
+
+describe('alertConditionWords', () => {
+  it('names a template condition, and leaves others alone', () => {
+    expect(alertConditionWords({ match: {}, else: "metric('queue.count') > 500" })).toMatch(/^More than 500 /);
+    expect(alertConditionWords({ match: {}, else: "metric('x') > 1" })).toBeNull();
+    expect(alertConditionWords({ match: { a: {} }, else: "metric('queue.count') > 500" })).toBeNull();
   });
 });
