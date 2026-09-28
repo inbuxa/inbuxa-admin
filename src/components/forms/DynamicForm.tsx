@@ -10,6 +10,7 @@
 import { humanize } from '@/lib/humanize';
 import { PageHeader } from '@/components/common/PageHeader';
 import { HelpPanel } from '@/help/HelpPanel';
+import { pageAbout } from '@/help/texts';
 import { fieldPlaceholder, formNotices, variantPrefill } from '@/features/ai/formExtras';
 import { FailedRecipients } from '@/features/ai/explain/FailedRecipients';
 import { iconForView } from '@/lib/viewIcon';
@@ -741,9 +742,14 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
   }, [resolved, schema, isCreate, isSingleton, formData, viewName, titleForm, t]);
 
   const formSubtitle = useMemo(() => {
-    if (titleForm?.subtitle) return titleForm.subtitle;
-    return isSingleton && !titleForm ? resolved?.obj.objectType.description : undefined;
-  }, [titleForm, isSingleton, resolved]);
+    // inbuxa: our own one-line intro where written (settings-reorg), else the schema's.
+    const schemaSubtitle = titleForm?.subtitle
+      ? titleForm.subtitle
+      : isSingleton && !titleForm
+        ? resolved?.obj.objectType.description
+        : undefined;
+    return pageAbout(viewName, schemaSubtitle);
+  }, [titleForm, isSingleton, resolved, viewName]);
 
   if (!schema || !resolved) {
     return (

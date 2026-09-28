@@ -14,6 +14,8 @@
  * Keys: `object` for a page, `object.field` for an option on it.
  */
 
+import { SETTINGS_PAGE_HELP } from './settingsPages';
+
 export const FIELD_HELP: Record<string, string> = {
   // Domains
   'x:Domain.name': 'The domain people’s addresses end in, like example.com.',
@@ -73,7 +75,7 @@ export interface PageHelp {
   tasks?: string[];
 }
 
-export const PAGE_HELP: Record<string, PageHelp> = {
+const MANAGEMENT_PAGE_HELP: Record<string, PageHelp> = {
   'x:Domain': {
     about: 'The domains this server receives and sends mail for. Each person’s address belongs to one of them.',
     tasks: [
@@ -146,6 +148,14 @@ export const PAGE_HELP: Record<string, PageHelp> = {
     about: 'What the server has been doing, newest first. Useful for tracing a problem back to its cause.',
   },
 };
+
+/** Every page's own words: Management's here, Settings' in settingsPages.ts. */
+export const PAGE_HELP: Record<string, PageHelp> = { ...SETTINGS_PAGE_HELP, ...MANAGEMENT_PAGE_HELP };
+
+/** A page's one-line intro: ours when written, else the schema's subtitle. */
+export function pageAbout(viewName: string, fallback?: string | null): string | undefined {
+  return PAGE_HELP[viewName]?.about ?? fallback ?? undefined;
+}
 
 /** The help text for an option: ours when written, else the schema's. */
 export function fieldHelp(id: string | undefined, fallback?: string | null): string | null {
