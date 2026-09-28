@@ -30,6 +30,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Plus, X, Eye, EyeOff, Loader2, Search, Check, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ExpressionEditor } from '@/components/expression/ExpressionEditor';
+import { EventPicker } from '@/features/events/EventPicker';
 import type { ExpressionHints } from '@/components/expression/simple';
 import { OtpAuthField } from '@/components/forms/OtpAuthField';
 import { SievepadButton } from '@/components/forms/SievepadButton';
@@ -1684,6 +1685,17 @@ function SetField({ scalarType, value, onChange, readOnly, schema, minItems, max
         />
       );
     case 'enum':
+      // inbuxa: 649 event types get a grouped picker with common picks (settings-reorg).
+      if (scalarType.enumName === 'EventType') {
+        return (
+          <EventPicker
+            variants={schema.enums.EventType ?? []}
+            items={items}
+            onChange={(newItems) => onChange(arrayToSetObject(newItems))}
+            readOnly={readOnly}
+          />
+        );
+      }
       return (
         <EnumMultiSelect
           enumName={scalarType.enumName}
