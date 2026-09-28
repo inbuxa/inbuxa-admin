@@ -22,10 +22,37 @@ import { describe, type LimitObject, type RuleRecord } from './rules';
 
 export const LIMITS_WIZARD_VIEW = 'Wizard/limits';
 
-export function LimitsSummary({ object }: { object: LimitObject }) {
+/** "Guided or manual?" for limits. Manual opens the incoming limits unless told otherwise. */
+export function LimitsLaunchChoice({
+  open,
+  onOpenChange,
+  onManual,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onManual?: () => void;
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const section = useSchemaStore((s) => s.viewToSection[object]) ?? 'Settings';
+  const section = useSchemaStore((s) => s.viewToSection['x:MtaInboundThrottle']) ?? 'Settings';
+  return (
+    <LaunchChoice
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('limitsSummary.chooseTitle', 'Sending and receiving limits')}
+      guidedHint={t(
+        'limitsSummary.guidedHint',
+        'Say who uses this server and get five sensible limits, each shown as a sentence you can adjust.',
+      )}
+      manualHint={t('limitsSummary.manualHint', 'Add and edit each rule yourself, with every option.')}
+      onGuided={() => navigate(`/${section}/${LIMITS_WIZARD_VIEW}`)}
+      onManual={onManual ?? (() => navigate(`/${section}/x:MtaInboundThrottle`))}
+    />
+  );
+}
+
+export function LimitsSummary({ object }: { object: LimitObject }) {
+  const { t } = useTranslation();
   const [rules, setRules] = useState<RuleRecord[] | null>(null);
   const [open, setOpen] = useState(false);
 
@@ -68,18 +95,7 @@ export function LimitsSummary({ object }: { object: LimitObject }) {
           ))}
         </ul>
       )}
-      <LaunchChoice
-        open={open}
-        onOpenChange={setOpen}
-        title={t('limitsSummary.chooseTitle', 'Sending and receiving limits')}
-        guidedHint={t(
-          'limitsSummary.guidedHint',
-          'Say who uses this server and get five sensible limits, each shown as a sentence you can adjust.',
-        )}
-        manualHint={t('limitsSummary.manualHint', 'Add and edit each rule yourself, with every option.')}
-        onGuided={() => navigate(`/${section}/${LIMITS_WIZARD_VIEW}`)}
-        onManual={() => undefined}
-      />
+      <LimitsLaunchChoice open={open} onOpenChange={setOpen} onManual={() => undefined} />
     </div>
   );
 }
