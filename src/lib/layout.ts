@@ -81,6 +81,11 @@ function checkSpecialLink(
     return { visible: canGet ? canGet('sysAudit') : true, enterprise: false };
   }
 
+  // inbuxa: legal holds, for server administrators who may see them (LH-13).
+  if (viewName === 'CustomComponent/LegalHolds') {
+    return { visible: canGet ? canGet('sysLegalHold') : true, enterprise: false };
+  }
+
   // inbuxa: locked accounts, for whoever may see them (AL-12).
   if (viewName === 'CustomComponent/AccountLocks') {
     return { visible: canGet ? canGet('sysAccountLock') : true, enterprise: false };
