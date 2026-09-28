@@ -47,6 +47,9 @@ import {
 } from '@/lib/navTree';
 import type { Layout, LayoutItem, LayoutSubItem } from '@/types/schema';
 
+/** Past this many links a menu is drawn in two columns. */
+const WIDE_MENU_LINKS = 12;
+
 /** Room kept for the "More" trigger when not everything fits. */
 const MORE_WIDTH = 92;
 
@@ -110,14 +113,20 @@ function MenuBody({ items, sectionName, currentPath, edition, onPick }: MenuBody
         if (!subtreeHasVisibleLink(sub.items, edition)) return null;
         const links = visibleLinks(sub.items, edition);
         return (
-          <DropdownMenuGroup key={`${sub.name}-${i}`}>
-            <DropdownMenuLabel className="pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <DropdownMenuGroup key={`${sub.name}-${i}`} className="break-inside-avoid">
+            <DropdownMenuLabel
+              className={cn(
+                'pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground',
+                sub.advanced && 'opacity-70',
+              )}
+            >
               {sub.name}
             </DropdownMenuLabel>
             {links.map((l) => (
               <DropdownMenuItem
                 key={l.viewName}
                 className={cn(
+                  sub.advanced && 'text-muted-foreground',
                   pathMatchesView(currentPath, sectionName, l.viewName) && 'bg-accent text-accent-foreground',
                 )}
                 onClick={() => onPick(l.viewName, checkIsEnterprise(l.viewName) && edition === 'community')}
@@ -163,6 +172,8 @@ function SectionNavItem({ item, sectionName, currentPath, edition, onPick, measu
 
   const { name, items } = item.container;
   const containsActive = subtreeContainsActive(items, currentPath, sectionName);
+  // inbuxa: a long menu (Settings › Mail flow) splits into two columns rather than running off the screen.
+  const wide = visibleLinks(items, edition).length > WIDE_MENU_LINKS;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -175,8 +186,26 @@ function SectionNavItem({ item, sectionName, currentPath, edition, onPick, measu
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-70 transition-transform duration-200 data-[state=open]:rotate-180" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={0} className="w-60">
-        <MenuBody items={items} sectionName={sectionName} currentPath={currentPath} edition={edition} onPick={onPick} />
+      <DropdownMenuContent align="start" sideOffset={0} className={wide ? 'w-[34rem]' : 'w-60'}>
+        {wide ? (
+          <div className="columns-2 gap-2">
+            <MenuBody
+              items={items}
+              sectionName={sectionName}
+              currentPath={currentPath}
+              edition={edition}
+              onPick={onPick}
+            />
+          </div>
+        ) : (
+          <MenuBody
+            items={items}
+            sectionName={sectionName}
+            currentPath={currentPath}
+            edition={edition}
+            onPick={onPick}
+          />
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

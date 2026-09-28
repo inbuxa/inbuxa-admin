@@ -61,7 +61,12 @@ const DataInventoryPage = lazyFeature(
   () => import('@/features/compliance/DataInventoryPage'),
   (m) => m.DataInventoryPage,
 );
-// inbuxa: Settings › Spam Filter › Local AI (ai-spam-classification spec).
+// inbuxa: Settings › Overview (settings-reorg spec).
+const SettingsOverviewPage = lazyFeature(
+  () => import('@/features/settings/SettingsOverviewPage'),
+  (m) => m.SettingsOverviewPage,
+);
+// inbuxa: Settings › Spam filter › Local AI (ai-spam-classification spec).
 const LocalAiPage = lazyFeature(
   () => import('@/features/ai/LocalAiPage'),
   (m) => m.LocalAiPage,
@@ -148,6 +153,10 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     // INBUXA: Settings › Security › Hardening (legacy-protocols spec).
     if (componentName === 'LegacyProtocols') {
       return <LegacyProtocolsPage />;
+    }
+    // inbuxa: Settings › Overview (settings-reorg).
+    if (componentName === 'SettingsOverview') {
+      return <SettingsOverviewPage />;
     }
     if (componentName === 'LocalAi') {
       return <LocalAiPage />;

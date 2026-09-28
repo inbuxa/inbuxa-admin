@@ -1,7 +1,10 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import type { Dashboard } from '@/features/dashboard/types/schema';
@@ -369,6 +372,8 @@ export interface LayoutSubItemContainer {
   type: 'container';
   name: string;
   items: LayoutSubItem[];
+  /** inbuxa: protocol-level detail, drawn last and dimmed (settings-reorg). */
+  advanced?: boolean;
 }
 
 export interface LayoutSubItemLink {
