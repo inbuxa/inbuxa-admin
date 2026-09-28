@@ -41,6 +41,7 @@ import {
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ArrowLeft, Save, Trash2, Loader2 } from 'lucide-react';
+import { AccountLockButton } from '@/features/lock/AccountLockButton';
 
 import { useSchemaStore } from '@/stores/schemaStore';
 import { useAccountStore } from '@/stores/accountStore';
@@ -920,13 +921,15 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
       ))}
 
       <div className="flex items-center justify-between pt-2 pb-8">
-        <div>
+        <div className="flex items-center gap-3">
           {canDelete && (
             <Button type="button" variant="destructive" disabled={saving} onClick={() => setDeleteConfirmOpen(true)}>
               <Trash2 className="h-4 w-4 mr-2" />
               {t('common.delete', 'Delete')}
             </Button>
           )}
+          {/* inbuxa: lock or unlock a person beside Delete (AL-1) */}
+          {viewName === 'x:Account/User' && objectId && <AccountLockButton accountId={objectId} disabled={saving} />}
         </div>
         <div className="flex items-center gap-3">
           {isDirty && (

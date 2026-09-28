@@ -13,6 +13,9 @@
 import { getAccountId, jmapRequest } from '@/services/jmap/client';
 
 export const INBUXA_CAPABILITY = 'urn:inbuxa:jmap';
+
+/** Fired on window after a lock or unlock, so every view of it refreshes. */
+export const LOCK_CHANGED = 'inbuxa:lock-changed';
 const OBJECT = 'inbuxa:AccountLock';
 
 export type Access = 'read' | 'organize' | 'full';
