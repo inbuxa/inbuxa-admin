@@ -1,7 +1,10 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { useState } from 'react';
@@ -12,7 +15,9 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
-import { X, Plus } from 'lucide-react';
+import { X, Plus, ListChecks } from 'lucide-react';
+import { SimpleExpressionEditor } from './SimpleExpressionEditor';
+import type { ExpressionHints } from './simple';
 
 function BufferedExprInput({
   value,
@@ -48,14 +53,29 @@ interface ExpressionEditorProps {
   };
   onChange: (value: { match: Record<string, { if: string; then: string }>; else: string }) => void;
   readOnly?: boolean;
+  /** inbuxa: what the field accepts, from the schema; with it, the field opens in plain form. */
+  hints?: ExpressionHints;
 }
 
-export function ExpressionEditor({ value, onChange, readOnly = false }: ExpressionEditorProps) {
+export function ExpressionEditor({ value, onChange, readOnly = false, hints }: ExpressionEditorProps) {
   const { t } = useTranslation();
   const [nextIndex, setNextIndex] = useState(() => {
     const keys = Object.keys(value.match).map(Number).filter(Number.isFinite);
     return keys.length > 0 ? Math.max(...keys) + 1 : 0;
   });
+  const [asText, setAsText] = useState(false);
+
+  if (hints && !asText) {
+    return (
+      <SimpleExpressionEditor
+        value={value}
+        onChange={onChange}
+        hints={hints}
+        readOnly={readOnly}
+        onEditAsText={() => setAsText(true)}
+      />
+    );
+  }
 
   const matchEntries = Object.entries(value.match);
 
@@ -135,7 +155,19 @@ export function ExpressionEditor({ value, onChange, readOnly = false }: Expressi
       ))}
 
       {!readOnly && (
-        <div className="flex justify-end">
+        <div className={hints ? 'flex justify-between' : 'flex justify-end'}>
+          {hints && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setAsText(false)}
+              className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <ListChecks className="h-3 w-3" />
+              {t('expression.editAsChoices', 'Edit as choices')}
+            </Button>
+          )}
           <Button
             type="button"
             variant="ghost"

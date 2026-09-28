@@ -30,6 +30,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Plus, X, Eye, EyeOff, Loader2, Search, Check, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ExpressionEditor } from '@/components/expression/ExpressionEditor';
+import type { ExpressionHints } from '@/components/expression/simple';
 import { OtpAuthField } from '@/components/forms/OtpAuthField';
 import { SievepadButton } from '@/components/forms/SievepadButton';
 import {
@@ -179,6 +180,7 @@ export function FieldWidget(props: FieldWidgetProps) {
             schema={schema}
             formField={formField}
             nullable={ft.nullable}
+            expression={ft.expression}
           />
         );
       case 'objectList':
@@ -1395,6 +1397,8 @@ interface EmbeddedObjectFieldProps {
   schema: Schema;
   formField: FormField;
   nullable?: boolean;
+  /** inbuxa: an expression field's allowed constants and variables, from the schema. */
+  expression?: ExpressionHints;
 }
 
 function EmbeddedObjectField({
@@ -1405,6 +1409,7 @@ function EmbeddedObjectField({
   schema,
   formField,
   nullable,
+  expression,
 }: EmbeddedObjectFieldProps) {
   const { t } = useTranslation();
   const objValue = (value as Record<string, unknown>) ?? {};
@@ -1418,6 +1423,7 @@ function EmbeddedObjectField({
         }}
         onChange={(v) => onChange(v)}
         readOnly={readOnly}
+        hints={expression}
       />
     );
   }
