@@ -106,6 +106,7 @@ export default function AdminPanel() {
     if (!section) return t('dashboard.title', 'Dashboard');
     if (!viewName) return section;
     if (viewName.startsWith('Wizard/dns/')) return `${t('dnsWizard.tabTitle', 'Publish DNS')} · ${section}`;
+    if (viewName === 'Wizard/directory') return `${t('dirSetup.tabTitle', 'Sign-in directory')} · ${section}`;
     if (viewName === 'Wizard/certificates') return `${t('certSetup.tabTitle', 'Certificates')} · ${section}`;
     if (viewName === 'Wizard/sending') return `${t('sendingSetup.tabTitle', 'Sending mail')} · ${section}`;
     if (viewName.startsWith('Dashboard/')) {

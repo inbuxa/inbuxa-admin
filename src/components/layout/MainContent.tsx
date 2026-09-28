@@ -17,6 +17,7 @@ import { DynamicForm } from '@/components/forms/DynamicForm';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
+import { DirectorySetupCard } from '@/features/directory/DirectorySetupCard';
 import { SendingSetupCard } from '@/features/sending/SendingSetupCard';
 import { CertificateSetupCard } from '@/features/certificates/CertificateSetupCard';
 import type { Schema } from '@/types/schema';
@@ -75,6 +76,11 @@ const SendingSetupPage = lazyFeature(
 const SettingsOverviewPage = lazyFeature(
   () => import('@/features/settings/SettingsOverviewPage'),
   (m) => m.SettingsOverviewPage,
+);
+// inbuxa: guided setup, connect a sign-in directory (settings-reorg spec).
+const DirectorySetupPage = lazyFeature(
+  () => import('@/features/directory/DirectorySetupPage'),
+  (m) => m.DirectorySetupPage,
 );
 // inbuxa: Settings › Spam filter › Local AI (ai-spam-classification spec).
 const LocalAiPage = lazyFeature(
@@ -140,6 +146,10 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     const [, wizard, param] = viewName.split('/');
     if (wizard === 'dns' && param) {
       return <ConnectDnsPage domainId={param} />;
+    }
+    // inbuxa: guided setup, connect a sign-in directory (settings-reorg).
+    if (wizard === 'directory') {
+      return <DirectorySetupPage />;
     }
     // inbuxa: guided setup, how this server sends mail (settings-reorg).
     if (wizard === 'sending') {
@@ -216,6 +226,14 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
 
   if (resolved.objectType.type === 'singleton') {
     // INBUXA: the Security settings carry the legacy protocols banner (LP-18).
+    if (resolved.objectName === 'x:Authentication') {
+      return (
+        <div className="space-y-4">
+          <DirectorySetupCard className="mx-auto max-w-4xl" />
+          <DynamicForm viewName={viewName} objectId="singleton" />
+        </div>
+      );
+    }
     if (resolved.objectName === 'x:Security') {
       return (
         <div className="space-y-4">
@@ -286,6 +304,14 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     return (
       <div className="space-y-4">
         <SendingSetupCard />
+        <DynamicList viewName={viewName} />
+      </div>
+    );
+  }
+  if (viewName === 'x:Directory') {
+    return (
+      <div className="space-y-4">
+        <DirectorySetupCard />
         <DynamicList viewName={viewName} />
       </div>
     );
