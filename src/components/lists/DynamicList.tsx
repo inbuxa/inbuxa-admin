@@ -75,6 +75,7 @@ import type { JmapSetResponse, JmapSetError } from '@/types/jmap';
 import type { ResolvedSchema } from '@/lib/schemaResolver';
 import { ExplainButton } from '@/features/ai/explain/ExplainButton';
 import { useExplainStore } from '@/features/ai/explain/explainStore';
+import { useDirectoryLocks } from '@/features/lock/useDirectoryLocks';
 
 const ENUM_FILTER_COMBOBOX_THRESHOLD = 15;
 
@@ -373,6 +374,8 @@ export function DynamicList({ viewName }: DynamicListProps) {
     const list = resolveList(schema, viewName, obj.objectName);
     return { obj, schema: schem, list };
   }, [schema, viewName]);
+  // inbuxa: lock and unlock people from the account list (AL-1)
+  const directoryLocks = useDirectoryLocks(resolved?.obj.objectName === 'x:Account');
 
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -861,7 +864,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
   const hasItemActions = (list.itemActions?.length ?? 0) > 0;
   // inbuxa: "Explain this" on each log entry (ai-explain EX-17)
   const explainLogs = explainAvailable && obj.objectName === 'x:Log';
-  const hasRowCell = hasItemActions || explainLogs;
+  const hasRowCell = hasItemActions || explainLogs || directoryLocks.enabled;
 
   const pageStart = anchorStack.length * PAGE_SIZE;
   const rangeStart = pageStart + 1;
@@ -1058,9 +1061,11 @@ export function DynamicList({ viewName }: DynamicListProps) {
   }
 
   function renderItemActions(item: Record<string, unknown>): React.ReactNode {
-    if (!hasItemActions || !list.itemActions) return null;
+    // inbuxa: Lock… or Unlock… for a person (AL-1)
+    const lockItems = directoryLocks.menuItems(item);
+    if ((!hasItemActions || !list.itemActions) && !lockItems) return null;
 
-    const filteredActions = list.itemActions.flatMap((action): { action: ItemAction; locked: boolean }[] => {
+    const filteredActions = (list.itemActions ?? []).flatMap((action): { action: ItemAction; locked: boolean }[] => {
       if (action.type === 'separator') return [{ action, locked: false }];
       if (action.type === 'delete') return canDelete ? [{ action, locked: false }] : [];
       if (action.type === 'setProperty') return canUpdate ? [{ action, locked: false }] : [];
@@ -1076,7 +1081,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
       return [{ action, locked: false }];
     });
 
-    if (filteredActions.length === 0) return null;
+    if (filteredActions.length === 0 && !lockItems) return null;
 
     return (
       <DropdownMenu>
@@ -1117,6 +1122,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
               </DropdownMenuItem>
             );
           })}
+          {lockItems}
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -1327,9 +1333,12 @@ export function DynamicList({ viewName }: DynamicListProps) {
                         return (
                           <td key={col.name} className="px-3 py-2">
                             {colIndex === 0 && item[col.name] != null ? (
-                              <ObjectHoverCard objectName={resolved.obj.objectName} id={itemId}>
-                                {cell}
-                              </ObjectHoverCard>
+                              <>
+                                <ObjectHoverCard objectName={resolved.obj.objectName} id={itemId}>
+                                  {cell}
+                                </ObjectHoverCard>
+                                {directoryLocks.badge(item)}
+                              </>
                             ) : (
                               cell
                             )}
@@ -1421,6 +1430,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
       </AlertDialog>
 
       <EnterpriseUpsell open={upsellOpen} onClose={() => setUpsellOpen(false)} />
+      {directoryLocks.dialogs}
     </div>
   );
 }
