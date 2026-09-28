@@ -17,6 +17,7 @@ import { DynamicForm } from '@/components/forms/DynamicForm';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
+import { MetricsPage } from '@/features/metricsConnect/MetricsPage';
 import { AlertsPage } from '@/features/alerts/AlertsPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
 import { RetentionPage } from '@/features/retention/RetentionPage';
@@ -268,6 +269,10 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
       ].includes(resolved.objectName)
     ) {
       return <ReportsPage viewName={viewName} />;
+    }
+    // inbuxa: the metrics pages open with where the numbers go (settings-reorg).
+    if (resolved.objectName === 'x:Metrics') {
+      return <MetricsPage viewName={viewName} />;
     }
     if (resolved.objectName === 'x:Security') {
       return (
