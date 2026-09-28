@@ -1,7 +1,10 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import type { Dashboard } from '@/features/dashboard/types/schema';
@@ -128,6 +131,8 @@ export interface FieldTypeObject {
   type: 'object';
   objectName: string;
   nullable?: boolean;
+  /** inbuxa: on an x:Expression, the constants it may evaluate to and the variables it may read. */
+  expression?: { constants: string[]; variables: string[] };
 }
 
 export interface FieldTypeObjectList {
