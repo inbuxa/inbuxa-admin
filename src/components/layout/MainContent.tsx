@@ -51,6 +51,16 @@ const LegacyProtocolsPage = lazyFeature(
   () => import('@/features/hardening/LegacyProtocolsPage'),
   (m) => m.LegacyProtocolsPage,
 );
+// inbuxa: Management › Compliance › Overview and Data Inventory
+// (personal-data catalog spec, §8).
+const ComplianceOverviewPage = lazyFeature(
+  () => import('@/features/compliance/ComplianceOverviewPage'),
+  (m) => m.ComplianceOverviewPage,
+);
+const DataInventoryPage = lazyFeature(
+  () => import('@/features/compliance/DataInventoryPage'),
+  (m) => m.DataInventoryPage,
+);
 // inbuxa: Settings › Spam Filter › Local AI (ai-spam-classification spec).
 const LocalAiPage = lazyFeature(
   () => import('@/features/ai/LocalAiPage'),
@@ -150,6 +160,12 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     }
     if (componentName === 'LegalHolds') {
       return <LegalHoldsPage />;
+    }
+    if (componentName === 'ComplianceOverview') {
+      return <ComplianceOverviewPage />;
+    }
+    if (componentName === 'DataInventory') {
+      return <DataInventoryPage />;
     }
     return (
       <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
