@@ -17,6 +17,7 @@ import { DynamicForm } from '@/components/forms/DynamicForm';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
+import { SendingSetupCard } from '@/features/sending/SendingSetupCard';
 import type { Schema } from '@/types/schema';
 
 function lazyFeature<M, P>(load: () => Promise<M>, select: (module: M) => ComponentType<P>) {
@@ -62,6 +63,10 @@ const DataInventoryPage = lazyFeature(
   (m) => m.DataInventoryPage,
 );
 // inbuxa: Settings › Overview (settings-reorg spec).
+const SendingSetupPage = lazyFeature(
+  () => import('@/features/sending/SendingSetupPage'),
+  (m) => m.SendingSetupPage,
+);
 const SettingsOverviewPage = lazyFeature(
   () => import('@/features/settings/SettingsOverviewPage'),
   (m) => m.SettingsOverviewPage,
@@ -130,6 +135,10 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     const [, wizard, param] = viewName.split('/');
     if (wizard === 'dns' && param) {
       return <ConnectDnsPage domainId={param} />;
+    }
+    // inbuxa: guided setup, how this server sends mail (settings-reorg).
+    if (wizard === 'sending') {
+      return <SendingSetupPage />;
     }
     return (
       <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
@@ -206,6 +215,15 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
         </div>
       );
     }
+    // inbuxa: the sending guide, offered where outbound delivery is set (settings-reorg).
+    if (resolved.objectName === 'x:MtaOutboundStrategy') {
+      return (
+        <div className="space-y-4">
+          <SendingSetupCard className="mx-auto max-w-4xl" />
+          <DynamicForm viewName={viewName} objectId="singleton" />
+        </div>
+      );
+    }
     return <DynamicForm viewName={viewName} objectId="singleton" />;
   }
 
@@ -247,5 +265,13 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     return page;
   }
 
+  if (viewName === 'x:MtaRoute') {
+    return (
+      <div className="space-y-4">
+        <SendingSetupCard />
+        <DynamicList viewName={viewName} />
+      </div>
+    );
+  }
   return <DynamicList viewName={viewName} />;
 }
