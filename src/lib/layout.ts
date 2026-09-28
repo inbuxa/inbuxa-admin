@@ -85,6 +85,10 @@ function checkSpecialLink(
   if (viewName === 'CustomComponent/LegalHolds') {
     return { visible: canGet ? canGet('sysLegalHold') : true, enterprise: false };
   }
+  // INBUXA: the compliance overview and data inventory (personal-data catalog)
+  if (viewName === 'CustomComponent/ComplianceOverview' || viewName === 'CustomComponent/DataInventory') {
+    return { visible: canGet ? canGet('sysCompliance') : true, enterprise: false };
+  }
 
   // inbuxa: locked accounts, for whoever may see them (AL-12).
   if (viewName === 'CustomComponent/AccountLocks') {
