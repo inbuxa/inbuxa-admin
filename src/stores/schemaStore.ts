@@ -1,11 +1,15 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { create } from 'zustand';
 import type { Schema, LayoutSubItem } from '@/types/schema';
+import { withRegroupedSettings } from '@/lib/settingsLayout';
 
 export interface SearchIndexEntry {
   text: string;
@@ -163,7 +167,9 @@ export const useSchemaStore = create<SchemaState>()((set) => ({
   viewToSection: {},
   searchIndex: [],
 
-  setSchema: (schema) => {
+  setSchema: (served) => {
+    // inbuxa: Settings grouped by task, not by config file (settings-reorg).
+    const schema = withRegroupedSettings(served);
     const { viewToSection, linkEntries } = walkLayouts(schema);
     const searchIndex = buildSearchIndex(schema, viewToSection, linkEntries);
     set({
