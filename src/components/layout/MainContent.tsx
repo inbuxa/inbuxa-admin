@@ -66,6 +66,14 @@ const AccountLocksPage = lazyFeature(
   () => import('@/features/lock/AccountLocksPage'),
   (m) => m.AccountLocksPage,
 );
+const LegalHoldsPage = lazyFeature(
+  () => import('@/features/hold/LegalHoldsPage'),
+  (m) => m.LegalHoldsPage,
+);
+const HeldNotice = lazyFeature(
+  () => import('@/features/hold/HeldNotice'),
+  (m) => m.HeldNotice,
+);
 const AccountLockBanner = lazyFeature(
   () => import('@/features/lock/AccountLockBanner'),
   (m) => m.AccountLockBanner,
@@ -140,6 +148,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     if (componentName === 'AccountLocks') {
       return <AccountLocksPage />;
     }
+    if (componentName === 'LegalHolds') {
+      return <LegalHoldsPage />;
+    }
     return (
       <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
         Unknown component: {componentName}
@@ -202,6 +213,7 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     if (viewName === 'x:Account/User') {
       return (
         <div className="space-y-4">
+          <HeldNotice accountId={id} />
           <AccountLockBanner accountId={id} />
           {page}
         </div>
