@@ -17,6 +17,7 @@ import { DynamicForm } from '@/components/forms/DynamicForm';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
+import { RetentionPage } from '@/features/retention/RetentionPage';
 import { LimitsSummary } from '@/features/limits/LimitsSummary';
 import { SenderChecksPage } from '@/features/senderChecks/SenderChecksPage';
 import { DirectorySetupCard } from '@/features/directory/DirectorySetupCard';
@@ -248,6 +249,10 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     // inbuxa: Sender checks open with a choice of level (settings-reorg).
     if (resolved.objectName === 'x:SenderAuth') {
       return <SenderChecksPage viewName={viewName} />;
+    }
+    // inbuxa: every retention page opens with all the "how long"s as sentences (settings-reorg).
+    if (resolved.objectName === 'x:DataRetention') {
+      return <RetentionPage viewName={viewName} />;
     }
     if (resolved.objectName === 'x:Security') {
       return (
