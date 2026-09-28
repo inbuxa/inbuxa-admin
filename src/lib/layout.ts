@@ -112,6 +112,12 @@ function checkSpecialLink(
     const ok = canGet ? canGet('sysDirectory') && canGet('sysDomain') && canGet('sysAuthentication') : true;
     return { visible: ok, enterprise: false };
   }
+  if (viewName === 'Wizard/limits') {
+    const ok = canGet
+      ? canGet('sysMtaInboundThrottle') && canGet('sysMtaOutboundThrottle') && canGet('sysMtaQueueQuota')
+      : true;
+    return { visible: ok, enterprise: false };
+  }
   if (viewName.startsWith('Wizard/dns/')) {
     return { visible: canGet ? canGet('sysDomain') : true, enterprise: false };
   }

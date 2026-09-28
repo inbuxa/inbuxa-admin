@@ -17,6 +17,7 @@ import { DynamicForm } from '@/components/forms/DynamicForm';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
+import { LimitsSummary } from '@/features/limits/LimitsSummary';
 import { SenderChecksPage } from '@/features/senderChecks/SenderChecksPage';
 import { DirectorySetupCard } from '@/features/directory/DirectorySetupCard';
 import { SendingSetupCard } from '@/features/sending/SendingSetupCard';
@@ -83,6 +84,11 @@ const DirectorySetupPage = lazyFeature(
   () => import('@/features/directory/DirectorySetupPage'),
   (m) => m.DirectorySetupPage,
 );
+// inbuxa: guided setup, sending and receiving limits (settings-reorg spec).
+const LimitsSetupPage = lazyFeature(
+  () => import('@/features/limits/LimitsSetupPage'),
+  (m) => m.LimitsSetupPage,
+);
 // inbuxa: Settings › Spam filter › Local AI (ai-spam-classification spec).
 const LocalAiPage = lazyFeature(
   () => import('@/features/ai/LocalAiPage'),
@@ -147,6 +153,10 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     const [, wizard, param] = viewName.split('/');
     if (wizard === 'dns' && param) {
       return <ConnectDnsPage domainId={param} />;
+    }
+    // inbuxa: guided setup, sending and receiving limits (settings-reorg).
+    if (wizard === 'limits') {
+      return <LimitsSetupPage />;
     }
     // inbuxa: guided setup, connect a sign-in directory (settings-reorg).
     if (wizard === 'directory') {
@@ -317,6 +327,14 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     return (
       <div className="space-y-4">
         <DirectorySetupCard />
+        <DynamicList viewName={viewName} />
+      </div>
+    );
+  }
+  if (viewName === 'x:MtaInboundThrottle' || viewName === 'x:MtaOutboundThrottle' || viewName === 'x:MtaQueueQuota') {
+    return (
+      <div className="space-y-4">
+        <LimitsSummary object={viewName} />
         <DynamicList viewName={viewName} />
       </div>
     );
