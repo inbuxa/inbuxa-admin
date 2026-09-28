@@ -40,6 +40,7 @@ import {
   type SwitchUpdate,
 } from './protocolPolicy';
 import { ConfirmTurnOff, ImpactPanel, ProtocolSwitch, Statement } from './parts';
+import { LogRetentionCard } from './LogRetentionCard';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; policy: ProtocolPolicy } | { kind: 'error'; message: string };
 
@@ -195,6 +196,8 @@ export function LegacyProtocolsPage() {
           }}
         />
       )}
+
+      <LogRetentionCard />
     </div>
   );
 }
