@@ -6,12 +6,14 @@
 
 /**
  * INBUXA: Settings › Security › Hardening, the server-wide legacy mail
- * protocols switch (legacy-protocols spec, LP-16, LP-17, LP-20, LP-21).
+ * protocols switches (legacy-protocols spec, LP-16, LP-17, LP-20, LP-21, and
+ * "one switch per protocol").
  *
- * Nobody should turn this on by accident or without understanding it, so the
- * statement is shown in full before the switch moves, and turning it on takes
- * a typed phrase. Turning it back on is one click: undoing a restriction must
- * never be the hard part.
+ * Each of IMAP, POP3 and ManageSieve has a switch on its row: turning one off
+ * asks first, naming who used it lately and the ports that close. Turning
+ * them all off at once shows the statement in full and takes a typed phrase.
+ * Turning anything back on is one click: undoing a restriction must never be
+ * the hard part.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -25,13 +27,19 @@ import { cn } from '@/lib/utils';
 import {
   describeListener,
   fetchProtocolPolicy,
+  offProtocols,
   PolicyUnavailable,
+  PROTOCOL_LABELS,
   protocolRows,
+  SWITCHED,
   updateProtocolPolicy,
+  usersOf,
   type ProtocolPolicy,
   type ProtocolRow,
+  type SwitchedProtocol,
+  type SwitchUpdate,
 } from './protocolPolicy';
-import { ConfirmTurnOff, ImpactPanel, Statement } from './parts';
+import { ConfirmTurnOff, ImpactPanel, ProtocolSwitch, Statement } from './parts';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; policy: ProtocolPolicy } | { kind: 'error'; message: string };
 
@@ -71,12 +79,12 @@ export function LegacyProtocolsPage() {
   }, [loaded]);
 
   const turn = useCallback(
-    async (legacyProtocols: 'enabled' | 'disabled') => {
+    async (update: SwitchUpdate) => {
       setBusy(true);
       try {
-        // Only legacyProtocols is sent. The server may still report closeSubmission
-        // overruled by the SMTP lock (LP-21), which the selector already shows.
-        await updateProtocolPolicy({ legacyProtocols });
+        // Only switches are sent. The server may still report closeSubmission
+        // overruled by the SMTP lock (LP-21), which the table already shows.
+        await updateProtocolPolicy(update);
         setConfirming(false);
         await refresh();
       } catch (e) {
@@ -102,11 +110,17 @@ export function LegacyProtocolsPage() {
   }
 
   const { policy } = load;
+  // All three off: the kill-all's state.
   const off = policy.legacyProtocols === 'disabled';
-  // What closes: what already did while the switch is off, what would otherwise.
+  // What closes: what already did while all are off, what would otherwise.
   const listeners = off ? policy.savedListeners : policy.wouldClose;
-  // Enabled with listeners still saved: some could not be put back (LP-5).
-  const stranded = off ? [] : policy.savedListeners;
+  // A protocol that is on with listeners still saved: some could not be put
+  // back (LP-5). Trying again turns those protocols on again.
+  const strandedOn = new Set(
+    SWITCHED.filter((p) => policy.switches[p] === 'enabled' && policy.savedListeners.some((l) => l.protocol === p)),
+  );
+  const stranded = policy.savedListeners.filter((l) => strandedOn.has(l.protocol as SwitchedProtocol));
+  const retry: SwitchUpdate = Object.fromEntries([...strandedOn].map((p) => [p, 'enabled']));
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -115,12 +129,17 @@ export function LegacyProtocolsPage() {
         <p className="text-muted-foreground">
           {t(
             'legacyProtocols.subtitle',
-            'Turn off IMAP, POP3, ManageSieve and sending from mail apps, so that only inbuxa webmail and JMAP apps can reach this server.',
+            'Turn off IMAP, POP3 or ManageSieve one at a time, or all of them with sending from mail apps, so that only inbuxa webmail and JMAP apps can reach this server.',
           )}
         </p>
       </header>
 
-      <StatusCard policy={policy} off={off} busy={busy} canUpdate={canUpdate} onTurnOn={() => turn('enabled')} />
+      <StatusCard
+        policy={policy}
+        busy={busy}
+        canUpdate={canUpdate}
+        onTurnOn={() => void turn({ legacyProtocols: 'enabled' })}
+      />
 
       {stranded.length > 0 && (
         <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4">
@@ -138,7 +157,7 @@ export function LegacyProtocolsPage() {
                 {stranded.map(describeListener).join(', ')}
               </p>
               {canUpdate && (
-                <Button size="sm" variant="outline" disabled={busy} onClick={() => turn('enabled')}>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void turn(retry)}>
                   <RotateCcw className="mr-2 h-4 w-4" />
                   {t('legacyProtocols.tryAgain', 'Try again')}
                 </Button>
@@ -148,7 +167,13 @@ export function LegacyProtocolsPage() {
         </div>
       )}
 
-      <ProtocolTable rows={protocolRows(policy, listeners)} off={off} />
+      <ProtocolTable
+        policy={policy}
+        rows={protocolRows(policy)}
+        busy={busy}
+        canUpdate={canUpdate}
+        onTurn={(protocol, value) => void turn({ [protocol]: value })}
+      />
 
       {!off && policy.recentLegacyUse && <ImpactPanel recent={policy.recentLegacyUse} />}
 
@@ -157,14 +182,14 @@ export function LegacyProtocolsPage() {
       {!off && canUpdate && !confirming && (
         <Button variant="destructive" onClick={() => setConfirming(true)}>
           <ShieldOff className="mr-2 h-4 w-4" />
-          {t('legacyProtocols.turnOff', 'Turn off legacy protocols…')}
+          {t('legacyProtocols.turnOffAll', 'Turn off all legacy protocols…')}
         </Button>
       )}
 
       {!off && confirming && (
         <ConfirmTurnOff
           busy={busy}
-          onConfirm={() => void turn('disabled')}
+          onConfirm={() => void turn({ legacyProtocols: 'disabled' })}
           onCancel={() => {
             setConfirming(false);
           }}
@@ -174,21 +199,29 @@ export function LegacyProtocolsPage() {
   );
 }
 
+/** Protocol names as a sentence: "IMAP", "IMAP and POP3", "IMAP, POP3 and ManageSieve". */
+function listNames(protocols: SwitchedProtocol[], and: string): string {
+  const names = protocols.map((p) => PROTOCOL_LABELS[p] ?? p);
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} ${and} ${names[names.length - 1]}`;
+}
+
 function StatusCard({
   policy,
-  off,
   busy,
   canUpdate,
   onTurnOn,
 }: {
   policy: ProtocolPolicy;
-  off: boolean;
   busy: boolean;
   canUpdate: boolean;
   onTurnOn: () => void;
 }) {
   const { t } = useTranslation();
+  const offList = offProtocols(policy.switches);
+  const off = policy.legacyProtocols === 'disabled';
+  const some = offList.length > 0 && !off;
   const Icon = off ? ShieldCheck : ShieldOff;
+  const and = t('legacyProtocols.and', 'and');
   return (
     <div
       className={cn(
@@ -202,12 +235,26 @@ function StatusCard({
           <p className="font-medium">
             {off
               ? t('legacyProtocols.statusOff', 'Legacy mail protocols are off on this server.')
-              : t('legacyProtocols.statusOn', 'Legacy mail protocols are on.')}
+              : some
+                ? t('legacyProtocols.statusSome', {
+                    count: offList.length,
+                    list: listNames(offList, and),
+                    defaultValue_one: '{{list}} is off on this server.',
+                    defaultValue_other: '{{list}} are off on this server.',
+                  })
+                : t('legacyProtocols.statusOn', 'Legacy mail protocols are on.')}
           </p>
           <p className="text-sm text-muted-foreground">
             {off
               ? t('legacyProtocols.statusOffBody', 'Only inbuxa webmail and JMAP apps can sign in.')
-              : t('legacyProtocols.statusOnBody', 'Mail apps can use IMAP, POP3 and ManageSieve.')}
+              : some
+                ? t('legacyProtocols.statusSomeBody', 'Mail apps can still use {{list}}, and send.', {
+                    list: listNames(
+                      SWITCHED.filter((p) => !offList.includes(p)),
+                      and,
+                    ),
+                  })
+                : t('legacyProtocols.statusOnBody', 'Mail apps can use IMAP, POP3 and ManageSieve.')}
             {policy.changedAt !== null && (
               <>
                 {' '}
@@ -219,64 +266,126 @@ function StatusCard({
           </p>
         </div>
       </div>
-      {off && canUpdate && (
+      {offList.length > 0 && canUpdate && (
         <Button variant="outline" disabled={busy} onClick={onTurnOn} className="shrink-0">
           {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {t('legacyProtocols.turnOn', 'Turn legacy protocols back on')}
+          {some
+            ? t('legacyProtocols.turnAllOn', 'Turn them all back on')
+            : t('legacyProtocols.turnOn', 'Turn legacy protocols back on')}
         </Button>
       )}
     </div>
   );
 }
 
-function ProtocolTable({ rows, off }: { rows: ProtocolRow[]; off: boolean }) {
+function ProtocolTable({
+  policy,
+  rows,
+  busy,
+  canUpdate,
+  onTurn,
+}: {
+  policy: ProtocolPolicy;
+  rows: ProtocolRow[];
+  busy: boolean;
+  canUpdate: boolean;
+  onTurn: (protocol: SwitchedProtocol, value: 'enabled' | 'disabled') => void;
+}) {
   const { t } = useTranslation();
+  const allOff = policy.legacyProtocols === 'disabled';
+  const recent = policy.recentLegacyUse;
+  const switched = (key: string): key is SwitchedProtocol => (SWITCHED as readonly string[]).includes(key);
   const stateText = (row: ProtocolRow) => {
     switch (row.state) {
       case 'locked':
-        return t('legacyProtocols.rowLocked', 'Locked open');
+        return row.key === 'submission'
+          ? allOff
+            ? t('legacyProtocols.rowRefused', 'Port open, sign-in refused')
+            : t('legacyProtocols.rowSubmission', 'On; sign-in refused only with all three off')
+          : t('legacyProtocols.rowLocked', 'Locked open');
       case 'refused':
         return t('legacyProtocols.rowRefused', 'Port open, sign-in refused');
       case 'closes':
-        if (row.ports.length === 0) return t('legacyProtocols.rowNoListener', 'No listener');
-        return off ? t('legacyProtocols.rowClosed', 'Closed') : t('legacyProtocols.rowWouldClose', 'Closes');
+        if (row.off) {
+          return row.ports.length > 0
+            ? t('legacyProtocols.rowClosed', 'Off, ports closed')
+            : t('legacyProtocols.rowOff', 'Off');
+        }
+        return row.ports.length === 0
+          ? t('legacyProtocols.rowNoListener', 'On, no listener')
+          : t('legacyProtocols.rowOn', 'On');
     }
   };
   return (
-    <div className="overflow-hidden rounded-xl border">
+    <div className="overflow-x-auto rounded-xl border">
       <table className="w-full text-sm">
         <thead className="bg-muted/50 text-left text-muted-foreground">
           <tr>
             <th className="px-4 py-2 font-medium">{t('legacyProtocols.colProtocol', 'Protocol')}</th>
             <th className="px-4 py-2 font-medium">{t('legacyProtocols.colPorts', 'Ports')}</th>
-            <th className="px-4 py-2 font-medium">
-              {off ? t('legacyProtocols.colNow', 'Now') : t('legacyProtocols.colWhenOff', 'When turned off')}
-            </th>
+            <th className="px-4 py-2 font-medium">{t('legacyProtocols.colUsed', 'Used lately')}</th>
+            <th className="px-4 py-2 font-medium">{t('legacyProtocols.colNow', 'Now')}</th>
+            <th className="px-4 py-2 font-medium sr-only">{t('legacyProtocols.colSwitch', 'Switch')}</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.key} className="border-t">
-              <td className="px-4 py-2 font-medium">{row.label}</td>
-              <td className="px-4 py-2 tabular-nums text-muted-foreground">
-                {row.ports.length > 0 ? row.ports.join(', ') : '—'}
-              </td>
-              <td className="px-4 py-2">
-                <span
-                  className={cn('inline-flex items-center gap-1.5', row.state === 'locked' && 'text-muted-foreground')}
-                >
-                  {row.state === 'locked' && <Lock className="h-3.5 w-3.5" />}
-                  {stateText(row)}
-                </span>
-              </td>
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const users = (switched(row.key) || row.key === 'submission') && recent ? usersOf(recent, row.key) : null;
+            return (
+              <tr key={row.key} className="border-t">
+                <td className="px-4 py-2 font-medium">{row.label}</td>
+                <td className="px-4 py-2 tabular-nums text-muted-foreground">
+                  {row.ports.length > 0 ? row.ports.join(', ') : '—'}
+                </td>
+                <td className="px-4 py-2 text-muted-foreground">
+                  {users === null
+                    ? '—'
+                    : users.length === 0
+                      ? t('legacyProtocols.usedNobody', 'Nobody')
+                      : t('legacyProtocols.usedCount', {
+                          count: users.length,
+                          defaultValue_one: '1 account',
+                          defaultValue_other: '{{count}} accounts',
+                        })}
+                </td>
+                <td className="px-4 py-2">
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1.5',
+                      (row.state === 'locked' || row.off) && 'text-muted-foreground',
+                    )}
+                  >
+                    {row.state === 'locked' && <Lock className="h-3.5 w-3.5" />}
+                    {stateText(row)}
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {switched(row.key) && canUpdate && (
+                    <ProtocolSwitch
+                      label={row.label}
+                      off={row.off === true}
+                      disabled={busy}
+                      users={users}
+                      ports={row.ports}
+                      scope={t('legacyProtocols.scopeServer', 'everyone on this server')}
+                      onTurnOn={() => onTurn(row.key as SwitchedProtocol, 'enabled')}
+                      onTurnOff={() => onTurn(row.key as SwitchedProtocol, 'disabled')}
+                    />
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
       <p className="border-t bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
         {t(
           'legacyProtocols.lockNote',
           'Incoming mail (SMTP) and inbuxa webmail (JMAP) are locked open: closing them would stop mail arriving and lock everyone out, including you.',
+        )}{' '}
+        {t(
+          'legacyProtocols.submissionNote',
+          'Sending from mail apps goes on while any of IMAP, POP3 or ManageSieve is on.',
         )}
       </p>
     </div>

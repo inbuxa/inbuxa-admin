@@ -5,14 +5,15 @@
  */
 
 /**
- * INBUXA: one tenant's legacy mail protocols switch, on the tenant's page
- * (legacy-protocols spec, LP-9 to LP-18 at tenant scope).
+ * INBUXA: one tenant's legacy mail protocols switches, on the tenant's page
+ * (legacy-protocols spec, LP-9 to LP-18 at tenant scope, and "one switch per
+ * protocol").
  *
- * It closes no port -- other tenants share them (LP-13) -- so the statement
- * names no listener and carries no firewall note. It refuses sign-in over
- * legacy protocols on the tenant's domains. Turning it off takes the typed
- * phrase; turning it back on is one click, which the server refuses while
- * it has legacy protocols off itself (LP-9), and says so.
+ * They close no port -- other tenants share them (LP-13) -- so nothing here
+ * names a listener or carries a firewall note. They refuse sign-in over each
+ * protocol on the tenant's domains. One protocol off asks first; all of them
+ * off takes the typed phrase; back on is one click, which the server refuses
+ * while it has that protocol off itself (LP-9), and says which.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -23,14 +24,29 @@ import { useAccountStore } from '@/stores/accountStore';
 import { toast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { getAccountId, jmapGet } from '@/services/jmap/client';
-import { fetchTenantPolicy, PolicyUnavailable, updateTenantPolicy, type TenantPolicy } from './protocolPolicy';
-import { ConfirmTurnOff, ImpactPanel, Statement } from './parts';
+import {
+  fetchProtocolPolicy,
+  fetchTenantPolicy,
+  offProtocols,
+  PolicyUnavailable,
+  PROTOCOL_LABELS,
+  SWITCHED,
+  updateTenantPolicy,
+  usersOf,
+  type Switches,
+  type SwitchUpdate,
+  type TenantPolicy,
+} from './protocolPolicy';
+import { ConfirmTurnOff, ImpactPanel, ProtocolSwitch, Statement } from './parts';
 
 export function TenantLegacyProtocols({ tenantId }: { tenantId: string }) {
   const { t } = useTranslation();
   const canGet = useAccountStore((s) => s.hasObjectPermission('sysDomain', 'Get'));
   const canUpdate = useAccountStore((s) => s.hasObjectPermission('sysDomain', 'Update'));
   const [policy, setPolicy] = useState<TenantPolicy | null>(null);
+  // The server's own switches, which a server administrator can read: a
+  // protocol off there is off for this tenant whatever its switch says.
+  const [server, setServer] = useState<Switches | null>(null);
   const [organization, setOrganization] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -48,10 +64,21 @@ export function TenantLegacyProtocols({ tenantId }: { tenantId: string }) {
     [],
   );
 
+  const loadServer = useCallback((signal?: AbortSignal) => {
+    fetchProtocolPolicy(signal)
+      .then((p) => {
+        if (!signal?.aborted) setServer(p.switches);
+      })
+      // Inside a tenant the server's switches aren't readable; the server
+      // still refuses what they forbid, and says so.
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!canGet) return;
     const controller = new AbortController();
     void loaded(fetchTenantPolicy(tenantId, controller.signal), controller.signal);
+    loadServer(controller.signal);
     // The organization's name, for the statement.
     jmapGet('x:Tenant', getAccountId('x:Tenant'), [tenantId], ['name'], controller.signal)
       .then((responses) => {
@@ -60,13 +87,13 @@ export function TenantLegacyProtocols({ tenantId }: { tenantId: string }) {
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [tenantId, canGet, loaded]);
+  }, [tenantId, canGet, loaded, loadServer]);
 
   const turn = useCallback(
-    async (value: 'enabled' | 'disabled') => {
+    async (update: SwitchUpdate) => {
       setBusy(true);
       try {
-        await updateTenantPolicy(tenantId, value);
+        await updateTenantPolicy(tenantId, update);
         setConfirming(false);
         await loaded(fetchTenantPolicy(tenantId));
       } catch (e) {
@@ -84,7 +111,9 @@ export function TenantLegacyProtocols({ tenantId }: { tenantId: string }) {
 
   if (!policy) return null;
   const off = policy.legacyProtocols === 'disabled';
+  const offList = offProtocols(policy.switches);
   const name = organization || t('legacyProtocols.thisOrganization', 'this organization');
+  const scope = t('legacyProtocols.scopeTenant', 'everyone in {{organization}}', { organization: name });
 
   return (
     // Aligned with the tenant form beneath it.
@@ -105,32 +134,91 @@ export function TenantLegacyProtocols({ tenantId }: { tenantId: string }) {
                     'Off for {{organization}}. Only inbuxa webmail and JMAP apps can sign in to its domains.',
                     { organization: name },
                   )
-                : t(
-                    'legacyProtocols.tenantOn',
-                    'On for {{organization}}. Mail apps can use IMAP, POP3 and ManageSieve on its domains.',
-                    { organization: name },
-                  )}
+                : offList.length > 0
+                  ? t(
+                      'legacyProtocols.tenantSome',
+                      'Some are off for {{organization}}. Mail apps can still send, and use what is on.',
+                      { organization: name },
+                    )
+                  : t(
+                      'legacyProtocols.tenantOn',
+                      'On for {{organization}}. Mail apps can use IMAP, POP3 and ManageSieve on its domains.',
+                      { organization: name },
+                    )}
             </p>
           </div>
         </div>
-        {canUpdate && off && (
-          <Button variant="outline" disabled={busy} onClick={() => void turn('enabled')} className="shrink-0">
+        {canUpdate && offList.length > 0 && (
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => void turn({ legacyProtocols: 'enabled' })}
+            className="shrink-0"
+          >
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {t('legacyProtocols.turnOn', 'Turn legacy protocols back on')}
+            {off
+              ? t('legacyProtocols.turnOn', 'Turn legacy protocols back on')
+              : t('legacyProtocols.turnAllOn', 'Turn them all back on')}
           </Button>
         )}
         {canUpdate && !off && !confirming && (
           <Button variant="destructive" onClick={() => setConfirming(true)} className="shrink-0">
-            {t('legacyProtocols.turnOff', 'Turn off legacy protocols…')}
+            {t('legacyProtocols.turnOffAll', 'Turn off all legacy protocols…')}
           </Button>
         )}
       </div>
+
+      <ul className="divide-y rounded-lg border text-sm">
+        {SWITCHED.map((protocol) => {
+          const label = PROTOCOL_LABELS[protocol] ?? protocol;
+          const serverOff = server?.[protocol] === 'disabled';
+          const tenantOff = policy.switches[protocol] === 'disabled';
+          const users = policy.recentLegacyUse ? usersOf(policy.recentLegacyUse, protocol) : null;
+          return (
+            <li key={protocol} className="flex items-center justify-between gap-3 px-4 py-2">
+              <div>
+                <span className="font-medium">{label}</span>{' '}
+                <span className="text-muted-foreground">
+                  {serverOff
+                    ? t('legacyProtocols.offServerWide', 'Off for the whole server')
+                    : tenantOff
+                      ? t('legacyProtocols.rowOff', 'Off')
+                      : t('legacyProtocols.rowOn', 'On')}
+                  {users !== null &&
+                    users.length > 0 &&
+                    ` · ${t('legacyProtocols.usedCount', {
+                      count: users.length,
+                      defaultValue_one: '1 account',
+                      defaultValue_other: '{{count}} accounts',
+                    })}`}
+                </span>
+              </div>
+              {canUpdate && (
+                <ProtocolSwitch
+                  label={label}
+                  off={tenantOff || serverOff}
+                  disabled={busy || serverOff}
+                  users={users}
+                  ports={null}
+                  scope={scope}
+                  onTurnOn={() => void turn({ [protocol]: 'enabled' })}
+                  onTurnOff={() => void turn({ [protocol]: 'disabled' })}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
 
       {!off && confirming && (
         <>
           {policy.recentLegacyUse && <ImpactPanel recent={policy.recentLegacyUse} />}
           <Statement scope={{ kind: 'tenant', organization: name }} />
-          <ConfirmTurnOff busy={busy} onConfirm={() => void turn('disabled')} onCancel={() => setConfirming(false)} />
+          <ConfirmTurnOff
+            busy={busy}
+            onConfirm={() => void turn({ legacyProtocols: 'disabled' })}
+            onCancel={() => setConfirming(false)}
+          />
         </>
       )}
     </section>
