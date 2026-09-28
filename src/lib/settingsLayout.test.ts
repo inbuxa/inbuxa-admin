@@ -99,11 +99,4 @@ describe('regroupSettings', () => {
     const all = SETTINGS_CATEGORIES.flatMap((c) => c.groups.flatMap((g) => g.pages.map((pg) => pg.viewName)));
     expect(new Set(all).size).toBe(all.length);
   });
-
-  it('only features pages its category holds', () => {
-    for (const cat of SETTINGS_CATEGORIES) {
-      const own = new Set(cat.groups.flatMap((g) => g.pages.map((pg) => pg.viewName)));
-      for (const v of cat.popular) expect(own.has(v), `${cat.name}: ${v}`).toBe(true);
-    }
-  });
 });

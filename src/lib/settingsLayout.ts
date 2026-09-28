@@ -40,8 +40,6 @@ export interface SettingsCategory {
   icon: string;
   /** One sentence for the Overview card. */
   blurb: string;
-  /** The pages most people come for, shown on the Overview card. */
-  popular: string[];
   groups: SettingsGroup[];
 }
 
@@ -52,7 +50,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     name: 'Mail flow',
     icon: 'route',
     blurb: 'How mail comes in and goes out: checks on senders, relays, limits and the reports sent to other servers.',
-    popular: ['x:SenderAuth', 'x:MtaRoute', 'x:MtaInboundThrottle'],
     groups: [
       {
         name: 'Receiving',
@@ -120,7 +117,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     name: 'Spam filter',
     icon: 'shield-alert',
     blurb: 'How strict the filter is, what it learns from, and the lists of senders and domains it trusts or blocks.',
-    popular: ['x:SpamSettings', 'CustomComponent/LocalAi', 'x:MemoryLookupKey/SpamTrustedDomain'],
     groups: [
       {
         name: 'Protection',
@@ -155,7 +151,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     name: 'Security',
     icon: 'lock',
     blurb: 'Who can sign in and how, the certificates that encrypt connections, and which addresses are blocked.',
-    popular: ['x:Certificate', 'CustomComponent/LegacyProtocols', 'x:BlockedIp'],
     groups: [
       {
         name: 'Sign-in',
@@ -185,7 +180,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     name: 'Network',
     icon: 'cable',
     blurb: 'The ports the server listens on, its web server, and how it looks up and publishes DNS.',
-    popular: ['x:NetworkListener', 'x:DnsServer', 'x:Http'],
     groups: [
       {
         name: 'Connections',
@@ -209,7 +203,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     name: 'Mail & apps',
     icon: 'mail',
     blurb: 'What people get: mailbox defaults and limits, IMAP and JMAP, calendars, contacts, files and web apps.',
-    popular: ['x:Email/EmailLimits', 'x:Imap', 'x:Calendar'],
     groups: [
       {
         name: 'Email',
@@ -257,7 +250,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     name: 'Storage',
     icon: 'database',
     blurb: 'Where mail, files and indexes are kept, how long deleted and old data stays, and caching.',
-    popular: ['x:DataStore', 'x:BlobStore', 'x:DataRetention/DataExpunge'],
     groups: [
       {
         name: 'Stores',
@@ -290,7 +282,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     icon: 'chart-line',
     blurb:
       'Logs and traces, metrics for Prometheus or OpenTelemetry, and the alerts and webhooks that tell you things.',
-    popular: ['x:Tracer', 'x:Alert', 'x:WebHook'],
     groups: [
       {
         name: 'Logs & traces',
@@ -314,7 +305,6 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     name: 'System',
     icon: 'boxes',
     blurb: 'Running more than one node, background tasks, lookup tables, AI models and branding.',
-    popular: ['x:Coordinator', 'x:TaskManager', 'x:Enterprise'],
     groups: [
       {
         name: 'Cluster',

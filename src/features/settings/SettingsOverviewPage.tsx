@@ -6,19 +6,19 @@
 
 /**
  * inbuxa: Settings › Overview, the landing page for Settings (settings-reorg).
- * A card per category saying what lives there, the guided setups, and, only
+ * A card per category explaining what that menu item covers, the guided setups, and, only
  * when there are any, the pages whose values differ from the defaults.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowRight, Check, ListChecks } from 'lucide-react';
+import { Check, ListChecks } from 'lucide-react';
 import { IconTile } from '@/components/common/IconTile';
 import { useSchemaStore } from '@/stores/schemaStore';
 import { useAccountStore } from '@/stores/accountStore';
 import { getAccountId, jmapRequest } from '@/services/jmap/client';
-import { checkLinkVisible, resolveViewPath, visibleLinks } from '@/lib/navTree';
+import { checkLinkVisible, resolveViewPath, topItemVisible } from '@/lib/navTree';
 import { SETTINGS_CATEGORIES, SETTINGS_LAYOUT_NAME } from '@/lib/settingsLayout';
 import { resolveObject } from '@/lib/schemaResolver';
 import { countChanged, singletonPages, type SettingsPageRef } from './changedFromDefault';
@@ -148,19 +148,12 @@ export function SettingsOverviewPage() {
 
   const layout = useMemo(() => schema?.layouts.find((l) => l.name === SETTINGS_LAYOUT_NAME), [schema]);
 
+  // What each item in the menu bar covers: explainers only, the bar does the navigating.
   const cards = useMemo(() => {
     if (!layout) return [];
-    return SETTINGS_CATEGORIES.flatMap((cat) => {
+    return SETTINGS_CATEGORIES.filter((cat) => {
       const item = layout.items.find((it) => 'container' in it && it.container.name === cat.name);
-      if (!item || !('container' in item)) return [];
-      const links = visibleLinks(item.container.items, edition);
-      if (links.length === 0) return [];
-      const leaf = (name: string) => name.split(' › ').pop()!;
-      const popular = cat.popular
-        .map((v) => links.find((l) => l.viewName === v))
-        .filter((l): l is { name: string; viewName: string } => l !== undefined)
-        .map((l) => ({ ...l, name: leaf(l.name) }));
-      return [{ cat, first: links[0].viewName, count: links.length, popular }];
+      return item !== undefined && topItemVisible(item, edition);
     });
   }, [layout, edition]);
 
@@ -178,7 +171,7 @@ export function SettingsOverviewPage() {
         <p className="text-muted-foreground">
           {t(
             'settingsOverview.subtitle',
-            'Everything the server does, grouped by the job. Each page says what it controls, and anything you change is marked against its default.',
+            'The menu above groups everything the server does by job. Here is what each part covers. Anything you change is marked against its default.',
           )}
         </p>
       </header>
@@ -198,29 +191,13 @@ export function SettingsOverviewPage() {
       )}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(({ cat, first, count, popular }) => (
+        {cards.map((cat) => (
           <div key={cat.name} className="flex flex-col gap-3 rounded-xl border bg-card p-5">
-            <Link to={resolveViewPath(SETTINGS_LAYOUT_NAME, first)} className="group flex items-center gap-3">
+            <div className="flex items-center gap-3">
               <IconTile name={cat.icon} size="lg" />
-              <span className="text-lg font-semibold group-hover:text-primary">{cat.name}</span>
-            </Link>
+              <h2 className="text-lg font-semibold">{cat.name}</h2>
+            </div>
             <p className="text-sm text-muted-foreground">{cat.blurb}</p>
-            <ul className="mt-auto space-y-1 text-sm">
-              {popular.map((l) => (
-                <li key={l.viewName}>
-                  <Link
-                    to={resolveViewPath(SETTINGS_LAYOUT_NAME, l.viewName)}
-                    className="inline-flex items-center gap-1.5 hover:text-primary"
-                  >
-                    <ArrowRight className="h-3.5 w-3.5 text-muted-foreground" />
-                    {l.name}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <p className="text-xs text-muted-foreground">
-              {t('settingsOverview.pageCount', '{{count}} pages', { count })}
-            </p>
           </div>
         ))}
       </section>
