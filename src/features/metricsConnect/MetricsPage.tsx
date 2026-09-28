@@ -6,27 +6,20 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronDown } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { DynamicForm } from '@/components/forms/DynamicForm';
 import { MetricsConnect } from './MetricsConnect';
 
-/** A metrics page: where the numbers go, then this page's own settings folded underneath. */
+/** A metrics page: the page heading, where the numbers go, then this page's own settings folded underneath. */
 export function MetricsPage({ viewName }: { viewName: string }) {
   const { t } = useTranslation();
   const [version, setVersion] = useState(0);
   return (
-    <div className="space-y-4">
-      <MetricsConnect onSaved={() => setVersion((v) => v + 1)} />
-      <Collapsible className="mx-auto max-w-4xl">
-        <CollapsibleTrigger className="group flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <ChevronDown className="h-4 w-4 transition-transform group-data-[state=closed]:-rotate-90" />
-          {t('metricsConnect.more', 'Which metrics, and every setting on this page')}
-        </CollapsibleTrigger>
-        <CollapsibleContent className="pt-4">
-          <DynamicForm key={version} viewName={viewName} objectId="singleton" />
-        </CollapsibleContent>
-      </Collapsible>
-    </div>
+    <DynamicForm
+      key={version}
+      viewName={viewName}
+      objectId="singleton"
+      intro={<MetricsConnect onSaved={() => setVersion((v) => v + 1)} />}
+      foldSections={t('metricsConnect.more', 'Which metrics, and every setting on this page')}
+    />
   );
 }

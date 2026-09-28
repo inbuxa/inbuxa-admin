@@ -17,6 +17,7 @@ import { DynamicForm } from '@/components/forms/DynamicForm';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
+import { SpamSettingsPage } from '@/features/spamLevel/SpamSettingsPage';
 import { WebhooksPage } from '@/features/events/WebhooksPage';
 import { ListenersPage } from '@/features/ports/ListenersPage';
 import { MetricsPage } from '@/features/metricsConnect/MetricsPage';
@@ -275,6 +276,10 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     // inbuxa: the metrics pages open with where the numbers go (settings-reorg).
     if (resolved.objectName === 'x:Metrics') {
       return <MetricsPage viewName={viewName} />;
+    }
+    // inbuxa: Spam filter › General opens with how hard the filter is (settings-reorg).
+    if (resolved.objectName === 'x:SpamSettings') {
+      return <SpamSettingsPage viewName={viewName} />;
     }
     if (resolved.objectName === 'x:Security') {
       return (

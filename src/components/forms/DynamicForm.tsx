@@ -13,7 +13,7 @@ import { HelpPanel } from '@/help/HelpPanel';
 import { fieldPlaceholder, formNotices, variantPrefill } from '@/features/ai/formExtras';
 import { FailedRecipients } from '@/features/ai/explain/FailedRecipients';
 import { iconForView } from '@/lib/viewIcon';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate, useBlocker } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -40,7 +40,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowLeft, Save, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Save, Trash2, Loader2 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AccountLockButton } from '@/features/lock/AccountLockButton';
 
 import { useSchemaStore } from '@/stores/schemaStore';
@@ -73,9 +74,13 @@ import type { JmapSetResponse, JmapSetError, JmapMethodCall } from '@/types/jmap
 interface DynamicFormProps {
   viewName: string;
   objectId: string | null;
+  /** inbuxa: a summary drawn right under the page heading, above the fields (settings-reorg). */
+  intro?: ReactNode;
+  /** inbuxa: fold the fields and Save under this label, for pages whose intro does the everyday work. */
+  foldSections?: string;
 }
 
-export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
+export function DynamicForm({ viewName, objectId, intro, foldSections }: DynamicFormProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const schema = useSchemaStore((s) => s.schema);
@@ -790,6 +795,8 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
         actions={<HelpPanel viewName={viewName} title={String(formTitle ?? '')} />}
       />
 
+      {intro}
+
       {generalError && (
         <div className="rounded-md bg-destructive/10 border border-destructive/20 p-4">
           <p className="text-sm text-destructive">{generalError}</p>
@@ -816,136 +823,138 @@ export function DynamicForm({ viewName, objectId }: DynamicFormProps) {
         <FailedRecipients queueId={objectId} recipients={formData.recipients} />
       )}
 
-      {sectionsToRender.map((section, sectionIdx) => (
-        <Card key={sectionIdx}>
-          {section.title && (
-            <CardHeader>
-              <CardTitle className="text-base">{section.title}</CardTitle>
-            </CardHeader>
-          )}
-          <CardContent className={section.title ? '' : 'pt-6'}>
-            <div className="space-y-6">
-              {resolved.obj.objectName === 'x:Domain' &&
-                objectId &&
-                !readOnly &&
-                section.fields.some((sf) => sf.formField.name === 'dnsManagement') && (
-                  <DnsConnectCard
-                    domainId={objectId}
-                    automatic={
-                      (originalData.dnsManagement as { '@type'?: string } | undefined)?.['@type'] === 'Automatic'
-                    }
-                  />
-                )}
-              {section.fields.map((sf) => {
-                const { formField, field, visible, enterpriseDisabled } = sf;
-                if (!visible) return null;
+      <FoldedSections label={foldSections}>
+        {sectionsToRender.map((section, sectionIdx) => (
+          <Card key={sectionIdx}>
+            {section.title && (
+              <CardHeader>
+                <CardTitle className="text-base">{section.title}</CardTitle>
+              </CardHeader>
+            )}
+            <CardContent className={section.title ? '' : 'pt-6'}>
+              <div className="space-y-6">
+                {resolved.obj.objectName === 'x:Domain' &&
+                  objectId &&
+                  !readOnly &&
+                  section.fields.some((sf) => sf.formField.name === 'dnsManagement') && (
+                    <DnsConnectCard
+                      domainId={objectId}
+                      automatic={
+                        (originalData.dnsManagement as { '@type'?: string } | undefined)?.['@type'] === 'Automatic'
+                      }
+                    />
+                  )}
+                {section.fields.map((sf) => {
+                  const { formField, field, visible, enterpriseDisabled } = sf;
+                  if (!visible) return null;
 
-                if (formField.name === '@type' && sch.type === 'multiple') {
-                  return (
-                    <div key="@type" className="space-y-1.5">
-                      <Label className="text-sm font-medium">{formField.label}</Label>
-                      <Select value={selectedVariant} onValueChange={handleVariantChange} disabled={readOnly}>
-                        <SelectTrigger>
-                          <SelectValue placeholder={t('form.selectType', 'Select type...')} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {sch.variants.map((v) => (
-                            <SelectItem key={v.name} value={v.name}>
-                              {v.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  if (formField.name === '@type' && sch.type === 'multiple') {
+                    return (
+                      <div key="@type" className="space-y-1.5">
+                        <Label className="text-sm font-medium">{formField.label}</Label>
+                        <Select value={selectedVariant} onValueChange={handleVariantChange} disabled={readOnly}>
+                          <SelectTrigger>
+                            <SelectValue placeholder={t('form.selectType', 'Select type...')} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {sch.variants.map((v) => (
+                              <SelectItem key={v.name} value={v.name}>
+                                {v.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  }
+
+                  const fieldValue = formData[formField.name];
+                  const fieldError = fieldErrors[formField.name];
+                  const fieldReadOnly =
+                    readOnly ||
+                    (field.update === 'immutable' && !isCreate) ||
+                    field.update === 'serverSet' ||
+                    enterpriseDisabled;
+
+                  const widget = (
+                    <FieldWidget
+                      key={formField.name}
+                      field={field}
+                      formField={
+                        formField.placeholder
+                          ? formField
+                          : {
+                              ...formField,
+                              // inbuxa: local example addresses on the AI model form
+                              placeholder: fieldPlaceholder(resolved.obj.objectName, formField.name),
+                            }
+                      }
+                      value={fieldValue}
+                      onChange={(v) => handleFieldChange(formField.name, v)}
+                      readOnly={fieldReadOnly}
+                      error={fieldError}
+                      schema={schema}
+                      sieveScriptName={
+                        isSieveScriptField(resolved.obj.objectName, formField.name) ? scriptName : undefined
+                      }
+                      helpScope={helpScope}
+                      explainTarget={
+                        isCreate
+                          ? undefined
+                          : { object: resolved.obj.objectName, id: isSingleton ? 'singleton' : String(objectId) }
+                      }
+                    />
                   );
-                }
 
-                const fieldValue = formData[formField.name];
-                const fieldError = fieldErrors[formField.name];
-                const fieldReadOnly =
-                  readOnly ||
-                  (field.update === 'immutable' && !isCreate) ||
-                  field.update === 'serverSet' ||
-                  enterpriseDisabled;
+                  if (enterpriseDisabled) {
+                    return (
+                      <TooltipProvider key={formField.name}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="opacity-60">{widget}</div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{t('enterprise.featureDisabled', "This feature isn't available on this server.")}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    );
+                  }
 
-                const widget = (
-                  <FieldWidget
-                    key={formField.name}
-                    field={field}
-                    formField={
-                      formField.placeholder
-                        ? formField
-                        : {
-                            ...formField,
-                            // inbuxa: local example addresses on the AI model form
-                            placeholder: fieldPlaceholder(resolved.obj.objectName, formField.name),
-                          }
-                    }
-                    value={fieldValue}
-                    onChange={(v) => handleFieldChange(formField.name, v)}
-                    readOnly={fieldReadOnly}
-                    error={fieldError}
-                    schema={schema}
-                    sieveScriptName={
-                      isSieveScriptField(resolved.obj.objectName, formField.name) ? scriptName : undefined
-                    }
-                    helpScope={helpScope}
-                    explainTarget={
-                      isCreate
-                        ? undefined
-                        : { object: resolved.obj.objectName, id: isSingleton ? 'singleton' : String(objectId) }
-                    }
-                  />
-                );
+                  return widget;
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
 
-                if (enterpriseDisabled) {
-                  return (
-                    <TooltipProvider key={formField.name}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="opacity-60">{widget}</div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>{t('enterprise.featureDisabled', "This feature isn't available on this server.")}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  );
-                }
-
-                return widget;
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-
-      <div className="flex items-center justify-between pt-2 pb-8">
-        <div className="flex items-center gap-3">
-          {canDelete && (
-            <Button type="button" variant="destructive" disabled={saving} onClick={() => setDeleteConfirmOpen(true)}>
-              <Trash2 className="h-4 w-4 mr-2" />
-              {t('common.delete', 'Delete')}
+        <div className="flex items-center justify-between pt-2 pb-8">
+          <div className="flex items-center gap-3">
+            {canDelete && (
+              <Button type="button" variant="destructive" disabled={saving} onClick={() => setDeleteConfirmOpen(true)}>
+                <Trash2 className="h-4 w-4 mr-2" />
+                {t('common.delete', 'Delete')}
+              </Button>
+            )}
+            {/* inbuxa: lock or unlock a person beside Delete (AL-1) */}
+            {viewName === 'x:Account/User' && objectId && <AccountLockButton accountId={objectId} disabled={saving} />}
+          </div>
+          <div className="flex items-center gap-3">
+            {isDirty && (
+              <span className="text-xs text-muted-foreground">{t('form.unsavedChangesLabel', 'Unsaved changes')}</span>
+            )}
+            <Button type="button" variant="outline" onClick={() => navigate(-1)} disabled={saving}>
+              {t('common.cancel', 'Cancel')}
             </Button>
-          )}
-          {/* inbuxa: lock or unlock a person beside Delete (AL-1) */}
-          {viewName === 'x:Account/User' && objectId && <AccountLockButton accountId={objectId} disabled={saving} />}
+            {!readOnly && (
+              <Button type="button" onClick={handleSave} disabled={saving || (!isCreate && !isDirty)}>
+                {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                {isCreate ? t('common.create', 'Create') : t('common.save', 'Save')}
+              </Button>
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          {isDirty && (
-            <span className="text-xs text-muted-foreground">{t('form.unsavedChangesLabel', 'Unsaved changes')}</span>
-          )}
-          <Button type="button" variant="outline" onClick={() => navigate(-1)} disabled={saving}>
-            {t('common.cancel', 'Cancel')}
-          </Button>
-          {!readOnly && (
-            <Button type="button" onClick={handleSave} disabled={saving || (!isCreate && !isDirty)}>
-              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-              {isCreate ? t('common.create', 'Create') : t('common.save', 'Save')}
-            </Button>
-          )}
-        </div>
-      </div>
+      </FoldedSections>
 
       <AlertDialog
         open={blocker.state === 'blocked'}
@@ -1198,3 +1207,17 @@ function isOtpAuthValid(data: unknown): boolean {
 }
 
 export default DynamicForm;
+
+/** inbuxa: the form's fields, folded under a label when the page's intro does the everyday work. */
+function FoldedSections({ label, children }: { label?: string; children: ReactNode }) {
+  if (!label) return <>{children}</>;
+  return (
+    <Collapsible>
+      <CollapsibleTrigger className="group flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+        <ChevronDown className="h-4 w-4 transition-transform group-data-[state=closed]:-rotate-90" />
+        {label}
+      </CollapsibleTrigger>
+      <CollapsibleContent className="space-y-6 pt-4">{children}</CollapsibleContent>
+    </Collapsible>
+  );
+}
