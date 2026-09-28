@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pencil, Scale, Unlock } from 'lucide-react';
+import { FileArchive, Pencil, Scale, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -20,6 +20,9 @@ import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { useAccountStore } from '@/stores/accountStore';
 import { fetchHolds, formatSize, HOLD_CHANGED, HoldsUnavailable, type LegalHold } from './legalHold';
 import { HoldDialog, ReleaseDialog, ScopeSummary } from './HoldDialogs';
+import { fetchExports, type HoldExport } from './holdExport';
+import { ExportDialog, ExportList } from './HoldExports';
+import { usePollWhileRunning } from './usePollWhileRunning';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; holds: LegalHold[] } | { kind: 'error'; message: string };
 
@@ -34,12 +37,17 @@ export function LegalHoldsPage() {
   const { t } = useTranslation();
   const canCreate = useAccountStore((s) => s.hasPermission('sysLegalHoldCreate'));
   const canUpdate = useAccountStore((s) => s.hasPermission('sysLegalHoldUpdate'));
+  const canExport = useAccountStore((s) => s.hasPermission('sysLegalHoldExport'));
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [fetches, setFetches] = useState(0);
   const [placing, setPlacing] = useState(false);
   const [editing, setEditing] = useState<LegalHold | null>(null);
   const [releasing, setReleasing] = useState<LegalHold | null>(null);
+  const [exporting, setExporting] = useState<LegalHold | null>(null);
+  const [exports, setExports] = useState<HoldExport[]>([]);
+  const [exportFetches, setExportFetches] = useState(0);
   const refetch = useCallback(() => setFetches((n) => n + 1), []);
+  const refetchExports = useCallback(() => setExportFetches((n) => n + 1), []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -61,6 +69,21 @@ export function LegalHoldsPage() {
       });
     return () => controller.abort();
   }, [fetches, t]);
+
+  useEffect(() => {
+    if (!canExport) return;
+    const controller = new AbortController();
+    fetchExports(controller.signal)
+      .then((list) => {
+        if (!controller.signal.aborted) setExports(list);
+      })
+      .catch(() => {
+        // An older server has no exports; the holds still show
+      });
+    return () => controller.abort();
+  }, [canExport, exportFetches]);
+
+  usePollWhileRunning(exports, refetchExports);
 
   const done = () => {
     setPlacing(false);
@@ -118,16 +141,26 @@ export function LegalHoldsPage() {
               </div>
               {hold.description && <div className="text-sm">{hold.description}</div>}
             </div>
-            {canUpdate && (
+            {(canUpdate || canExport) && (
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditing(hold)}>
-                  <Pencil className="mr-2 h-4 w-4" />
-                  {t('hold.widenAction', 'Widen…')}
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setReleasing(hold)}>
-                  <Unlock className="mr-2 h-4 w-4" />
-                  {t('hold.releaseAction', 'Release…')}
-                </Button>
+                {canExport && (
+                  <Button variant="outline" size="sm" onClick={() => setExporting(hold)}>
+                    <FileArchive className="mr-2 h-4 w-4" />
+                    {t('hold.export.action', 'Export…')}
+                  </Button>
+                )}
+                {canUpdate && (
+                  <Button variant="outline" size="sm" onClick={() => setEditing(hold)}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    {t('hold.widenAction', 'Widen…')}
+                  </Button>
+                )}
+                {canUpdate && (
+                  <Button variant="outline" size="sm" onClick={() => setReleasing(hold)}>
+                    <Unlock className="mr-2 h-4 w-4" />
+                    {t('hold.releaseAction', 'Release…')}
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -152,6 +185,7 @@ export function LegalHoldsPage() {
               </div>
             </div>
           </div>
+          <ExportList hold={hold} exports={exports.filter((e) => e.holdId === hold.id)} />
         </div>
       ))}
 
@@ -180,6 +214,16 @@ export function LegalHoldsPage() {
 
       {placing && <HoldDialog onClose={() => setPlacing(false)} onDone={done} />}
       {editing && <HoldDialog existing={editing} onClose={() => setEditing(null)} onDone={done} />}
+      {exporting && (
+        <ExportDialog
+          hold={exporting}
+          onClose={() => setExporting(null)}
+          onStarted={() => {
+            setExporting(null);
+            refetchExports();
+          }}
+        />
+      )}
       {releasing && <ReleaseDialog hold={releasing} onClose={() => setReleasing(null)} onDone={done} />}
     </div>
   );
