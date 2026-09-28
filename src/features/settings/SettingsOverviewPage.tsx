@@ -23,6 +23,7 @@ import { SETTINGS_CATEGORIES, SETTINGS_LAYOUT_NAME } from '@/lib/settingsLayout'
 import { resolveObject } from '@/lib/schemaResolver';
 import { countChanged, singletonPages, type SettingsPageRef } from './changedFromDefault';
 import { SENDING_WIZARD_VIEW, SendingLaunchChoice } from '@/features/sending/SendingSetupCard';
+import { CERTIFICATE_WIZARD_VIEW, CertificateLaunchChoice } from '@/features/certificates/CertificateSetupCard';
 
 /** Calls per JMAP request; the protocol's own floor, so any server takes it. */
 const CALLS_PER_REQUEST = 16;
@@ -49,6 +50,14 @@ async function anyExist(objectName: string): Promise<boolean> {
 
 /** Each guided setup registers here as it lands. */
 const GUIDED_SETUPS: GuidedSetup[] = [
+  {
+    id: 'certificates',
+    title: 'Certificates, automatically',
+    blurb:
+      'Free Let’s Encrypt certificates for your domains, with every name checked first and renewals handled for you.',
+    to: { choice: (props) => <CertificateLaunchChoice {...props} /> },
+    gate: CERTIFICATE_WIZARD_VIEW,
+  },
   {
     id: 'sending',
     title: 'How this server sends mail',

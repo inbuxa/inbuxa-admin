@@ -100,6 +100,10 @@ function checkSpecialLink(
   }
 
   // INBUXA: guided jobs are open to whoever may manage what they change.
+  if (viewName === 'Wizard/certificates') {
+    const ok = canGet ? canGet('sysDomain') && canGet('sysAcmeProvider') && canGet('sysCertificate') : true;
+    return { visible: ok, enterprise: false };
+  }
   if (viewName === 'Wizard/sending') {
     const ok = canGet ? canGet('sysMtaRoute') && canGet('sysMtaOutboundStrategy') : true;
     return { visible: ok, enterprise: false };
