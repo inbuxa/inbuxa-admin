@@ -17,6 +17,7 @@ import { DynamicForm } from '@/components/forms/DynamicForm';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
+import { ListenersPage } from '@/features/ports/ListenersPage';
 import { MetricsPage } from '@/features/metricsConnect/MetricsPage';
 import { AlertsPage } from '@/features/alerts/AlertsPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
@@ -366,6 +367,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
   }
   if (viewName === 'x:Alert') {
     return <AlertsPage viewName={viewName} />;
+  }
+  if (viewName === 'x:NetworkListener') {
+    return <ListenersPage viewName={viewName} />;
   }
   return <DynamicList viewName={viewName} />;
 }
