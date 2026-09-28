@@ -41,7 +41,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ArrowLeft, ChevronDown, Save, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, ChevronDown, RotateCcw, Save, Trash2, Loader2 } from 'lucide-react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AccountLockButton } from '@/features/lock/AccountLockButton';
 
@@ -66,6 +66,7 @@ import { toast } from '@/hooks/use-toast';
 import { logFormChange } from '@/lib/debug';
 import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DnsConnectCard } from '@/features/dns/DnsConnectCard';
+import { changedFields } from '@/features/settings/changedFromDefault';
 import { isSieveScriptField } from '@/lib/sievepad';
 import { reloadActionFor } from '@/lib/settingsApply';
 
@@ -115,6 +116,7 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
   const [createdObjectId, setCreatedObjectId] = useState<string | null>(null);
 
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
 
   const currentFields = useMemo((): Fields | null => {
     if (!resolved) return null;
@@ -771,6 +773,15 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
 
   const { sch } = resolved;
   const readOnly = !canEdit;
+  // inbuxa: what "Reset to default" would put back on a settings page (settings-reorg).
+  const resettable =
+    isSingleton && !readOnly
+      ? changedFields(schema, viewName, formData, {
+          on: t('field.on', 'On'),
+          off: t('field.off', 'Off'),
+          none: t('field.none', 'None'),
+        })
+      : [];
 
   const combinedForm: Form | null = (() => {
     if (sch.type !== 'multiple') return currentForm;
@@ -944,6 +955,12 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
             )}
             {/* inbuxa: lock or unlock a person beside Delete (AL-1) */}
             {viewName === 'x:Account/User' && objectId && <AccountLockButton accountId={objectId} disabled={saving} />}
+            {resettable.length > 0 && (
+              <Button type="button" variant="outline" disabled={saving} onClick={() => setResetOpen(true)}>
+                <RotateCcw className="h-4 w-4 mr-2" />
+                {t('form.resetToDefault', 'Reset to default')}
+              </Button>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {isDirty && (
@@ -984,6 +1001,47 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
               }}
             >
               {t('form.leave', 'Leave')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={resetOpen} onOpenChange={setResetOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('form.resetTitle', 'Put these back to their defaults?')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t(
+                'form.resetBody',
+                'The form fills in the defaults. Nothing changes on the server until you save, and Cancel leaves it as it was.',
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <ul className="max-h-72 space-y-1 overflow-y-auto text-sm">
+            {resettable.map((f) => (
+              <li key={f.name} className="flex flex-wrap gap-x-2">
+                <span className="font-medium">{f.label}</span>
+                <span className="text-muted-foreground">
+                  {f.now !== null
+                    ? t('form.resetFromTo', '{{now}} → {{was}}', { now: f.now, was: f.was })
+                    : t('form.resetTo', '→ {{was}}', { was: f.was })}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setFormData((prev) => {
+                  const next = { ...prev };
+                  for (const f of resettable) next[f.name] = structuredClone(f.defaultValue);
+                  return next;
+                });
+                setFieldErrors({});
+              }}
+            >
+              {t('form.resetConfirm', 'Fill in defaults')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

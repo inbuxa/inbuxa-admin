@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { countChanged, singletonPages } from './changedFromDefault';
+import { changedFields, countChanged, singletonPages } from './changedFromDefault';
 import type { Schema } from '@/types/schema';
 
 const field = (type: Record<string, unknown>) => ({ description: '', type, update: 'mutable' });
@@ -84,5 +84,35 @@ describe('singletonPages', () => {
       { viewName: 'x:Imap', label: 'IMAP', where: 'Mail & apps › Protocols' },
       { viewName: 'x:Email/EmailLimits', label: 'Limits', where: 'Mail & apps' },
     ]);
+  });
+});
+
+describe('changedFields', () => {
+  it('names each changed field with its value and default in words', () => {
+    expect(changedFields(schema, 'x:Imap', { allowPlainText: true, timeout: 600000, banner: 'hi' })).toEqual([
+      { name: 'allowPlainText', label: 'allowPlainText', now: 'on', was: 'off', defaultValue: false },
+      { name: 'timeout', label: 'timeout', now: expect.any(String), was: expect.any(String), defaultValue: 1800000 },
+    ]);
+  });
+
+  it('leaves out fields nobody can change', () => {
+    const serverSet = {
+      ...schema,
+      fields: {
+        ...schema.fields,
+        'x:Imap': {
+          ...schema.fields['x:Imap'],
+          properties: {
+            ...schema.fields['x:Imap'].properties,
+            timeout: { ...field({ type: 'number', format: 'duration' }), update: 'serverSet' },
+          },
+        },
+      },
+    } as unknown as Schema;
+    expect(changedFields(serverSet, 'x:Imap', { timeout: 5 }).map((f) => f.name)).toEqual([]);
+  });
+
+  it('is empty when nothing differs', () => {
+    expect(changedFields(schema, 'x:Imap', { allowPlainText: false })).toEqual([]);
   });
 });

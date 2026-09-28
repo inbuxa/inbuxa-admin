@@ -42,12 +42,31 @@ export function singletonPages(schema: Schema, items: LayoutItem[]): SettingsPag
   return out;
 }
 
-/** How many of a page's fields differ from their defaults, given the object's current value. */
-export function countChanged(schema: Schema, viewName: string, data: Record<string, unknown>): number {
+export interface ChangedField {
+  name: string;
+  label: string;
+  /** The current value in words, or null when there is nothing short to say. */
+  now: string | null;
+  /** The default in words. */
+  was: string;
+  defaultValue: unknown;
+}
+
+/**
+ * The fields on a page that differ from their defaults, given the object's
+ * current value: what "Reset to default" puts back. Server-set fields are
+ * left out, since nobody can change them.
+ */
+export function changedFields(
+  schema: Schema,
+  viewName: string,
+  data: Record<string, unknown>,
+  words: { on: string; off: string; none: string } = WORDS,
+): ChangedField[] {
   const resolved = resolveObject(schema, viewName);
-  if (!resolved) return 0;
+  if (!resolved) return [];
   const sch = resolveSchema(schema, resolved.objectName);
-  if (!sch) return 0;
+  if (!sch) return [];
 
   let scope: string;
   let schemaName: string;
@@ -56,23 +75,39 @@ export function countChanged(schema: Schema, viewName: string, data: Record<stri
     schemaName = sch.schemaName;
   } else {
     const variant = sch.variants.find((v) => v.name === data['@type']);
-    if (!variant?.schemaName) return 0;
+    if (!variant?.schemaName) return [];
     scope = variant.schemaName;
     schemaName = variant.schemaName;
   }
 
   const fields = schema.fields[scope] ?? schema.fields[schemaName];
   const form = resolveForm(schema, viewName, resolved.objectName, schemaName);
-  if (!fields || !form) return 0;
+  if (!fields || !form) return [];
 
-  let changed = 0;
+  const out: ChangedField[] = [];
+  const seen = new Set<string>();
   for (const section of form.sections) {
-    for (const { name } of section.fields) {
+    for (const formField of section.fields) {
+      const { name } = formField;
       const field = fields.properties[name];
-      if (!field) continue;
+      if (!field || seen.has(name) || field.update === 'serverSet') continue;
+      seen.add(name);
       const def = fields.defaults?.[name];
-      if (describeDefault(field, def, schema, WORDS) !== null && differsFromDefault(data[name], def)) changed++;
+      const was = describeDefault(field, def, schema, words);
+      if (was === null || !differsFromDefault(data[name], def)) continue;
+      out.push({
+        name,
+        label: formField.label || name,
+        now: describeDefault(field, data[name], schema, words),
+        was,
+        defaultValue: def,
+      });
     }
   }
-  return changed;
+  return out;
+}
+
+/** How many of a page's fields differ from their defaults, given the object's current value. */
+export function countChanged(schema: Schema, viewName: string, data: Record<string, unknown>): number {
+  return changedFields(schema, viewName, data).length;
 }
