@@ -10,7 +10,7 @@
  * when there are any, the pages whose values differ from the defaults.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Check, ListChecks } from 'lucide-react';
@@ -22,6 +22,7 @@ import { checkLinkVisible, resolveViewPath, topItemVisible } from '@/lib/navTree
 import { SETTINGS_CATEGORIES, SETTINGS_LAYOUT_NAME } from '@/lib/settingsLayout';
 import { resolveObject } from '@/lib/schemaResolver';
 import { countChanged, singletonPages, type SettingsPageRef } from './changedFromDefault';
+import { SENDING_WIZARD_VIEW, SendingLaunchChoice } from '@/features/sending/SendingSetupCard';
 
 /** Calls per JMAP request; the protocol's own floor, so any server takes it. */
 const CALLS_PER_REQUEST = 16;
@@ -30,8 +31,8 @@ interface GuidedSetup {
   id: string;
   title: string;
   blurb: string;
-  /** Where the job starts. */
-  to: string;
+  /** Where the job starts: a page, or a "Guided or manual?" choice for a job with a wizard. */
+  to: string | { choice: (props: { open: boolean; onOpenChange: (open: boolean) => void }) => ReactNode };
   /** The view whose visibility decides whether this reader sees the card. */
   gate: string;
   /** Whether it is already set up; left out when there's no cheap way to tell. */
@@ -48,6 +49,13 @@ async function anyExist(objectName: string): Promise<boolean> {
 
 /** Each guided setup registers here as it lands. */
 const GUIDED_SETUPS: GuidedSetup[] = [
+  {
+    id: 'sending',
+    title: 'How this server sends mail',
+    blurb: 'Check whether port 25 is open, then deliver directly or through a relay such as Amazon SES or Mailgun.',
+    to: { choice: (props) => <SendingLaunchChoice {...props} /> },
+    gate: SENDING_WIZARD_VIEW,
+  },
   {
     id: 'dns',
     title: 'Publish DNS records automatically',
@@ -122,11 +130,11 @@ function SetupCard({ setup }: { setup: GuidedSetup }) {
     };
   }, [setup]);
 
-  return (
-    <Link
-      to={setup.to}
-      className="group flex flex-col gap-2 rounded-xl border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-soft"
-    >
+  const [choosing, setChoosing] = useState(false);
+  const className =
+    'group flex flex-col gap-2 rounded-xl border bg-card p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-soft';
+  const body = (
+    <>
       <div className="flex items-center gap-2">
         <span className="font-medium">{setup.title}</span>
         {done && (
@@ -137,7 +145,23 @@ function SetupCard({ setup }: { setup: GuidedSetup }) {
         )}
       </div>
       <p className="text-sm text-muted-foreground">{setup.blurb}</p>
-    </Link>
+    </>
+  );
+
+  if (typeof setup.to === 'string') {
+    return (
+      <Link to={setup.to} className={className}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <>
+      <button type="button" className={className} onClick={() => setChoosing(true)}>
+        {body}
+      </button>
+      {setup.to.choice({ open: choosing, onOpenChange: setChoosing })}
+    </>
   );
 }
 

@@ -100,6 +100,10 @@ function checkSpecialLink(
   }
 
   // INBUXA: guided jobs are open to whoever may manage what they change.
+  if (viewName === 'Wizard/sending') {
+    const ok = canGet ? canGet('sysMtaRoute') && canGet('sysMtaOutboundStrategy') : true;
+    return { visible: ok, enterprise: false };
+  }
   if (viewName.startsWith('Wizard/dns/')) {
     return { visible: canGet ? canGet('sysDomain') : true, enterprise: false };
   }
