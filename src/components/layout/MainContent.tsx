@@ -18,6 +18,7 @@ import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
 import { SendingSetupCard } from '@/features/sending/SendingSetupCard';
+import { CertificateSetupCard } from '@/features/certificates/CertificateSetupCard';
 import type { Schema } from '@/types/schema';
 
 function lazyFeature<M, P>(load: () => Promise<M>, select: (module: M) => ComponentType<P>) {
@@ -63,6 +64,10 @@ const DataInventoryPage = lazyFeature(
   (m) => m.DataInventoryPage,
 );
 // inbuxa: Settings › Overview (settings-reorg spec).
+const CertificateSetupPage = lazyFeature(
+  () => import('@/features/certificates/CertificateSetupPage'),
+  (m) => m.CertificateSetupPage,
+);
 const SendingSetupPage = lazyFeature(
   () => import('@/features/sending/SendingSetupPage'),
   (m) => m.SendingSetupPage,
@@ -139,6 +144,10 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     // inbuxa: guided setup, how this server sends mail (settings-reorg).
     if (wizard === 'sending') {
       return <SendingSetupPage />;
+    }
+    // inbuxa: guided setup, automatic certificates (settings-reorg).
+    if (wizard === 'certificates') {
+      return <CertificateSetupPage />;
     }
     return (
       <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
@@ -265,6 +274,14 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     return page;
   }
 
+  if (viewName === 'x:Certificate' || viewName === 'x:AcmeProvider') {
+    return (
+      <div className="space-y-4">
+        <CertificateSetupCard />
+        <DynamicList viewName={viewName} />
+      </div>
+    );
+  }
   if (viewName === 'x:MtaRoute') {
     return (
       <div className="space-y-4">
