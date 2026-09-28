@@ -137,7 +137,10 @@ export function ComplianceOverviewPage() {
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile value={inventory.summary.collected} label={t('overview.collected', 'Kinds of personal data this server can hold')} />
+        <Tile
+          value={inventory.summary.collected}
+          label={t('overview.collected', 'Kinds of personal data this server can hold')}
+        />
         <Tile value={inventory.summary.unbounded} label={t('overview.unbounded', 'Kept with no time limit')} />
         <Tile value={inventory.summary.leavingHost} label={t('overview.leaving', 'Sent off this server')} />
         <Tile value={inventory.summary.processors} label={t('overview.hosts', 'Hosts receiving personal data')} />

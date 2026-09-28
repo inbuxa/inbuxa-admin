@@ -137,13 +137,52 @@ const SOURCE_NAMES: Record<string, string> = {
   'outbound-reports': 'DMARC and TLS reports sent',
 };
 
+/** Words in object names that are written in capitals. */
+const ACRONYMS: Record<string, string> = Object.fromEntries(
+  [
+    'AI',
+    'API',
+    'ARF',
+    'ASN',
+    'CSV',
+    'DAV',
+    'DKIM',
+    'DMARC',
+    'DNS',
+    'DNSBL',
+    'DSN',
+    'EHLO',
+    'HTTP',
+    'IMAP',
+    'IP',
+    'JMAP',
+    'LDAP',
+    'LLM',
+    'MTA',
+    'MX',
+    'OIDC',
+    'OTP',
+    'SPF',
+    'SQL',
+    'STS',
+    'TLS',
+    'TSIG',
+    'TTL',
+    'URL',
+  ].map((a) => [a.toLowerCase(), a]),
+);
+
 /** A readable name for a catalog id. */
 export function itemName(id: string): string {
   if (SOURCE_NAMES[id]) return SOURCE_NAMES[id];
   const bare = id.replace(/^(x|inbuxa):/, '');
-  // UserAccount -> User account
-  const words = bare.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
-  return words.charAt(0) + words.slice(1).toLowerCase();
+  // BlockedIp -> Blocked IP
+  const words = bare
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .split(' ')
+    .map((w, i) => ACRONYMS[w.toLowerCase()] ?? (i === 0 ? w : w.toLowerCase()));
+  return words.join(' ');
 }
 
 const WHERE_NAMES: Record<string, string> = {

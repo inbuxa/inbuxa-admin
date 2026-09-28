@@ -34,7 +34,9 @@ describe('data inventory', () => {
     expect(itemName('x:UserAccount')).toBe('User account');
     expect(itemName('inbuxa:AuditEvent')).toBe('Audit event');
     expect(itemName('log-file')).toBe('Log files');
-    expect(itemName('x:ArfFeedbackReport')).toBe('Arf feedback report');
+    expect(itemName('x:ArfFeedbackReport')).toBe('ARF feedback report');
+    expect(itemName('x:BlockedIp')).toBe('Blocked IP');
+    expect(itemName('x:DmarcTroubleshoot')).toBe('DMARC troubleshoot');
   });
 
   it('says retention as a fact', () => {
