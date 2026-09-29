@@ -515,9 +515,9 @@ function ChangeTable({ changes }: { changes: AuditChange[] }) {
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-muted text-left text-muted-foreground">
           <tr>
-            <th className="px-3 py-1.5 font-medium">{t('audit.change.field', 'Setting')}</th>
-            <th className="px-3 py-1.5 font-medium">{t('audit.change.before', 'Before')}</th>
-            <th className="px-3 py-1.5 font-medium">{t('audit.change.after', 'After')}</th>
+            <th className="px-3 py-1.5 font-medium">{t('audit.changes.field', 'Setting')}</th>
+            <th className="px-3 py-1.5 font-medium">{t('audit.changes.before', 'Before')}</th>
+            <th className="px-3 py-1.5 font-medium">{t('audit.changes.after', 'After')}</th>
           </tr>
         </thead>
         <tbody>
@@ -526,7 +526,7 @@ function ChangeTable({ changes }: { changes: AuditChange[] }) {
               <td className="px-3 py-1.5 font-mono text-xs">{change.field}</td>
               {change.redacted ? (
                 <td colSpan={2} className="px-3 py-1.5 italic text-muted-foreground">
-                  {t('audit.change.secret', 'Changed. Secrets are never recorded.')}
+                  {t('audit.changes.secret', 'Changed. Secrets are never recorded.')}
                 </td>
               ) : (
                 <>
