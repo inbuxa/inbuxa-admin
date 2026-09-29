@@ -302,10 +302,10 @@
     "selectFilterPlaceholder": "Select {{label}}...",
     "selectItem": "Select item",
     "showing": "Showing {{from}}-{{to}} of {{total}} {{name}}",
-    "showingItems": "Showing {{count}} items",
     "sort": "Sort",
     "unknownError": "Unknown error",
-    "emptyTitle": "Nothing here yet"
+    "emptyTitle": "Nothing here yet",
+    "showingRange": "Showing {{from}}-{{to}} {{name}}"
   },
   "login": {
     "continue": "Continue",

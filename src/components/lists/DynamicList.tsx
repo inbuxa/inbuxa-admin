@@ -499,9 +499,9 @@ export function DynamicList({ viewName }: DynamicListProps) {
           list: Record<string, unknown>[];
         };
 
-        if (queryData.total != null) {
-          setTotal(queryData.total);
-        }
+        // inbuxa: a server that can't count (logs past the first page) leaves
+        // total out; the last page's total must not stand in for it
+        setTotal(queryData.total ?? null);
 
         setItems(getData.list ?? []);
         setSelectedIds(new Set());
@@ -887,7 +887,8 @@ export function DynamicList({ viewName }: DynamicListProps) {
   const pageStart = anchorStack.length * PAGE_SIZE;
   const rangeStart = pageStart + 1;
   const rangeEnd = pageStart + items.length;
-  const hasNextPage = total !== null && rangeEnd < total;
+  // inbuxa: without a total, a full page means there may be more
+  const hasNextPage = total !== null ? rangeEnd < total : items.length === PAGE_SIZE;
   const hasPrevPage = anchorStack.length > 0;
 
   function renderFilter(filterDef: FilterDef): React.ReactNode {
@@ -1401,8 +1402,10 @@ export function DynamicList({ viewName }: DynamicListProps) {
                   total,
                   name: list.pluralName,
                 })
-              : t('list.showingItems', 'Showing {{count}} items', {
-                  count: items.length,
+              : t('list.showingRange', 'Showing {{from}}-{{to}} {{name}}', {
+                  from: rangeStart,
+                  to: rangeEnd,
+                  name: list.pluralName,
                 })}
           </div>
           <div className="flex items-center gap-2">
