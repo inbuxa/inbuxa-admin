@@ -30,7 +30,16 @@ import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { useAccountStore } from '@/stores/accountStore';
 import { toast } from '@/hooks/use-toast';
 import { formatSize } from '@/features/hold/legalHold';
-import { decideHeld, fetchHeld, fetchPreview, RulesUnavailable, type HeldMessage } from './api';
+import { Input } from '@/components/ui/input';
+import {
+  decideHeld,
+  fetchHeld,
+  fetchKeepHeldDays,
+  fetchPreview,
+  RulesUnavailable,
+  saveKeepHeldDays,
+  type HeldMessage,
+} from './api';
 import { detectorName } from './model';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; held: HeldMessage[] } | { kind: 'error'; message: string };
@@ -164,6 +173,88 @@ function DecideDialog({
   );
 }
 
+/** How long held mail waits, and changing it for those who may. */
+function KeepDays() {
+  const { t } = useTranslation();
+  const canChange = useAccountStore((s) => s.hasPermission('sysDlpPolicyUpdate'));
+  const [days, setDays] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('7');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchKeepHeldDays(controller.signal)
+      .then((d) => !controller.signal.aborted && setDays(d))
+      // An older server, or no permission to see it: say nothing
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+  if (days === null) return null;
+  const valid = /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 90;
+  const save = async () => {
+    setBusy(true);
+    try {
+      await saveKeepHeldDays(Number(value));
+      setDays(Number(value));
+      setEditing(false);
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: t('held.daysFailed', 'Not saved'),
+        description: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+      {editing ? (
+        <>
+          <span>{t('held.daysLabel', 'Held mail waits')}</span>
+          <Input
+            type="number"
+            min={1}
+            max={90}
+            className="h-8 w-20"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+          />
+          <span>{t('held.daysUnit', 'days (1 to 90) for newly held mail')}</span>
+          <Button size="sm" disabled={busy || !valid} onClick={() => void save()}>
+            {t('held.save', 'Save')}
+          </Button>
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => setEditing(false)}>
+            {t('held.cancel', 'Cancel')}
+          </Button>
+        </>
+      ) : (
+        <>
+          <span>
+            {t('held.days', {
+              count: days,
+              defaultValue_one: 'If nobody decides within 1 day, it goes back to the sender.',
+              defaultValue_other: 'If nobody decides within {{count}} days, it goes back to the sender.',
+            })}
+          </span>
+          {canChange && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setValue(String(days));
+                setEditing(true);
+              }}
+            >
+              {t('held.changeDays', 'Change…')}
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function HeldMailPage() {
   const { t } = useTranslation();
   const canDecide = useAccountStore((s) => s.hasPermission('sysDlpReviewUpdate'));
@@ -199,9 +290,10 @@ export function HeldMailPage() {
         title={t('held.title', 'Held mail')}
         subtitle={t(
           'held.subtitle',
-          'Outgoing mail a DLP rule held for review. Release it and it’s delivered; reject it and the sender is told. If nobody decides within 7 days, it goes back to the sender.',
+          'Outgoing mail a DLP rule held for review. Release it and it’s delivered; reject it and the sender is told.',
         )}
       />
+      <KeepDays />
       {load.kind === 'loading' && <LoadingFallback />}
       {load.kind === 'error' && (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">{load.message}</div>

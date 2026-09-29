@@ -28,6 +28,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
+import { ObjectPicker } from '@/components/common/ObjectPicker';
+import { useObjectLabel } from '@/lib/objectOptions';
+import { useSchemaStore } from '@/stores/schemaStore';
 import { saveRule } from './api';
 import { DETECTORS, TEMPLATES, describeRule, type Action, type Condition, type Direction, type Rule } from './model';
 
@@ -48,6 +51,9 @@ const CONDITION_TYPES: { type: Condition['type']; label: string; dlpOnly?: boole
   { type: 'senderDomain', label: 'Sender’s domain is…' },
   { type: 'recipientAddress', label: 'A recipient is…' },
   { type: 'recipientDomain', label: 'A recipient’s domain is…' },
+  { type: 'senderGroup', label: 'Sender is in a group' },
+  { type: 'recipientGroup', label: 'A recipient is in a group' },
+  { type: 'senderTenant', label: 'Sender is in a tenant' },
   { type: 'header', label: 'A header…' },
   { type: 'attachmentExtension', label: 'An attachment ends in…' },
   { type: 'attachmentType', label: 'An attachment’s type is…' },
@@ -179,6 +185,53 @@ function DetectorPicker({
   );
 }
 
+function IdChip({ labelObject, id, onRemove }: { labelObject: string; id: string; onRemove: () => void }) {
+  const schema = useSchemaStore((s) => s.schema);
+  const { label } = useObjectLabel(labelObject, id, schema!);
+  return (
+    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs">
+      {label ?? id}
+      <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-foreground">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
+/** Groups or tenants, picked from the directory. */
+function IdPicker({
+  objectName,
+  labelObject,
+  ids,
+  onChange,
+  placeholder,
+}: {
+  objectName: string;
+  labelObject: string;
+  ids: string[];
+  onChange: (ids: string[]) => void;
+  placeholder: string;
+}) {
+  const schema = useSchemaStore((s) => s.schema);
+  if (!schema) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {ids.map((id) => (
+        <IdChip key={id} labelObject={labelObject} id={id} onRemove={() => onChange(ids.filter((x) => x !== id))} />
+      ))}
+      <ObjectPicker
+        schema={schema}
+        objectName={objectName}
+        value=""
+        onChange={(id) => {
+          if (id && !ids.includes(id)) onChange([...ids, id]);
+        }}
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
+
 function ConditionFields({ value, onChange }: { value: Condition; onChange: (c: Condition) => void }) {
   const { t } = useTranslation();
   const listField = (items: string[], build: (items: string[]) => Condition, hint: string) => (
@@ -288,10 +341,25 @@ function ConditionFields({ value, onChange }: { value: Condition; onChange: (c: 
     case 'detected':
       return <DetectorPicker value={value} onChange={onChange} />;
     case 'senderGroup':
-    case 'senderTenant':
     case 'recipientGroup':
       return (
-        <p className="text-xs text-muted-foreground">{t('rules.keptAsIs', 'Kept as it is; edit it over the API.')}</p>
+        <IdPicker
+          objectName="x:Account/Group"
+          labelObject="x:Account"
+          ids={value.groups}
+          onChange={(groups) => onChange({ type: value.type, groups })}
+          placeholder={t('rules.pickGroup', 'Add a group…')}
+        />
+      );
+    case 'senderTenant':
+      return (
+        <IdPicker
+          objectName="x:Tenant"
+          labelObject="x:Tenant"
+          ids={value.tenants}
+          onChange={(tenants) => onChange({ type: 'senderTenant', tenants })}
+          placeholder={t('rules.pickTenant', 'Add a tenant…')}
+        />
       );
     default:
       return null;
