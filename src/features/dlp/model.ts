@@ -50,6 +50,7 @@ export type Action =
   | { type: 'redirect'; addresses: string[] }
   | { type: 'refuse'; text: string }
   | { type: 'route'; queue: string }
+  | { type: 'journal'; journal: string }
   | { type: 'block'; notice: string }
   | { type: 'warn'; notice: string }
   | { type: 'hold'; notice: string; notifySender?: boolean };
@@ -297,6 +298,8 @@ export function describeAction(a: Action): string {
       return 'refuse it';
     case 'route':
       return `send it through the ${a.queue} queue`;
+    case 'journal':
+      return 'journal it';
     case 'block':
       return 'block it';
     case 'warn':

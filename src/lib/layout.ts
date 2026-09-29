@@ -95,6 +95,10 @@ function checkSpecialLink(
   if (viewName === 'CustomComponent/DlpRules') {
     return { visible: canGet ? canGet('sysDlpPolicy') : true, enterprise: false };
   }
+  // INBUXA: journaling (journaling spec, §3)
+  if (viewName === 'CustomComponent/Journal') {
+    return { visible: canGet ? canGet('sysJournal') : true, enterprise: false };
+  }
   if (viewName === 'CustomComponent/HeldMail') {
     return { visible: canGet ? canGet('sysDlpReview') : true, enterprise: false };
   }

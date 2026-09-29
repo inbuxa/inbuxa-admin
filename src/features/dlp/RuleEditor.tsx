@@ -28,9 +28,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from '@/hooks/use-toast';
-import { ObjectPicker } from '@/components/common/ObjectPicker';
-import { useObjectLabel } from '@/lib/objectOptions';
-import { useSchemaStore } from '@/stores/schemaStore';
+import { IdPicker } from './IdPicker';
+import { JournalSelect } from '@/features/journal/JournalSelect';
 import { saveRule } from './api';
 import { DETECTORS, TEMPLATES, describeRule, type Action, type Condition, type Direction, type Rule } from './model';
 
@@ -181,53 +180,6 @@ function DetectorPicker({
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function IdChip({ labelObject, id, onRemove }: { labelObject: string; id: string; onRemove: () => void }) {
-  const schema = useSchemaStore((s) => s.schema);
-  const { label } = useObjectLabel(labelObject, id, schema!);
-  return (
-    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs">
-      {label ?? id}
-      <button type="button" onClick={onRemove} className="text-muted-foreground hover:text-foreground">
-        <X className="h-3 w-3" />
-      </button>
-    </span>
-  );
-}
-
-/** Groups or tenants, picked from the directory. */
-function IdPicker({
-  objectName,
-  labelObject,
-  ids,
-  onChange,
-  placeholder,
-}: {
-  objectName: string;
-  labelObject: string;
-  ids: string[];
-  onChange: (ids: string[]) => void;
-  placeholder: string;
-}) {
-  const schema = useSchemaStore((s) => s.schema);
-  if (!schema) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-1">
-      {ids.map((id) => (
-        <IdChip key={id} labelObject={labelObject} id={id} onRemove={() => onChange(ids.filter((x) => x !== id))} />
-      ))}
-      <ObjectPicker
-        schema={schema}
-        objectName={objectName}
-        value=""
-        onChange={(id) => {
-          if (id && !ids.includes(id)) onChange([...ids, id]);
-        }}
-        placeholder={placeholder}
-      />
     </div>
   );
 }
@@ -416,6 +368,7 @@ const TRANSPORT_ACTIONS: { type: Action['type']; label: string }[] = [
   { type: 'addRecipient', label: 'Send a copy to…' },
   { type: 'redirect', label: 'Send it to someone else instead' },
   { type: 'route', label: 'Send it through a queue' },
+  { type: 'journal', label: 'Journal it' },
   { type: 'refuse', label: 'Refuse it' },
 ];
 
@@ -435,6 +388,8 @@ function blankAction(type: Action['type']): Action {
       return { type, addresses: [] };
     case 'route':
       return { type, queue: '' };
+    case 'journal':
+      return { type, journal: '' };
     case 'refuse':
       return { type, text: '' };
     case 'block':
@@ -539,6 +494,8 @@ function ActionFields({ value, onChange }: { value: Action; onChange: (a: Action
           onChange={(e) => onChange({ ...value, queue: e.target.value })}
         />
       );
+    case 'journal':
+      return <JournalSelect value={value.journal} onChange={(journal) => onChange({ ...value, journal })} />;
     case 'refuse':
       return (
         <Textarea
@@ -710,10 +667,27 @@ export function RuleEditor({ initial, onClose, onSaved }: { initial: Rule; onClo
         <section className="space-y-2">
           <h3 className="text-sm font-semibold">{t('rules.then', 'Then')}</h3>
           {dlp ? (
-            <DlpAction
-              value={rule.actions[0] ?? { type: 'warn', notice: '' }}
-              onChange={(a) => patch({ actions: [a] })}
-            />
+            <div className="space-y-3">
+              <DlpAction
+                value={rule.actions.find((a) => a.type !== 'journal') ?? { type: 'warn', notice: '' }}
+                onChange={(a) => patch({ actions: [a, ...rule.actions.filter((x) => x.type === 'journal')] })}
+              />
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted-foreground">{t('rules.dlpJournal', 'Also journal it')}</span>
+                <JournalSelect
+                  allowNone
+                  value={rule.actions.find((a) => a.type === 'journal')?.journal ?? ''}
+                  onChange={(journal) =>
+                    patch({
+                      actions: [
+                        ...rule.actions.filter((a) => a.type !== 'journal'),
+                        ...(journal ? [{ type: 'journal' as const, journal }] : []),
+                      ],
+                    })
+                  }
+                />
+              </div>
+            </div>
           ) : (
             <div className="space-y-2">
               {rule.actions.map((action, i) => (
