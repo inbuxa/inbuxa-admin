@@ -142,3 +142,14 @@ export function describeAlert(a: AlertRecord): string {
   const does = actions.length > 0 ? actions.join(' and ') : 'do nothing (no email or event is set)';
   return `When ${when}, ${does}.${a.enable === false ? ' (off)' : ''}`;
 }
+
+/** An alert's condition in words for the list, when it came from a template: "More than 500 messages are waiting to be delivered". */
+export function alertConditionWords(
+  condition: { match?: Record<string, unknown>; else?: string } | null,
+): string | null {
+  if (!condition || Object.keys(condition.match ?? {}).length > 0 || !condition.else) return null;
+  const known = recognize(condition.else);
+  if (!known) return null;
+  const when = known.template.when(known.n);
+  return when.charAt(0).toUpperCase() + when.slice(1);
+}
