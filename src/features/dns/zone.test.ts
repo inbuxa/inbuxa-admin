@@ -54,6 +54,27 @@ describe('parseZone', () => {
     expect(records.find((r) => r.kind === 'dkim')?.value).toBe('"v=DKIM1; k=ed25519; p=abc"');
   });
 
+  it('joins a long TXT record the server splits across lines, as BIND does', () => {
+    const zone = [
+      'example.com. IN MX 10 mail.example.com.',
+      'rsa._domainkey.example.com. IN TXT (',
+      '    "v=DKIM1; k=rsa; p=MIIBIjAN"',
+      '    "BgkqhkiG9w0BAQEFAAOC"',
+      ')',
+      '_dmarc.example.com. IN TXT "v=DMARC1; p=reject"',
+    ].join('\n');
+    const records = parseZone(zone);
+    const dkim = records.find((r) => r.kind === 'dkim');
+    expect(dkim?.value).toBe('"v=DKIM1; k=rsa; p=MIIBIjAN" "BgkqhkiG9w0BAQEFAAOC"');
+    expect(normalizeValue('TXT', dkim!.value)).toBe(normalizeValue('TXT', '"v=DKIM1; k=rsa; p=MIIBIjANBgkqhkiG9w0BAQEFAAOC"'));
+    expect(records.map((r) => r.kind)).toEqual(['mx', 'dkim', 'dmarc']);
+  });
+
+  it('keeps parentheses that are inside a quoted value', () => {
+    const [r] = parseZone('_dmarc.example.com. IN TXT "v=DMARC1; p=none; (test)"');
+    expect(r.value).toBe('"v=DMARC1; p=none; (test)"');
+  });
+
   it('copes with nothing', () => {
     expect(parseZone(undefined)).toEqual([]);
     expect(parseZone('')).toEqual([]);
