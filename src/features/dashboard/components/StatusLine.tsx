@@ -11,6 +11,7 @@ import { CircleAlert } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
 import type { ServerFacts } from '../serverFacts';
 import { hrefFor, type DashLink } from '../links';
+import { useCriticalCount } from '@/features/security/useCriticalCount';
 
 interface Phrase {
   text: string;
@@ -25,6 +26,8 @@ interface Phrase {
 export function StatusLine({ facts }: { facts: ServerFacts | null }) {
   const { t } = useTranslation();
   const { canViewObject } = usePermissions();
+  // inbuxa: SS-27, critical security items not accepted
+  const critical = useCriticalCount();
   if (!facts) return null;
 
   const n = (key: string, count: number, one: string, other: string) =>
@@ -50,6 +53,17 @@ export function StatusLine({ facts }: { facts: ServerFacts | null }) {
 
   // Quiet when all is well: the line only appears when something needs a look.
   const visible = attention.filter((p) => canViewObject(p.link.viewName));
+  // Already limited to those who may see the Security page
+  if (critical)
+    visible.push({
+      text: n(
+        'status.securityCritical',
+        critical,
+        '{{count}} critical security item',
+        '{{count}} critical security items',
+      ),
+      link: { viewName: 'CustomComponent/LegacyProtocols', section: 'Settings', label: '' },
+    });
   if (visible.length === 0) return null;
 
   const lead = n('status.needsLook', visible.length, 'One thing needs a look:', '{{count}} things need a look:');

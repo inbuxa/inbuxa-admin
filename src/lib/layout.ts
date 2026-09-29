@@ -65,10 +65,11 @@ function checkSpecialLink(
     return { visible: allowed, enterprise: true };
   }
 
-  // INBUXA: the legacy protocols switch takes listeners away and puts them back,
-  // so whoever may see a listener may see it (legacy-protocols spec).
+  // INBUXA: the security to-do list and the legacy-protocols switch. Every
+  // check is server-wide, so it's for whoever may read the server's security
+  // settings, which tenant administrators can't (security to-do list spec).
   if (viewName === 'CustomComponent/LegacyProtocols') {
-    return { visible: canGet ? canGet('sysNetworkListener') : true, enterprise: false };
+    return { visible: canGet ? canGet('sysSecurity') : true, enterprise: false };
   }
 
   // inbuxa: the Local AI page is for whoever may see the AI classifier.

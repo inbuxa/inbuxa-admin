@@ -1,7 +1,10 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import * as React from 'react';
@@ -19,6 +22,8 @@ type ToasterToast = {
   variant?: ToastVariant;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** inbuxa: how long it stays up, in ms; longer for one that offers Undo. */
+  duration?: number;
 };
 
 let count = 0;
