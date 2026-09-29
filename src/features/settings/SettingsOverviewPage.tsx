@@ -6,20 +6,18 @@
 
 /**
  * inbuxa: Settings › Overview, the landing page for Settings (settings-reorg).
- * A card per category explaining what that menu item covers, the guided setups, and, only
- * when there are any, the pages whose values differ from the defaults.
+ * The guided setups and, only when there are any, the pages whose values
+ * differ from the defaults. The menu bar above does the navigating.
  */
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Check, ListChecks } from 'lucide-react';
-import { IconTile } from '@/components/common/IconTile';
 import { useSchemaStore } from '@/stores/schemaStore';
-import { useAccountStore } from '@/stores/accountStore';
 import { getAccountId, jmapRequest } from '@/services/jmap/client';
-import { checkLinkVisible, resolveViewPath, topItemVisible } from '@/lib/navTree';
-import { SETTINGS_CATEGORIES, SETTINGS_LAYOUT_NAME } from '@/lib/settingsLayout';
+import { checkLinkVisible, resolveViewPath } from '@/lib/navTree';
+import { SETTINGS_LAYOUT_NAME } from '@/lib/settingsLayout';
 import { resolveObject } from '@/lib/schemaResolver';
 import { countChanged, singletonPages, type SettingsPageRef } from './changedFromDefault';
 import { SENDING_WIZARD_VIEW, SendingLaunchChoice } from '@/features/sending/SendingSetupCard';
@@ -204,18 +202,8 @@ function SetupCard({ setup }: { setup: GuidedSetup }) {
 export function SettingsOverviewPage() {
   const { t } = useTranslation();
   const schema = useSchemaStore((s) => s.schema);
-  const edition = useAccountStore((s) => s.edition);
 
   const layout = useMemo(() => schema?.layouts.find((l) => l.name === SETTINGS_LAYOUT_NAME), [schema]);
-
-  // What each item in the menu bar covers: explainers only, the bar does the navigating.
-  const cards = useMemo(() => {
-    if (!layout) return [];
-    return SETTINGS_CATEGORIES.filter((cat) => {
-      const item = layout.items.find((it) => 'container' in it && it.container.name === cat.name);
-      return item !== undefined && topItemVisible(item, edition);
-    });
-  }, [layout, edition]);
 
   const pages = useMemo(
     () => (schema && layout ? singletonPages(schema, layout.items).filter((pg) => checkLinkVisible(pg.viewName)) : []),
@@ -231,7 +219,7 @@ export function SettingsOverviewPage() {
         <p className="text-muted-foreground">
           {t(
             'settingsOverview.subtitle',
-            'The menu above groups everything the server does by job. Here is what each part covers. Anything you change is marked against its default.',
+            'The menu above groups everything the server does by job. Anything you change is marked against its default.',
           )}
         </p>
       </header>
@@ -249,18 +237,6 @@ export function SettingsOverviewPage() {
           </div>
         </section>
       )}
-
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map((cat) => (
-          <div key={cat.name} className="flex flex-col gap-3 rounded-xl border bg-card p-5">
-            <div className="flex items-center gap-3">
-              <IconTile name={cat.icon} size="lg" />
-              <h2 className="text-lg font-semibold">{cat.name}</h2>
-            </div>
-            <p className="text-sm text-muted-foreground">{cat.blurb}</p>
-          </div>
-        ))}
-      </section>
 
       {changed.length > 0 && (
         <section className="space-y-3">
