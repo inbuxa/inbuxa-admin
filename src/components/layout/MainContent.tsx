@@ -79,6 +79,11 @@ const MailFlowRulesPage = lazyFeature(
   () => import('@/features/dlp/RulesPage'),
   (m) => m.MailFlowRulesPage,
 );
+// INBUXA: journaling (journaling spec, §3)
+const JournalPage = lazyFeature(
+  () => import('@/features/journal/JournalPage'),
+  (m) => m.JournalPage,
+);
 const HeldMailPage = lazyFeature(
   () => import('@/features/dlp/HeldMailPage'),
   (m) => m.HeldMailPage,
@@ -239,6 +244,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     }
     if (componentName === 'MailFlowRules') {
       return <MailFlowRulesPage />;
+    }
+    if (componentName === 'Journal') {
+      return <JournalPage />;
     }
     if (componentName === 'HeldMail') {
       return <HeldMailPage />;
