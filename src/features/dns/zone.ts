@@ -67,10 +67,62 @@ function kindOf(name: string, type: string, value: string): RecordKind | null {
   return null;
 }
 
+/** The text with the quoted strings blanked, so parentheses inside them don't count. */
+function unquoted(line: string): string {
+  return line.replace(/"(?:[^"\\]|\\.)*"/g, '""');
+}
+
+/**
+ * Join the lines a record spans. The server writes a TXT value longer than
+ * 255 bytes the way BIND does, as quoted chunks inside parentheses on lines
+ * of their own:
+ *
+ *     sel._domainkey.example.com. IN TXT (
+ *         "v=DKIM1; k=rsa; p=MIIB…"
+ *         "…IDAQAB"
+ *     )
+ *
+ * Read a line at a time, the record was "(" and the DKIM key never matched
+ * what DNS returns, so every domain with an RSA key showed as missing it.
+ */
+function logicalLines(text: string): string[] {
+  const out: string[] = [];
+  let pending: string | null = null;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (pending !== null) {
+      pending += ` ${line}`;
+      if (unquoted(line).includes(')')) {
+        out.push(pending);
+        pending = null;
+      }
+      continue;
+    }
+    const bare = unquoted(line);
+    if (bare.includes('(') && !bare.includes(')')) pending = line;
+    else out.push(line);
+  }
+  if (pending !== null) out.push(pending);
+  // The parentheses only group lines; the record doesn't contain them.
+  return out.map((l) => {
+    const bare = unquoted(l);
+    if (!bare.includes('(')) return l;
+    let result = '';
+    let inQuote = false;
+    for (let i = 0; i < l.length; i++) {
+      const c = l[i];
+      if (c === '"' && l[i - 1] !== '\\') inQuote = !inQuote;
+      if (!inQuote && (c === '(' || c === ')')) continue;
+      result += c;
+    }
+    return result.replace(/\s+/g, ' ').trim();
+  });
+}
+
 /** Parse the zone text. Lines it can't place are left out, not guessed at. */
 export function parseZone(text: string | null | undefined): ZoneRecord[] {
   const out: ZoneRecord[] = [];
-  for (const raw of (text ?? '').split('\n')) {
+  for (const raw of logicalLines(text ?? '')) {
     const line = raw.trim();
     if (!line || line.startsWith(';')) continue;
     const f = fields(line);
