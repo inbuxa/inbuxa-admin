@@ -7,205 +7,47 @@
  * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
-import { useTranslation } from 'react-i18next';
-import { Greeting } from './Greeting';
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSchemaStore } from '@/stores/schemaStore';
 import type { Dashboard } from '../types/schema';
-import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
-import { useDashboardStore } from '../stores/dashboardStore';
-import { useLiveMetricsStore } from '../stores/liveMetricsStore';
-import { useHistoryMetricsStore } from '../stores/historyMetricsStore';
-import { collectHistoryMetricIds, collectLiveMetricIds, periodKey, periodWindow, deltaHistograms } from '../helpers';
-import { StatCard } from './StatCard';
-import { DashboardChart } from './DashboardChart';
-import { PeriodSelector } from './PeriodSelector';
-import { StatusLine } from './StatusLine';
-import { StorageTreemap } from './StorageTreemap';
-import { QueueWaiting } from './QueueWaiting';
-import { WeeklyHeatmap } from './WeeklyHeatmap';
-import { useServerFacts, type ServerFacts } from '../serverFacts';
-import { useClusterHealth } from '../clusterHealth';
-import { ClusterHealthCard } from './ClusterHealthCard';
-
-/** INBUXA: live-metric cards the server's own objects can stand in for. */
-const FALLBACKS: Record<string, keyof ServerFacts> = {
-  'user.count': 'users',
-  'domain.count': 'domains',
-  'queue.count': 'queued',
-};
-
-/** INBUXA: in a cluster, this card gives way to Cluster Health. */
-const replacedInCluster = (metrics: string[]) => metrics.length === 1 && metrics[0] === 'server.memory';
+import { CommandCenter } from './CommandCenter';
+import { ClusterView } from './ClusterView';
+import { DashboardShell } from './DashboardShell';
+import { TrendsView } from './TrendsView';
 
 interface DashboardViewProps {
   dashboardId: string;
   section: string;
 }
 
+/**
+ * INBUXA: every dashboard page sits in the same shell, which stays in place
+ * as you move between them. The landing page is the command center; the
+ * others are its trend pages, plus Cluster when the server is part of one.
+ */
 export function DashboardView({ dashboardId, section }: DashboardViewProps) {
-  const { t } = useTranslation();
   const navigate = useNavigate();
   const schema = useSchemaStore((s) => s.schema);
-  const period = useDashboardStore((s) => s.period);
-  const fetchHistory = useHistoryMetricsStore((s) => s.fetch);
-  const refreshHistory = useHistoryMetricsStore((s) => s.refresh);
-  const historyStatus = useHistoryMetricsStore((s) => s.status);
-  const historyCache = useHistoryMetricsStore((s) => s.cache);
-  const subscribeLive = useLiveMetricsStore((s) => s.subscribe);
-  const unsubscribeLive = useLiveMetricsStore((s) => s.unsubscribe);
-  const liveStatus = useLiveMetricsStore((s) => s.status);
-  const liveError = useLiveMetricsStore((s) => s.error);
-  const { facts } = useServerFacts();
-  const clusterHealth = useClusterHealth();
-
   const dashboards = useMemo<Dashboard[]>(() => schema?.dashboards ?? [], [schema]);
   const dashboard = dashboards.find((d) => d.id === dashboardId);
+  const own = dashboardId === 'overview' || dashboardId === 'cluster';
 
   useEffect(() => {
-    if (!dashboard && dashboards.length > 0) {
-      navigate(`/${section}/Dashboard/${dashboards[0].id}`, { replace: true });
+    if (!own && !dashboard && dashboards.length > 0) {
+      navigate(`/${section}/Dashboard/overview`, { replace: true });
     }
-  }, [dashboard, dashboards, navigate, section]);
-
-  const historyIds = useMemo(
-    () => (dashboard ? collectHistoryMetricIds(dashboard.cards, dashboard.charts) : new Set<string>()),
-    [dashboard],
-  );
-  const liveIds = useMemo(() => (dashboard ? collectLiveMetricIds(dashboard.cards) : new Set<string>()), [dashboard]);
-
-  const cacheKey = dashboard ? `${dashboard.id}|${periodKey(period)}` : '';
-  const [fetchVersion, setFetchVersion] = useState(0);
-
-  useEffect(() => {
-    if (!dashboard || historyIds.size === 0) return;
-    let cancelled = false;
-    fetchHistory(dashboard.id, period, historyIds).then(() => {
-      if (!cancelled) setFetchVersion((v) => v + 1);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [dashboard, period, historyIds, fetchHistory]);
-
-  const { historySamples, historyWindow } = useMemo(() => {
-    void fetchVersion;
-    const raw = historyCache.get(cacheKey)?.metrics ?? [];
-    return {
-      historySamples: deltaHistograms(raw),
-      historyWindow: periodWindow(period),
-    };
-  }, [historyCache, cacheKey, fetchVersion, period]);
-
-  useEffect(() => {
-    if (liveIds.size > 0) {
-      subscribeLive(liveIds);
-    }
-    return () => {
-      unsubscribeLive();
-    };
-  }, [liveIds, subscribeLive, unsubscribeLive]);
-
-  const isLoading = historyStatus.get(cacheKey) === 'loading';
-
-  const handleRefresh = useCallback(() => {
-    if (dashboard && historyIds.size > 0) {
-      refreshHistory(dashboard.id, period, historyIds).then(() => setFetchVersion((v) => v + 1));
-    }
-  }, [dashboard, period, historyIds, refreshHistory]);
-
-  if (!dashboard) {
-    if (dashboards.length === 0) {
-      return (
-        <div className="flex items-center justify-center p-8 text-muted-foreground">No dashboards configured.</div>
-      );
-    }
-    return null;
-  }
+  }, [own, dashboard, dashboards, navigate, section]);
 
   return (
-    <div className="space-y-6">
-      <Greeting />
-      <StatusLine facts={facts} />
-      <LegacyProtocolsBanner />
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {dashboards.length > 1 && (
-          <Tabs value={dashboardId} onValueChange={(id) => navigate(`/${section}/Dashboard/${id}`)}>
-            <TabsList>
-              {dashboards.map((d) => (
-                <TabsTrigger key={d.id} value={d.id}>
-                  {d.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        )}
-        {dashboards.length === 1 && <h2 className="text-lg font-semibold">{dashboard.label}</h2>}
-
-        <PeriodSelector onRefresh={handleRefresh} loading={isLoading} />
-      </div>
-
-      {liveStatus === 'error' && liveError && (
-        <div className="flex items-center gap-3 rounded-xl border border-highlight/40 bg-highlight-soft px-4 py-3 text-sm text-foreground">
-          <AlertCircle className="h-4 w-4 shrink-0 text-highlight" />
-          <span>
-            {/404/.test(liveError)
-              ? t(
-                  'dashboard.liveUnavailable',
-                  "Live numbers aren't available on this server yet. The rest of the dashboard still works.",
-                )
-              : liveError}
-          </span>
-        </div>
-      )}
-
-      {dashboard.cards && dashboard.cards.length > 0 && (
-        <div className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
-          {dashboard.cards.map((card, i) =>
-            clusterHealth && replacedInCluster(card.metrics) ? (
-              <ClusterHealthCard key={`cluster-health-${i}`} health={clusterHealth} />
-            ) : (
-              <StatCard
-                key={`${card.title}-${i}`}
-                card={card}
-                historySamples={historySamples}
-                historyWindow={historyWindow}
-                fallback={
-                  card.metrics.length === 1 && FALLBACKS[card.metrics[0]]
-                    ? (facts?.[FALLBACKS[card.metrics[0]]] as number | undefined)
-                    : undefined
-                }
-              />
-            ),
-          )}
-        </div>
-      )}
-
-      {dashboard.id === 'overview' && facts && (facts.storage || facts.waiting) && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {facts.waiting && <QueueWaiting waiting={facts.waiting} />}
-          {facts.storage && <StorageTreemap storage={facts.storage} />}
-        </div>
-      )}
-
-      {dashboard.id === 'overview' && <WeeklyHeatmap samples={historySamples} />}
-
-      {dashboard.charts && dashboard.charts.length > 0 && (
-        <div className="space-y-4">
-          {dashboard.charts.map((chart, i) => (
-            <DashboardChart
-              key={`${chart.title}-${i}`}
-              chart={chart}
-              historySamples={historySamples}
-              historyWindow={historyWindow}
-              period={period}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    <DashboardShell dashboards={dashboards} current={dashboardId} section={section}>
+      {dashboardId === 'overview' ? (
+        <CommandCenter />
+      ) : dashboardId === 'cluster' ? (
+        <ClusterView />
+      ) : dashboard ? (
+        <TrendsView key={dashboard.id} dashboard={dashboard} />
+      ) : null}
+    </DashboardShell>
   );
 }

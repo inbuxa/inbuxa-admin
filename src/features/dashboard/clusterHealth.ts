@@ -22,6 +22,7 @@ export type NodeStatus = 'active' | 'stale' | 'inactive';
 
 export interface ClusterNodeRow {
   hostname: string;
+  nodeId?: string;
   status: NodeStatus;
   /** When the node last renewed its lease. */
   lastRenewal: string;
@@ -64,7 +65,7 @@ async function fetchNodes(): Promise<ClusterNodeRow[] | null> {
       {
         accountId,
         '#ids': { resultOf: 'q', name: 'x:ClusterNode/query', path: '/ids' },
-        properties: ['hostname', 'status', 'lastRenewal'],
+        properties: ['hostname', 'nodeId', 'status', 'lastRenewal'],
       },
       'g',
     ],
@@ -74,6 +75,7 @@ async function fetchNodes(): Promise<ClusterNodeRow[] | null> {
   const list = ((got[1] as Record<string, unknown>).list as Record<string, unknown>[] | undefined) ?? [];
   return list.map((n) => ({
     hostname: String(n.hostname ?? n.id),
+    nodeId: n.nodeId === undefined || n.nodeId === null ? undefined : String(n.nodeId),
     status: String(n.status ?? 'active').toLowerCase() as NodeStatus,
     lastRenewal: String(n.lastRenewal ?? ''),
   }));
@@ -81,15 +83,28 @@ async function fetchNodes(): Promise<ClusterNodeRow[] | null> {
 
 const REFRESH_MS = 30_000;
 
-/** The cluster's health, refreshed every 30 seconds; null when this isn't a cluster. */
-export function useClusterHealth() {
-  const [health, setHealth] = useState<ClusterHealth | null>(null);
+export interface ClusterState {
+  /** Every lease, inactive ones included, for the node roster. */
+  nodes: ClusterNodeRow[];
+  health: ClusterHealth;
+}
+
+/**
+ * The cluster's nodes and their health, refreshed every 30 seconds and
+ * whenever `tick` moves. undefined until the first answer; null when this
+ * server isn't one node of several, or the viewer can't list nodes.
+ */
+export function useClusterState(tick = 0) {
+  const [state, setState] = useState<ClusterState | null | undefined>(undefined);
 
   const refresh = useCallback(() => {
     fetchNodes()
-      .then((nodes) => setHealth(nodes ? summarizeNodes(nodes) : null))
-      // A failed refresh keeps the last answer rather than flipping the card back.
-      .catch(() => {});
+      .then((nodes) => {
+        const health = nodes ? summarizeNodes(nodes) : null;
+        setState(nodes && health ? { nodes, health } : null);
+      })
+      // A failed refresh keeps the last answer rather than flipping the page back.
+      .catch(() => setState((s) => (s === undefined ? null : s)));
   }, []);
 
   useEffect(() => {
@@ -100,7 +115,7 @@ export function useClusterHealth() {
       clearTimeout(first);
       clearInterval(timer);
     };
-  }, [refresh]);
+  }, [refresh, tick]);
 
-  return health;
+  return state;
 }

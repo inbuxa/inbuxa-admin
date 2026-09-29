@@ -111,7 +111,11 @@ export default function AdminPanel() {
     if (viewName === 'Wizard/certificates') return `${t('certSetup.tabTitle', 'Certificates')} · ${section}`;
     if (viewName === 'Wizard/sending') return `${t('sendingSetup.tabTitle', 'Sending mail')} · ${section}`;
     if (viewName.startsWith('Dashboard/')) {
-      const board = schema?.dashboards?.find((d) => d.id === viewName.slice('Dashboard/'.length));
+      const boardId = viewName.slice('Dashboard/'.length);
+      // INBUXA: the landing page is the command center; Cluster isn't in the schema.
+      if (boardId === 'overview') return t('cc.back', 'Command center');
+      if (boardId === 'cluster') return `${t('cc.cluster', 'Cluster')} · ${t('dashboard.title', 'Dashboard')}`;
+      const board = schema?.dashboards?.find((d) => d.id === boardId);
       return `${board?.label ?? t('dashboard.title', 'Dashboard')} · ${t('dashboard.title', 'Dashboard')}`;
     }
     let label: string | undefined;

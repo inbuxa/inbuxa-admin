@@ -1,7 +1,10 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { create } from 'zustand';
@@ -99,10 +102,13 @@ export const useHistoryMetricsStore = create<HistoryMetricsState>()((set, get) =
 
   refresh: async (dashboardId, period, ids) => {
     const key = `${dashboardId}|${periodKey(period)}`;
+    // INBUXA: mark the entry stale rather than dropping it, so the dashboard
+    // keeps showing the last numbers until the new ones arrive instead of
+    // blanking every instrument for the length of the fetch.
     set((state) => {
-      const newCache = new Map(state.cache);
-      newCache.delete(key);
-      return { cache: newCache };
+      const entry = state.cache.get(key);
+      if (!entry) return {};
+      return { cache: new Map(state.cache).set(key, { ...entry, fetchedAt: 0 }) };
     });
     return get().fetch(dashboardId, period, ids);
   },

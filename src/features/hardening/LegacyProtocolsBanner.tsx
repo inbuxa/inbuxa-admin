@@ -10,49 +10,16 @@
  * when the reader may not see the policy, or when the server has no policy.
  */
 
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ShieldCheck } from 'lucide-react';
-import { useAccountStore } from '@/stores/accountStore';
-import { fetchProtocolPolicy, fetchTenantPolicy } from './protocolPolicy';
+import { useLegacyProtocolsOff } from './useLegacyProtocolsOff';
 
 export const LEGACY_PROTOCOLS_VIEW = 'CustomComponent/LegacyProtocols';
 
 export function LegacyProtocolsBanner() {
   const { t } = useTranslation();
-  const canGetServer = useAccountStore((s) => s.hasObjectPermission('sysNetworkListener', 'Get'));
-  const canGetTenant = useAccountStore((s) => s.hasObjectPermission('sysDomain', 'Get'));
-  const [off, setOff] = useState<null | 'server' | 'tenant'>(null);
-
-  useEffect(() => {
-    if (!canGetServer && !canGetTenant) return;
-    const controller = new AbortController();
-    const signal = controller.signal;
-    (async () => {
-      // The server's switch first. Inside a tenant it can't be read, and the
-      // tenant's own is the one to report (LP-18 at tenant scope).
-      try {
-        if (canGetServer) {
-          const policy = await fetchProtocolPolicy(signal);
-          if (!signal.aborted) setOff(policy.legacyProtocols === 'disabled' ? 'server' : null);
-          return;
-        }
-      } catch {
-        // Fall through to the tenant's.
-      }
-      try {
-        if (canGetTenant) {
-          const policy = await fetchTenantPolicy(null, signal);
-          if (!signal.aborted) setOff(policy.legacyProtocols === 'disabled' ? 'tenant' : null);
-        }
-      } catch {
-        // A banner is not worth an error: an older server simply has no switch.
-      }
-    })();
-    return () => controller.abort();
-  }, [canGetServer, canGetTenant]);
-
+  const off = useLegacyProtocolsOff();
   if (!off) return null;
 
   return (
