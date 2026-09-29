@@ -90,6 +90,17 @@ function checkSpecialLink(
     return { visible: canGet ? canGet('sysCompliance') : true, enterprise: false };
   }
 
+  // INBUXA: DLP and mail flow rules, and held mail (dlp-and-mail-flow-rules spec, §2.8)
+  if (viewName === 'CustomComponent/DlpRules') {
+    return { visible: canGet ? canGet('sysDlpPolicy') : true, enterprise: false };
+  }
+  if (viewName === 'CustomComponent/HeldMail') {
+    return { visible: canGet ? canGet('sysDlpReview') : true, enterprise: false };
+  }
+  if (viewName === 'CustomComponent/MailFlowRules') {
+    return { visible: canGet ? canGet('sysMailRule') : true, enterprise: false };
+  }
+
   // inbuxa: locked accounts, for whoever may see them (AL-12).
   if (viewName === 'CustomComponent/AccountLocks') {
     return { visible: canGet ? canGet('sysAccountLock') : true, enterprise: false };

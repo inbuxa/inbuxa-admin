@@ -92,6 +92,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         pages: [
           p('x:MtaMilter', 'Milters'),
           p('x:MtaHook', 'Hooks'),
+          p('CustomComponent/MailFlowRules', 'Rules'),
           p('x:SieveSystemScript', 'Server Sieve scripts'),
           p('x:SieveSystemInterpreter', 'Server Sieve interpreter'),
         ],

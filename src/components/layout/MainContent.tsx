@@ -70,6 +70,19 @@ const ComplianceOverviewPage = lazyFeature(
   () => import('@/features/compliance/ComplianceOverviewPage'),
   (m) => m.ComplianceOverviewPage,
 );
+// INBUXA: DLP and mail flow rules (dlp-and-mail-flow-rules spec, §3)
+const DlpRulesPage = lazyFeature(
+  () => import('@/features/dlp/RulesPage'),
+  (m) => m.DlpRulesPage,
+);
+const MailFlowRulesPage = lazyFeature(
+  () => import('@/features/dlp/RulesPage'),
+  (m) => m.MailFlowRulesPage,
+);
+const HeldMailPage = lazyFeature(
+  () => import('@/features/dlp/HeldMailPage'),
+  (m) => m.HeldMailPage,
+);
 const DataInventoryPage = lazyFeature(
   () => import('@/features/compliance/DataInventoryPage'),
   (m) => m.DataInventoryPage,
@@ -219,6 +232,15 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     }
     if (componentName === 'ComplianceOverview') {
       return <ComplianceOverviewPage />;
+    }
+    if (componentName === 'DlpRules') {
+      return <DlpRulesPage />;
+    }
+    if (componentName === 'MailFlowRules') {
+      return <MailFlowRulesPage />;
+    }
+    if (componentName === 'HeldMail') {
+      return <HeldMailPage />;
     }
     if (componentName === 'DataInventory') {
       return <DataInventoryPage />;
