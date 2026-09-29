@@ -36,10 +36,10 @@ export type Condition =
   | { type: 'cantBeInspected' }
   | { type: 'messageSizeOver'; bytes: number }
   | { type: 'detected'; detectors: DetectorMin[] }
-  // Kept as the server sent them; the form doesn't edit these yet
-  | { type: 'senderGroup'; groups: number[] }
-  | { type: 'senderTenant'; tenants: number[] }
-  | { type: 'recipientGroup'; groups: number[] };
+  // Group and tenant ids, as JMAP ids
+  | { type: 'senderGroup'; groups: string[] }
+  | { type: 'senderTenant'; tenants: string[] }
+  | { type: 'recipientGroup'; groups: string[] };
 
 export type Action =
   | { type: 'addDisclaimer'; text: string; html?: string | null; position: Position }
@@ -230,15 +230,21 @@ export function describeCondition(c: Condition): string {
     case 'senderDomain':
       return `the sender is at ${list(c.domains)}`;
     case 'senderGroup':
-      return `the sender is in one of ${c.groups.length} groups`;
+      return c.groups.length === 1
+        ? 'the sender is in the chosen group'
+        : `the sender is in one of ${c.groups.length} groups`;
     case 'senderTenant':
-      return `the sender is in one of ${c.tenants.length} tenants`;
+      return c.tenants.length === 1
+        ? 'the sender is in the chosen tenant'
+        : `the sender is in one of ${c.tenants.length} tenants`;
     case 'recipientAddress':
       return `a recipient is ${list(c.addresses)}`;
     case 'recipientDomain':
       return `a recipient is at ${list(c.domains)}`;
     case 'recipientGroup':
-      return `a recipient is in one of ${c.groups.length} groups`;
+      return c.groups.length === 1
+        ? 'a recipient is in the chosen group'
+        : `a recipient is in one of ${c.groups.length} groups`;
     case 'recipientOutside':
       return 'a recipient is outside this server';
     case 'words':

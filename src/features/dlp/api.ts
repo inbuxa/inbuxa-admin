@@ -135,3 +135,17 @@ export async function decideHeld(
   const failed = setFailure(result, 'notUpdated', id);
   if (failed) throw failed;
 }
+
+// --- Settings ---------------------------------------------------------------
+
+/** How many days held mail waits for a reviewer (1 to 90). */
+export async function fetchKeepHeldDays(signal?: AbortSignal): Promise<number> {
+  const result = await call('inbuxa:DlpSettings/get', { ids: null }, signal);
+  return (result.list as { keepHeldDays?: number }[] | undefined)?.[0]?.keepHeldDays ?? 7;
+}
+
+export async function saveKeepHeldDays(days: number): Promise<void> {
+  const result = await call('inbuxa:DlpSettings/set', { update: { singleton: { keepHeldDays: days } } });
+  const failed = setFailure(result, 'notUpdated', 'singleton');
+  if (failed) throw failed;
+}
