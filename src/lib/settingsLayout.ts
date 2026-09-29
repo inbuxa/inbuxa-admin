@@ -163,8 +163,9 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
       {
         name: 'Protection',
         pages: [
+          // inbuxa: the security to-do list, with the legacy-protocols switch (was Hardening)
+          p('CustomComponent/LegacyProtocols', 'Security'),
           p('x:Security', 'Settings'),
-          p('CustomComponent/LegacyProtocols', 'Hardening'),
           p('x:BlockedIp', 'Blocked IPs'),
           p('x:AllowedIp', 'Allowed IPs'),
           p('x:Asn', 'ASN & GeoIP'),

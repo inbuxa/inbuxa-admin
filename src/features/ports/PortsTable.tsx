@@ -154,7 +154,7 @@ export function PortsTable({ onChanged }: { onChanged?: () => void }) {
               className="text-xs text-primary hover:underline"
               to={`/${hardeningSection}/CustomComponent/LegacyProtocols`}
             >
-              {t('ports.onHardening', 'Switched on Hardening')}
+              {t('ports.onHardening', 'Switched on the Security page')}
             </Link>
           ) : confirming === s.id ? (
             <span className="flex flex-wrap items-center justify-end gap-2 text-xs">

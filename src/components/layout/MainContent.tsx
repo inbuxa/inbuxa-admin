@@ -60,9 +60,9 @@ const ActionPage = lazyFeature(
   () => import('@/features/actions/ActionPage'),
   (m) => m.ActionPage,
 );
-const LegacyProtocolsPage = lazyFeature(
-  () => import('@/features/hardening/LegacyProtocolsPage'),
-  (m) => m.LegacyProtocolsPage,
+const SecurityPage = lazyFeature(
+  () => import('@/features/security/SecurityPage'),
+  (m) => m.SecurityPage,
 );
 // inbuxa: Management › Compliance › Overview and Data Inventory
 // (personal-data catalog spec, §8).
@@ -211,8 +211,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
       return <LiveTracingPage />;
     }
     // INBUXA: Settings › Security › Hardening (legacy-protocols spec).
+    // inbuxa: the security to-do list, which holds the legacy-protocols switch
     if (componentName === 'LegacyProtocols') {
-      return <LegacyProtocolsPage />;
+      return <SecurityPage />;
     }
     // inbuxa: Settings › Overview (settings-reorg).
     if (componentName === 'SettingsOverview') {
