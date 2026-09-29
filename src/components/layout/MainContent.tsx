@@ -18,6 +18,7 @@ import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
 import { SpamSettingsPage } from '@/features/spamLevel/SpamSettingsPage';
+import { WebhookTestCard } from '@/features/events/WebhookTestCard';
 import { WebhooksPage } from '@/features/events/WebhooksPage';
 import { ListenersPage } from '@/features/ports/ListenersPage';
 import { MetricsPage } from '@/features/metricsConnect/MetricsPage';
@@ -311,7 +312,11 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     }
     const canUpdate = useAccountStore.getState().hasObjectPermission(resolved.permissionPrefix, 'Update');
     const page = canUpdate ? (
-      <DynamicForm viewName={viewName} objectId={id} />
+      <DynamicForm
+        viewName={viewName}
+        objectId={id}
+        intro={resolved.objectName === 'x:WebHook' ? <WebhookTestCard webhookId={id} /> : undefined}
+      />
     ) : (
       <DynamicViewPage viewName={viewName} objectId={id} />
     );
