@@ -30,7 +30,18 @@ interface OptionHelp {
  */
 function pageHelp(schema: Schema, viewName: string) {
   const obj = resolveObject(schema, viewName);
-  if (!obj) return null;
+  if (!obj) {
+    // inbuxa: a page with no object of its own (the Security page) brings its own list
+    const own = PAGE_HELP[viewName];
+    if (!own) return null;
+    return {
+      id: viewName,
+      about: own.about,
+      tasks: own.tasks ?? [],
+      options: (own.options ?? []).map((o) => ({ id: `${viewName}.${o.label}`, ...o })),
+      optionsTitle: own.optionsTitle,
+    };
+  }
   const sch = resolveSchema(schema, obj.objectName);
   const ours = PAGE_HELP[viewName] ?? PAGE_HELP[obj.objectName];
   const about =
@@ -57,7 +68,13 @@ function pageHelp(schema: Schema, viewName: string) {
     const text = fieldHelp(id, field.description);
     if (text) options.push({ id, label: label || humanize(name), text });
   }
-  return { id: obj.objectName, about, tasks: ours?.tasks ?? [], options };
+  return {
+    id: obj.objectName,
+    about,
+    tasks: ours?.tasks ?? [],
+    options,
+    optionsTitle: undefined as string | undefined,
+  };
 }
 
 /**
@@ -116,7 +133,9 @@ export function HelpPanel({ viewName, title }: { viewName: string; title: string
             )}
             {help.options.length > 0 && (
               <section className="space-y-2">
-                <h3 className="text-sm font-semibold">{t('help.options', 'The options on this page')}</h3>
+                <h3 className="text-sm font-semibold">
+                  {help.optionsTitle ?? t('help.options', 'The options on this page')}
+                </h3>
                 <dl className="divide-y rounded-xl border">
                   {help.options.map((o) => (
                     <div key={o.id} className="px-4 py-3" data-help-id={o.id}>

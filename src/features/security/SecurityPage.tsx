@@ -27,6 +27,7 @@ import { toast, useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { ExplainButton } from '@/features/ai/explain/ExplainButton';
 import { LegacyProtocolsPage } from '@/features/hardening/LegacyProtocolsPage';
+import { HelpPanel } from '@/help/HelpPanel';
 import { evaluate, type Item, type Passed, type Severity } from './checks';
 import { loadSnapshot } from './load';
 import {
@@ -268,7 +269,10 @@ export function SecurityPage() {
     <div className="space-y-10">
       <div className="mx-auto max-w-3xl space-y-6">
         <header className="space-y-1">
-          <h1 className="text-2xl font-semibold">{t('security.title', 'Security')}</h1>
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-semibold">{t('security.title', 'Security')}</h1>
+            <HelpPanel viewName="CustomComponent/LegacyProtocols" title={t('security.title', 'Security')} />
+          </div>
           <p className="text-muted-foreground">
             {t(
               'security.subtitle',

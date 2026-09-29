@@ -15,6 +15,7 @@
  */
 
 import { SETTINGS_PAGE_HELP } from './settingsPages';
+import { SECURITY_PAGE_HELP } from './securityChecks';
 
 export const FIELD_HELP: Record<string, string> = {
   // Domains
@@ -73,6 +74,10 @@ export interface PageHelp {
   about: string;
   /** The things people come here to do. */
   tasks?: string[];
+  /** inbuxa: for a page with no form of its own (the Security page), what it lists, explained. */
+  options?: { label: string; text: string }[];
+  /** What to call that list; "The options on this page" otherwise. */
+  optionsTitle?: string;
 }
 
 const MANAGEMENT_PAGE_HELP: Record<string, PageHelp> = {
@@ -150,7 +155,11 @@ const MANAGEMENT_PAGE_HELP: Record<string, PageHelp> = {
 };
 
 /** Every page's own words: Management's here, Settings' in settingsPages.ts. */
-export const PAGE_HELP: Record<string, PageHelp> = { ...SETTINGS_PAGE_HELP, ...MANAGEMENT_PAGE_HELP };
+export const PAGE_HELP: Record<string, PageHelp> = {
+  ...SETTINGS_PAGE_HELP,
+  ...MANAGEMENT_PAGE_HELP,
+  'CustomComponent/LegacyProtocols': SECURITY_PAGE_HELP,
+};
 
 /** A page's one-line intro: ours when written, else the schema's subtitle. */
 export function pageAbout(viewName: string, fallback?: string | null): string | undefined {
