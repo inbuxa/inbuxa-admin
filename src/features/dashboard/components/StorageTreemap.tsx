@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ArrowUpRight, HardDrive } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Corners } from './Panel';
 import { cn } from '@/lib/utils';
 import { formatValue } from '../helpers';
 import { squarify } from '../treemap';
@@ -65,10 +66,13 @@ export function StorageTreemap({ storage }: { storage: StorageUse[] }) {
   const nearFull = storage.filter((s) => s.quota && s.used / s.quota >= 0.9).length;
 
   return (
-    <Card>
+    <Card className="relative flex h-full flex-col">
+      <Corners />
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
         <div>
-          <CardTitle className="text-base">{t('storage.title', 'Who uses the space')}</CardTitle>
+          <CardTitle className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            {t('storage.title', 'Who uses the space')}
+          </CardTitle>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {total > 0
               ? t('storage.subtitle', '{{total}} across {{count}} people', {
@@ -95,7 +99,7 @@ export function StorageTreemap({ storage }: { storage: StorageUse[] }) {
           <ArrowUpRight className="h-3.5 w-3.5" />
         </Link>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-1 flex-col">
         <div ref={box} className="relative w-full overflow-hidden rounded-xl" style={{ height: HEIGHT }}>
           {total === 0 && (
             <div className="flex h-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-sm text-muted-foreground">

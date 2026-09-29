@@ -164,7 +164,7 @@ async function fetchFacts(): Promise<ServerFacts> {
 
 const REFRESH_MS = 60_000;
 
-export function useServerFacts() {
+export function useServerFacts(tick = 0) {
   const [facts, setFacts] = useState<ServerFacts | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -185,7 +185,7 @@ export function useServerFacts() {
       clearTimeout(first);
       clearInterval(timer);
     };
-  }, [refresh]);
+  }, [refresh, tick]);
 
   return { facts, error, refresh };
 }

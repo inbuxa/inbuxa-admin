@@ -179,3 +179,15 @@
 .dark input[type='number'] {
   color-scheme: dark;
 }
+
+/* inbuxa: the dashboard clock's "Updated" line, lit briefly as new numbers land */
+@keyframes cc-flash {
+  0% {
+    color: var(--primary);
+    text-shadow: 0 0 8px var(--primary);
+  }
+  100% {
+    color: var(--muted-foreground);
+    text-shadow: none;
+  }
+}
