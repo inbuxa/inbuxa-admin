@@ -1,6 +1,20 @@
 # CI on the self-hosted Gitea, ported from .gitlab-ci.yml during the move off
 # GitLab (2026-09-22). Gitea reads .gitea/workflows and ignores .github/ once
-# this directory exists; .github/workflows stays as it was for GitHub.
+# this directory exists; .github/workflows is the GitHub side, below.
+#
+# WHERE THE BUILD RUNS. Gitea push-mirrors this repository to GitHub, and the
+# org variable BUILD_ON picks which forge does the heavy work:
+#   * unset (or anything but `github`): every job here runs, as it always did,
+#     and GitHub's workflow skips all of its jobs.
+#   * `github`: the build and publish jobs here are skipped, GitHub Actions
+#     runs .github/workflows/ci.yml on its hosted runners (native arm64, no
+#     QEMU), and the `github` job below waits for the commit status that run
+#     posts back, passing or failing with it. So this run's result is still
+#     the one that counts, for a PR's checks as for anything that merges on
+#     green CI. The variable is set on both forges, and must agree.
+# If GitHub is ever unavailable, unsetting BUILD_ON here is the whole
+# fallback: the jobs below take over again unchanged. weekly-release.yml and
+# announce.yml run here whatever BUILD_ON says.
 #
 # Every job runs in an image pinned by digest (tag in the trailing comment),
 # and the only action used is coffey-labs/actions/checkout pinned by SHA. The
@@ -39,6 +53,7 @@ concurrency:
 jobs:
   # A release tag is built and tested again before its image is published.
   build:
+    if: ${{ vars.BUILD_ON != 'github' }}
     runs-on: light
     container:
       image: node:22-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9 # 22-bookworm-slim
@@ -78,7 +93,7 @@ jobs:
   # its push tokens from its own name, so unlike on GitLab nothing here has to
   # be pointed at a public address.
   publish:
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ vars.BUILD_ON != 'github' && startsWith(github.ref, 'refs/tags/') }}
     needs: [build]
     runs-on: docker
     container:
@@ -126,3 +141,38 @@ jobs:
             || echo "package already linked (or link refused); not fatal"
       - if: always()
         run: docker logout "$REGISTRY" || true
+
+  # ------------------------------------------------------------ github ------
+  # With BUILD_ON=github, the work above happens in GitHub Actions, which
+  # posts one commit status back here when it finishes: "github/ci (branch)"
+  # for a branch push, "github/ci (tag)" for a tag. This job waits for that
+  # status on the commit under test -- the PR's head for a pull request -- and
+  # passes or fails with it. Nothing arriving within the timeout means GitHub
+  # never built the commit (a mirror that failed to sync, or GitHub being
+  # down): check the mirror, or unset BUILD_ON to build here.
+  github:
+    if: ${{ vars.BUILD_ON == 'github' }}
+    runs-on: light
+    timeout-minutes: 150
+    container:
+      image: node:22-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9 # 22-bookworm-slim
+    env:
+      TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      CONTEXT: github/ci (${{ github.ref_type == 'tag' && 'tag' || 'branch' }})
+    steps:
+      - run: apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates curl jq >/dev/null
+      - shell: bash
+        run: |
+          set -uo pipefail
+          url="$CI_SERVER_INTERNAL/api/v1/repos/$GITHUB_REPOSITORY/commits/$SHA/statuses?limit=50"
+          echo "waiting for '$CONTEXT' on $SHA"
+          while :; do
+            state="$(curl -fsS -H "Authorization: token $TOKEN" "$url" \
+                     | jq -r --arg c "$CONTEXT" '[.[] | select(.context == $c)] | sort_by(.id) | last | .status // empty')"
+            case "$state" in
+              success) echo "GitHub reported success"; exit 0 ;;
+              failure|error) echo "GitHub reported $state -- see the status's link for the run" >&2; exit 1 ;;
+            esac
+            sleep 20
+          done
