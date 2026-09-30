@@ -10,6 +10,15 @@
        keeps its name, and a favicon is held longer than anything else. Bump it
        (date + letter, never a counter) whenever public/favicon.ico changes. -->
   <link rel="icon" type="image/x-icon" href="favicon.ico?v=2026-09-27a" />
+  <link rel="apple-touch-icon" href="img/apple-touch-icon.png?v=2026-09-27a" />
+  <!-- Installable: relative to <base>, which the server rewrites per mount, so
+       /admin and /account each install as their own app. No service worker on
+       purpose: installing no longer needs one, and an admin console has nothing
+       to do offline -- a cached shell would only pin a stale build. -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0d8a82" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="inbuxa Admin" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>inbuxa Admin</title>
 </head>
