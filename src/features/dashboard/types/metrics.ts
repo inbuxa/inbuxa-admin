@@ -1,15 +1,19 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 export type MetricId = string;
 
+// INBUXA: nodeId is the node that wrote the sample (servers from 2026.9.30 on)
 export type Metric =
-  | { '@type': 'Counter'; metric: MetricId; count: number; timestamp?: string }
-  | { '@type': 'Gauge'; metric: MetricId; count: number; timestamp?: string }
-  | { '@type': 'Histogram'; metric: MetricId; count: number; sum: number; timestamp?: string };
+  | { '@type': 'Counter'; metric: MetricId; count: number; timestamp?: string; nodeId?: number }
+  | { '@type': 'Gauge'; metric: MetricId; count: number; timestamp?: string; nodeId?: number }
+  | { '@type': 'Histogram'; metric: MetricId; count: number; sum: number; timestamp?: string; nodeId?: number };
 
 export type Period = { kind: 'preset'; preset: PresetKey } | { kind: 'custom'; from: Date; to: Date };
 
