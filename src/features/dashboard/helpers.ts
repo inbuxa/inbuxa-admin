@@ -1,7 +1,10 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import type { Metric, MetricId, Period } from './types/metrics';
@@ -15,19 +18,23 @@ export function metricToScalar(m: Metric): number {
   return m.count;
 }
 
+// INBUXA: histograms are running totals per node, so they're diffed per
+// node; in a cluster, diffing across nodes subtracts one node's total from
+// another's.
 export function deltaHistograms(samples: Metric[]): Metric[] {
   const nonHistograms: Metric[] = [];
-  const byMetric = new Map<MetricId, Metric[]>();
+  const byMetric = new Map<string, Metric[]>();
 
   for (const m of samples) {
     if (m['@type'] !== 'Histogram') {
       nonHistograms.push(m);
       continue;
     }
-    let list = byMetric.get(m.metric);
+    const key = `${m.metric}|${m.nodeId ?? ''}`;
+    let list = byMetric.get(key);
     if (!list) {
       list = [];
-      byMetric.set(m.metric, list);
+      byMetric.set(key, list);
     }
     list.push(m);
   }
