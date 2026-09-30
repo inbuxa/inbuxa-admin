@@ -4,6 +4,10 @@
 
 <h3 align="center">INBUXA Admin</h3>
 
+> [!NOTE]
+> Development happens on [git.coffeylabs.org/inbuxa/inbuxa-admin](https://git.coffeylabs.org/inbuxa/inbuxa-admin); the copy on GitHub is a read-only mirror.
+> Report issues at **[git.coffeylabs.org/inbuxa/inbuxa-admin/issues](https://git.coffeylabs.org/inbuxa/inbuxa-admin/issues)**, and join discussions at **[community.coffeylabs.org](https://community.coffeylabs.org)**.
+
 The administration interface for the INBUXA mail server: every server setting,
 first-boot setup, and recovery, in the browser.
 
