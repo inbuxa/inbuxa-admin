@@ -9,6 +9,7 @@
 
 import type { Layout, LayoutItem, LayoutSubItem, Schema } from '@/types/schema';
 import { resolveObject } from '@/lib/schemaResolver';
+import { SETTINGS_LAYOUT_NAME, SETTINGS_OVERVIEW_VIEW } from '@/lib/settingsLayout';
 
 function findFirstSubLink(items: LayoutSubItem[]): string | null {
   for (const item of items) {
@@ -111,8 +112,11 @@ function checkSpecialLink(
     return { visible: canGet ? canGet('sysAccountLock') : true, enterprise: false };
   }
 
+  // INBUXA: a page this console can't draw is hidden. A server newer than the
+  // console lists pages the console doesn't know yet, and counting them as
+  // visible hid the first-boot wizard (inbuxa-server#135).
   if (viewName.startsWith('CustomComponent/')) {
-    return { visible: true, enterprise: false };
+    return { visible: false, enterprise: false };
   }
 
   // INBUXA: guided jobs are open to whoever may manage what they change.
@@ -148,6 +152,20 @@ export function isLinkVisible(
   canGet: CanGet,
   hasPerm?: HasPermission,
 ): boolean {
+  // INBUXA: the Settings overview is the console's own page, there when any
+  // settings page is. Visible on its own, it made the Settings layout visible
+  // to the bootstrap administrator, and the wizard never showed.
+  if (viewName === SETTINGS_OVERVIEW_VIEW) {
+    const settings = schema.layouts.find((layout) => layout.name === SETTINGS_LAYOUT_NAME);
+    return (
+      settings?.items.some(
+        (item) =>
+          'container' in item &&
+          findFirstVisibleSubLink(schema, item.container.items, edition, canGet, hasPerm) !== null,
+      ) ?? false
+    );
+  }
+
   const special = checkSpecialLink(viewName, edition, hasPerm, canGet);
   if (special !== null) return special.visible;
 
