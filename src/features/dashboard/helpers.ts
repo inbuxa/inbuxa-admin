@@ -99,9 +99,49 @@ export function cardValue(card: Card, samples: Metric[]): number {
 }
 
 export function seriesBucketValue(series: Series, bucketSamples: Metric[]): number | null {
-  const values = bucketSamples.filter((m) => series.metrics.includes(m.metric)).map(metricToScalar);
-  if (values.length === 0) return null;
-  return aggregate(values, series.aggregate);
+  const mine = bucketSamples.filter((m) => series.metrics.includes(m.metric));
+  if (mine.length === 0) return null;
+  // INBUXA: a gauge's slice is one reading across the nodes, not every tick's readings combined
+  if (mine.every((m) => m['@type'] === 'Gauge')) return gaugeReading(mine, series.metrics);
+  return aggregate(mine.map(metricToScalar), series.aggregate);
+}
+
+// INBUXA: gauges counting the whole cluster. Only the node that computes
+// them has a true reading; history from before inbuxa-server 2026.9.30.2
+// also holds the other nodes' copies, with the queue drifted below zero
+// (stored unsigned, so a 20-digit number) and the accounts and domains at 0.
+export const CLUSTER_GAUGES = new Set<MetricId>(['queue.count', 'user.count', 'domain.count']);
+
+/**
+ * The gauges' reading across the cluster: each node's latest, added up for
+ * per-node gauges (memory, open connections), and for cluster-wide counts the
+ * largest believable one. Null when there's no reading.
+ */
+export function gaugeReading(samples: Metric[], ids: MetricId[]): number | null {
+  const last = new Map<string, { metric: MetricId; at: number; value: number }>();
+  for (const m of samples) {
+    if (m['@type'] !== 'Gauge' || !ids.includes(m.metric)) continue;
+    const at = m.timestamp ? Date.parse(m.timestamp) : 0;
+    const key = `${m.metric}|${m.nodeId ?? ''}`;
+    const prev = last.get(key);
+    if (!prev || at >= prev.at) last.set(key, { metric: m.metric, at, value: m.count });
+  }
+  let sum = 0;
+  let found = false;
+  const cluster = new Map<MetricId, number>();
+  for (const { metric, value } of last.values()) {
+    if (!CLUSTER_GAUGES.has(metric)) {
+      sum += value;
+      found = true;
+    } else if (value <= Number.MAX_SAFE_INTEGER) {
+      cluster.set(metric, Math.max(cluster.get(metric) ?? 0, value));
+    }
+  }
+  for (const value of cluster.values()) {
+    sum += value;
+    found = true;
+  }
+  return found ? sum : null;
 }
 
 export function bucketize(samples: Metric[], from: Date, to: Date, bucketCount: number): Metric[][] {
