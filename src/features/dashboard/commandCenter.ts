@@ -10,7 +10,7 @@
  * from the components so every figure can be tested on its own.
  */
 import type { Metric } from './types/metrics';
-import { bucketize, metricToScalar } from './helpers';
+import { bucketize, gaugeReading, metricToScalar } from './helpers';
 
 /** Messages the server took in from outside. */
 export const RECEIVED = ['queue.message-queued'];
@@ -107,9 +107,12 @@ export function mean(samples: Metric[], ids: string[]): number | null {
 
 /** Counts per time slice across the period, oldest first. */
 export function series(samples: Metric[], ids: string[], from: Date, to: Date, buckets: number): number[] {
-  return bucketize(samples, from, to, buckets).map((b) =>
-    b.filter((m) => ids.includes(m.metric)).reduce((s, m) => s + metricToScalar(m), 0),
-  );
+  return bucketize(samples, from, to, buckets).map((b) => {
+    const mine = b.filter((m) => ids.includes(m.metric));
+    // A gauge's slice is one reading across the nodes, not the sum of every tick
+    if (mine.length > 0 && mine.every((m) => m['@type'] === 'Gauge')) return gaugeReading(mine, ids) ?? 0;
+    return mine.reduce((s, m) => s + metricToScalar(m), 0);
+  });
 }
 
 export interface Load {
@@ -180,7 +183,7 @@ export function latest(samples: Metric[], ids: string[]): number | null {
 export function summarize(samples: Metric[], ids: string[], timing: boolean): number | null {
   if (timing) return mean(samples, ids);
   const mine = samples.filter((s) => ids.includes(s.metric));
-  if (mine.length > 0 && mine.every((s) => s['@type'] === 'Gauge')) return latest(mine, ids);
+  if (mine.length > 0 && mine.every((s) => s['@type'] === 'Gauge')) return gaugeReading(mine, ids);
   return total(samples, ids);
 }
 

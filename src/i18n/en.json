@@ -1841,7 +1841,7 @@
       "zoneDetail": "fine under {{good}} · slow over {{bad}}",
       "quiet": "Nothing recorded yet",
       "memory": "Memory",
-      "memoryDetail": "this node · peak {{peak}}",
+      "memoryDetail": "all nodes · peak {{peak}}",
       "connLoad": "Connection load",
       "smtpSplit": "SMTP sessions",
       "smtpIn": "{{n}} in",

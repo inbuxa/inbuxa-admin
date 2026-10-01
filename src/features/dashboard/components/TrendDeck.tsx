@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Metric, Period } from '../types/metrics';
 import type { ServerFacts } from '../serverFacts';
-import { bucketTimestamps, formatValue, getBucketCount } from '../helpers';
+import { bucketTimestamps, formatValue, gaugeReading, getBucketCount } from '../helpers';
 import {
   DECK_METRICS,
   AUTH_FAILED,
@@ -18,7 +18,6 @@ import {
   RECEIVED,
   SENT,
   SPAM,
-  latest,
   load,
   mean,
   queueHealth,
@@ -149,11 +148,12 @@ export function TrendDeck({ id, samples, window, period, periodName, live, liveV
     />
   );
 
-  // Memory now against its highest in the period: how close to the peak the node is running.
+  // Memory now against its highest in the period, both summed over the nodes:
+  // the live feed is one node's, so the reading comes from the stored history.
   const memoryGauge = () => {
-    const readings = samples.filter((m) => m.metric === 'server.memory').map((m) => m.count);
-    const now = liveValues.get('server.memory') ?? latest(samples, ['server.memory']);
-    const peak = Math.max(0, now ?? 0, ...readings);
+    const MEMORY = ['server.memory'];
+    const now = gaugeReading(samples, MEMORY);
+    const peak = Math.max(0, now ?? 0, ...series(samples, MEMORY, from, to, buckets));
     return (
       <Gauge
         key="memory"
@@ -163,7 +163,7 @@ export function TrendDeck({ id, samples, window, period, periodName, live, liveV
         label={t('cc.g.memory', 'Memory')}
         detail={
           peak
-            ? t('cc.g.memoryDetail', 'this node · peak {{peak}}', { peak: formatValue(peak, 'bytes') })
+            ? t('cc.g.memoryDetail', 'all nodes · peak {{peak}}', { peak: formatValue(peak, 'bytes') })
             : t('cc.g.quiet', 'Nothing recorded yet')
         }
       />
