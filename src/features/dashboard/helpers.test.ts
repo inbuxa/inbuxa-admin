@@ -86,8 +86,8 @@ describe('gaugeReading', () => {
   it('takes the real cluster-wide count, not a drifted or zero copy', () => {
     const samples = [
       reading('queue.count', '2026-09-30T11:00:00Z', 8, 2),
-      reading('queue.count', '2026-09-30T11:00:01Z', 18_446_744_073_709_551_596, 0),
-      reading('queue.count', '2026-09-30T11:00:02Z', 18_446_744_073_709_551_613, 1),
+      reading('queue.count', '2026-09-30T11:00:01Z', 2 ** 64 - 20, 0),
+      reading('queue.count', '2026-09-30T11:00:02Z', 2 ** 64 - 3, 1),
       reading('user.count', '2026-09-30T11:00:00Z', 7, 2),
       reading('user.count', '2026-09-30T11:00:02Z', 0, 1),
     ];
