@@ -20,6 +20,18 @@ const OBJECT = 'inbuxa:AccountLock';
 
 export type Access = 'read' | 'organize' | 'full';
 
+/**
+ * What a lock is for (multi-account spec, MA-S): a locked account, or a shared
+ * mailbox such as support@. A shared mailbox needs no reason, holds up to 100
+ * people, and runs its own automatic replies.
+ */
+export type LockKind = 'lock' | 'sharedMailbox';
+
+/** Most people a lock of this kind may have. */
+export function maxDelegates(kind: LockKind): number {
+  return kind === 'sharedMailbox' ? 100 : 10;
+}
+
 export const ACCESS_LEVELS: Access[] = ['read', 'organize', 'full'];
 
 export interface Delegate {
@@ -34,6 +46,7 @@ export interface Delegate {
 export interface AccountLock {
   id: string;
   name: string;
+  kind: LockKind;
   reason: string;
   /** RFC 3339. */
   lockedAt: string;
@@ -79,13 +92,17 @@ export function untilFromServer(value: string | null | undefined): string {
 }
 
 /** What's wrong with a delegate list before it's sent, or null (AL-5, AL-8). */
-export function delegateProblem(delegates: Delegate[], lockedId: string): string | null {
-  if (delegates.length > 10) return 'At most 10 delegates.';
+export function delegateProblem(delegates: Delegate[], lockedId: string, kind: LockKind = 'lock'): string | null {
+  const max = maxDelegates(kind);
+  // A shared mailbox's delegates are just the people in it (MA-S4)
+  const who = kind === 'sharedMailbox' ? 'person' : 'delegate';
+  if (delegates.length > max) return `At most ${max} ${who === 'person' ? 'people' : 'delegates'}.`;
   const seen = new Set<string>();
   for (const d of delegates) {
-    if (!d.accountId) return 'Choose an account for each delegate.';
-    if (d.accountId === lockedId) return 'An account can’t be its own delegate.';
-    if (seen.has(d.accountId)) return 'A delegate is listed twice.';
+    if (!d.accountId) return `Choose an account for each ${who}.`;
+    if (d.accountId === lockedId)
+      return kind === 'sharedMailbox' ? 'A shared mailbox can’t have itself as a person.' : 'An account can’t be its own delegate.';
+    if (seen.has(d.accountId)) return `A ${who} is listed twice.`;
     seen.add(d.accountId);
     if (d.sendAs && d.access === 'read')
       return 'Sending as the account needs organize or full access: the message is made in its Drafts first.';
@@ -107,6 +124,8 @@ function fromServer(raw: Record<string, unknown>): AccountLock {
   return {
     id: String(raw.id ?? ''),
     name: String(raw.name ?? ''),
+    // An older server sends no kind: every lock is a lock
+    kind: raw.kind === 'sharedMailbox' ? 'sharedMailbox' : 'lock',
     reason: String(raw.reason ?? ''),
     lockedAt: String(raw.lockedAt ?? ''),
     lockedBy: String(raw.lockedBy ?? ''),
@@ -132,14 +151,26 @@ export async function fetchLocks(accountId?: string, signal?: AbortSignal): Prom
   return ((result as { list?: Record<string, unknown>[] }).list ?? []).map(fromServer);
 }
 
-export async function lockAccount(accountId: string, reason: string, delegates: Delegate[]): Promise<void> {
+export async function lockAccount(
+  accountId: string,
+  reason: string,
+  delegates: Delegate[],
+  kind: LockKind = 'lock',
+): Promise<void> {
   const responses = await jmapRequest(
     [
       [
         `${OBJECT}/set`,
         {
           accountId: getAccountId('x:Account'),
-          create: { l: { accountId, reason: reason.trim(), delegates: toServer(delegates) } },
+          create: {
+            l: {
+              accountId,
+              ...(kind === 'lock' ? {} : { kind }),
+              ...(reason.trim() ? { reason: reason.trim() } : {}),
+              delegates: toServer(delegates),
+            },
+          },
         },
         '0',
       ],

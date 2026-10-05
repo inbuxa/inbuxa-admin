@@ -40,7 +40,8 @@ export function AccountLocksPage() {
     const controller = new AbortController();
     fetchLocks(undefined, controller.signal)
       .then((locks) => {
-        if (!controller.signal.aborted) setLoad({ kind: 'ready', locks });
+        // Shared mailboxes have a page of their own (MA-S)
+        if (!controller.signal.aborted) setLoad({ kind: 'ready', locks: locks.filter((l) => l.kind === 'lock') });
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;

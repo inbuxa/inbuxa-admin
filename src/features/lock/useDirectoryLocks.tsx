@@ -65,7 +65,8 @@ export function useDirectoryLocks(active: boolean) {
     const id = String(item.id);
     const lock = locks.get(id);
     if (lock) {
-      if (!canDestroy) return null;
+      // A shared mailbox is managed on its own page (MA-S4)
+      if (!canDestroy || lock.kind === 'sharedMailbox') return null;
       return (
         <>
           <DropdownMenuSeparator />

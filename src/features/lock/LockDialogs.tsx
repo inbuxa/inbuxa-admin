@@ -69,7 +69,20 @@ function ReasonField({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
-function DelegateEditor({ delegates, onChange }: { delegates: Delegate[]; onChange: (d: Delegate[]) => void }) {
+export function DelegateEditor({
+  delegates,
+  onChange,
+  max = 10,
+  hint,
+  addLabel,
+}: {
+  delegates: Delegate[];
+  onChange: (d: Delegate[]) => void;
+  /** Most people this kind of lock may have (MA-S: 100 for a shared mailbox). */
+  max?: number;
+  hint?: string;
+  addLabel?: string;
+}) {
   const { t } = useTranslation();
   const schema = useSchemaStore((s) => s.schema);
   const update = (i: number, patch: Partial<Delegate>) =>
@@ -77,10 +90,11 @@ function DelegateEditor({ delegates, onChange }: { delegates: Delegate[]; onChan
   return (
     <div className="space-y-3">
       <div className="text-sm text-muted-foreground">
-        {t(
-          'lock.delegatesHint',
-          'People who can open this account, beside their own mail, while it is locked. Everything they do there is recorded.',
-        )}
+        {hint ??
+          t(
+            'lock.delegatesHint',
+            'People who can open this account, beside their own mail, while it is locked. Everything they do there is recorded.',
+          )}
       </div>
       {delegates.map((d, i) => (
         <div key={i} className="space-y-2 rounded-lg border p-3">
@@ -142,14 +156,14 @@ function DelegateEditor({ delegates, onChange }: { delegates: Delegate[]; onChan
           </label>
         </div>
       ))}
-      {delegates.length < 10 && (
+      {delegates.length < max && (
         <Button
           variant="outline"
           size="sm"
           onClick={() => onChange([...delegates, { accountId: '', access: 'read', sendAs: false, until: '' }])}
         >
           <Plus className="mr-2 h-4 w-4" />
-          {t('lock.addDelegate', 'Add a delegate')}
+          {addLabel ?? t('lock.addDelegate', 'Add a delegate')}
         </Button>
       )}
     </div>

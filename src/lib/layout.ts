@@ -111,6 +111,10 @@ function checkSpecialLink(
   if (viewName === 'CustomComponent/AccountLocks') {
     return { visible: canGet ? canGet('sysAccountLock') : true, enterprise: false };
   }
+  // inbuxa: shared mailboxes are locks of their own kind (MA-S4)
+  if (viewName === 'CustomComponent/SharedMailboxes') {
+    return { visible: canGet ? canGet('sysAccountLock') : true, enterprise: false };
+  }
 
   // INBUXA: a page this console can't draw is hidden. A server newer than the
   // console lists pages the console doesn't know yet, and counting them as

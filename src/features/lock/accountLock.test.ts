@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { delegateProblem, untilFromServer, untilToServer, type Delegate } from './accountLock';
+import { delegateProblem, maxDelegates, untilFromServer, untilToServer, type Delegate } from './accountLock';
 
 const d = (patch: Partial<Delegate>): Delegate => ({
   accountId: 'b',
@@ -46,5 +46,17 @@ describe('until', () => {
     expect(untilToServer('')).toBeNull();
     expect(untilFromServer(null)).toBe('');
     expect(untilFromServer('not a date')).toBe('');
+  });
+});
+
+describe('shared mailboxes (MA-S)', () => {
+  it('hold up to 100 people, where a lock holds 10', () => {
+    const people = (n: number) => Array.from({ length: n }, (_, i) => d({ accountId: `a${i}` }));
+    expect(maxDelegates('lock')).toBe(10);
+    expect(maxDelegates('sharedMailbox')).toBe(100);
+    expect(delegateProblem(people(11), 'z')).toMatch(/At most 10/);
+    expect(delegateProblem(people(11), 'z', 'sharedMailbox')).toBeNull();
+    expect(delegateProblem(people(101), 'z', 'sharedMailbox')).toMatch(/At most 100 people/);
+    expect(delegateProblem([d({ accountId: '' })], 'z', 'sharedMailbox')).toMatch(/each person/);
   });
 });
