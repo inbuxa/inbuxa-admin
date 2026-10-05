@@ -130,6 +130,11 @@ const AccountLocksPage = lazyFeature(
   () => import('@/features/lock/AccountLocksPage'),
   (m) => m.AccountLocksPage,
 );
+// inbuxa: Management › Directory › Shared mailboxes (multi-account spec, MA-S4).
+const SharedMailboxesPage = lazyFeature(
+  () => import('@/features/lock/SharedMailboxesPage'),
+  (m) => m.SharedMailboxesPage,
+);
 const LegalHoldsPage = lazyFeature(
   () => import('@/features/hold/LegalHoldsPage'),
   (m) => m.LegalHoldsPage,
@@ -232,6 +237,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     }
     if (componentName === 'AccountLocks') {
       return <AccountLocksPage />;
+    }
+    if (componentName === 'SharedMailboxes') {
+      return <SharedMailboxesPage />;
     }
     if (componentName === 'LegalHolds') {
       return <LegalHoldsPage />;
