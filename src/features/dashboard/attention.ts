@@ -16,6 +16,7 @@ import {
   FileWarning,
   HardDrive,
   ListX,
+  MailWarning,
   RadioTower,
   RotateCw,
   ServerCrash,
@@ -38,6 +39,9 @@ export interface AttentionInput {
   facts: ServerFacts | null;
   health: ClusterHealth | null;
   critical: number | null;
+  /** inbuxa: blocklist and reverse-DNS failures on Domains › Deliverability (DL-18). */
+  deliverability?: number | null;
+  deliverabilityHref?: string | null;
   samples: Metric[];
   liveStatus: string;
   nodesHref: string | null;
@@ -52,6 +56,8 @@ export function buildAttention({
   facts,
   health,
   critical,
+  deliverability,
+  deliverabilityHref,
   samples,
   liveStatus,
   nodesHref,
@@ -74,6 +80,20 @@ export function buildAttention({
       }),
       detail: t('cc.a.securityDetail', 'On the Security to-do list and not yet accepted.'),
       href: `/Settings/${LEGACY_PROTOCOLS_VIEW}`,
+    });
+  if (deliverability)
+    attention.push({
+      id: 'deliverability',
+      severity: 'crit',
+      icon: MailWarning,
+      count: deliverability,
+      title: t('cc.a.deliverability', {
+        count: deliverability,
+        defaultValue_one: 'blocklist or reverse-DNS problem',
+        defaultValue_other: 'blocklist or reverse-DNS problems',
+      }),
+      detail: t('cc.a.deliverabilityDetail', 'Other mail servers may refuse mail from this one.'),
+      href: deliverabilityHref ?? null,
     });
   if (health && health.unhealthy)
     attention.push({

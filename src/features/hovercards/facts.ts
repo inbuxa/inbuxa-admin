@@ -11,6 +11,10 @@
 import { getAccountId, jmapRequest } from '@/services/jmap/client';
 import { parseZone, type RecordKind, type ZoneRecord } from '@/features/dns/zone';
 import { checkRecords } from '@/features/dns/liveCheck';
+import i18n from '@/i18n';
+import { useAccountStore } from '@/stores/accountStore';
+import { fetchReports, fetchSettings } from '@/features/deliverability/api';
+import { grade, worstFor } from '@/features/deliverability/grade';
 
 export interface DomainFacts {
   kind: 'domain';
@@ -22,6 +26,8 @@ export interface DomainFacts {
   certs: string;
   /** The core records, and which are live in public DNS. */
   checks: { kind: RecordKind; live: boolean }[];
+  /** inbuxa: DL-19, the domain's worst deliverability failure, if any. */
+  deliverability?: string;
 }
 
 export interface PersonFacts {
@@ -58,6 +64,14 @@ export async function coreChecks(zone: ZoneRecord[], domain: string): Promise<{ 
   }));
 }
 
+/** DL-19: the worst failing deliverability finding for a domain, for whoever may read the reports. */
+async function deliverabilityFor(domain: string): Promise<string | undefined> {
+  if (!useAccountStore.getState().hasObjectPermission('sysDeliverability', 'Get')) return undefined;
+  const [reports, settings] = await Promise.all([fetchReports(), fetchSettings()]);
+  const t = i18n.t.bind(i18n) as (key: string, fallback: string, options?: Record<string, unknown>) => string;
+  return worstFor(grade(reports, settings.lists, t), domain.toLowerCase())?.title;
+}
+
 async function domainFacts(id: string): Promise<DomainFacts | null> {
   const accountId = getAccountId('x:Domain');
   const responses = await jmapRequest([
@@ -80,9 +94,10 @@ async function domainFacts(id: string): Promise<DomainFacts | null> {
   if (!d) return null;
   const count = responses.find((r) => r[2] === 'n' && r[0] !== 'error')?.[1] as { total?: number } | undefined;
   const name = String(d.name);
-  const checks = await coreChecks(parseZone(d.dnsZoneFile as string | undefined), name).catch(
-    (): DomainFacts['checks'] => [],
-  );
+  const [checks, deliverability] = await Promise.all([
+    coreChecks(parseZone(d.dnsZoneFile as string | undefined), name).catch((): DomainFacts['checks'] => []),
+    deliverabilityFor(name).catch(() => undefined),
+  ]);
   return {
     kind: 'domain',
     name,
@@ -92,6 +107,7 @@ async function domainFacts(id: string): Promise<DomainFacts | null> {
     dkim: mode(d.dkimManagement),
     certs: mode(d.certificateManagement),
     checks,
+    deliverability,
   };
 }
 

@@ -115,6 +115,10 @@ function checkSpecialLink(
   if (viewName === 'CustomComponent/SharedMailboxes') {
     return { visible: canGet ? canGet('sysAccountLock') : true, enterprise: false };
   }
+  // inbuxa: Domains › Deliverability, for whoever may read the reports (deliverability spec)
+  if (viewName === 'CustomComponent/Deliverability') {
+    return { visible: canGet ? canGet('sysDeliverability') : true, enterprise: false };
+  }
 
   // INBUXA: a page this console can't draw is hidden. A server newer than the
   // console lists pages the console doesn't know yet, and counting them as

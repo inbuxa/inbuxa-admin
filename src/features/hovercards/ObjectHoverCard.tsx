@@ -6,7 +6,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CheckCircle2, CircleDashed, Globe, Loader2, UserRound } from 'lucide-react';
+import { CheckCircle2, CircleDashed, Globe, Loader2, MailWarning, UserRound } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatSize } from '@/lib/durationFormat';
 import { cn } from '@/lib/utils';
@@ -66,6 +66,12 @@ function DomainCard({ f }: { f: DomainFacts }) {
             ))}
           </div>
         </div>
+      )}
+      {f.deliverability && (
+        <p className="flex items-start gap-1.5 text-destructive">
+          <MailWarning className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {f.deliverability}
+        </p>
       )}
       <div className="space-y-1 border-t pt-2">
         <Row label={t('hover.dns', 'DNS records')}>{auto(f.dns)}</Row>
