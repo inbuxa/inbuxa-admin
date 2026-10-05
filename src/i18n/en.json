@@ -10,7 +10,9 @@
     "failedTitle": "Action failed",
     "noAdditionalData": "No additional data returned.",
     "otherGroup": "Other",
-    "title": "Actions"
+    "title": "Actions",
+    "confirmRun": "This runs on the server as soon as you choose Run. It has no options.",
+    "run": "Run"
   },
   "bootstrap": {
     "clipboardBlocked": "Your browser blocked clipboard access.",
@@ -242,10 +244,11 @@
     "list": "List",
     "noResults": "No results found.",
     "pages": "Pages",
-    "placeholder": "Search pages, fields, settings...",
     "settings": "Settings",
     "title": "Search",
-    "typeToSearch": "Type to search the admin panel."
+    "typeToSearch": "Type to search the admin panel.",
+    "placeholderActions": "Search pages and settings, or run an action...",
+    "actions": "Actions"
   },
   "jmapErrors": {
     "addressBookHasContents": "This address book has contacts. Remove them first.",
@@ -1949,5 +1952,19 @@
     "now": "now",
     "avgZone": "average · {{zone}}",
     "average": "average"
+  },
+  "commands": {
+    "actionHint": "Server action",
+    "guideHint": "Guided or manual, you choose next",
+    "themeLight": "Switch to the light theme",
+    "themeDark": "Switch to the dark theme",
+    "appHint": "This browser",
+    "signOut": "Sign out",
+    "trace": "Trace delivery to {{target}}",
+    "traceHint": "Opens the delivery test with this filled in",
+    "guideSending": "Set up how this server sends mail",
+    "guideLimits": "Set up sending and receiving limits",
+    "guideDirectory": "Connect a sign-in directory",
+    "guideCertificates": "Set up automatic certificates"
   }
 }

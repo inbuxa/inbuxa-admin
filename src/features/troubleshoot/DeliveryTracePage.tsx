@@ -2,10 +2,13 @@
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { isValidTarget } from './target';
 import { useTranslation } from 'react-i18next';
 import {
   Play,
@@ -324,16 +327,6 @@ function useRelativeTime(startedAtMs: number | null): string {
     m: Math.floor(s / 60),
     s: s % 60,
   });
-}
-
-function isValidTarget(target: string): boolean {
-  target = target.trim();
-  if (!target) return false;
-  if (target.includes('@')) {
-    const [local, domain] = target.split('@');
-    return local.length > 0 && domain.length > 0 && domain.includes('.');
-  }
-  return target.includes('.');
 }
 
 export function DeliveryTracePage() {

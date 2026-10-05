@@ -37,7 +37,7 @@ import { sectionLandingLink } from '@/lib/lastVisited';
 import { cn } from '@/lib/utils';
 import { isAdminLayout, useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
-import { buildEndSessionUrl, getPostLogoutRedirectUri } from '@/services/auth/oauth';
+import { signOut } from '@/services/auth/signOut';
 import { createElement, useEffect, useState } from 'react';
 import { useAccountStore } from '@/stores/accountStore';
 import { useSchemaStore } from '@/stores/schemaStore';
@@ -67,7 +67,6 @@ export function TopBar() {
   const accounts = useAuthStore((s) => s.accounts);
   const activeAccountId = useAuthStore((s) => s.activeAccountId);
   const switchAccount = useAuthStore((s) => s.switchAccount);
-  const logout = useAuthStore((s) => s.logout);
   const edition = useAccountStore((s) => s.edition);
   const hasObjectPermission = useAccountStore((s) => s.hasObjectPermission);
   const hasPermission = useAccountStore((s) => s.hasPermission);
@@ -116,7 +115,9 @@ export function TopBar() {
           className="flex h-9 w-full max-w-md items-center gap-2 rounded-md border border-input bg-transparent px-3 text-sm text-muted-foreground shadow-sm transition-colors hover:bg-accent"
         >
           <Search className="h-4 w-4" />
-          <span className="flex-1 text-left">{t('globalSearch.placeholder', 'Search pages, fields, settings...')}</span>
+          <span className="flex-1 text-left">
+            {t('globalSearch.placeholderActions', 'Search pages and settings, or run an action...')}
+          </span>
           <kbd className="pointer-events-none flex h-5 select-none items-center rounded border bg-muted px-1.5 font-mono text-[10px] font-medium">
             {IS_MAC ? '⌘K' : 'Ctrl K'}
           </kbd>
@@ -293,17 +294,7 @@ export function TopBar() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem
-              onClick={() => {
-                const endSessionEndpoint = useAuthStore.getState().endSessionEndpoint;
-                logout();
-                if (endSessionEndpoint) {
-                  window.location.href = buildEndSessionUrl(endSessionEndpoint, getPostLogoutRedirectUri());
-                } else {
-                  navigate('/login');
-                }
-              }}
-            >
+            <DropdownMenuItem onClick={() => signOut(navigate)}>
               <LogOut className="mr-2 h-4 w-4" />
               {t('logout', 'Logout')}
             </DropdownMenuItem>
