@@ -1954,7 +1954,9 @@
     "average": "average",
     "zoomReset": "Back to {{period}}",
     "zoomed": "Zoom",
-    "dragToZoom": "Drag to zoom"
+    "dragToZoom": "Drag to zoom",
+    "nodeMail": "Mail",
+    "nodeConnections": "Connections"
   },
   "commands": {
     "actionHint": "Server action",

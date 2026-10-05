@@ -187,7 +187,7 @@ export function summarize(samples: Metric[], ids: string[], timing: boolean): nu
   return total(samples, ids);
 }
 
-const CONNECTION_STARTS = [
+export const CONNECTION_STARTS = [
   'smtp.connection-start',
   'imap.connection-start',
   'pop3.connection-start',
@@ -224,7 +224,36 @@ export const STORE_ERRORS = [
   'store.http-store-error',
 ];
 export const THREAD_ERRORS = ['server.thread-error'];
-export const CLUSTER_IDS = new Set([...COORDINATION, ...STORE_ERRORS, ...THREAD_ERRORS]);
+/** inbuxa: what each node handled, for the strips on its card in the cluster roster. */
+export const NODE_MAIL = [...RECEIVED, ...SENT];
+export const CLUSTER_IDS = new Set([
+  ...COORDINATION,
+  ...STORE_ERRORS,
+  ...THREAD_ERRORS,
+  ...NODE_MAIL,
+  ...CONNECTION_STARTS,
+]);
+
+/**
+ * inbuxa: one node's share of `series`: only the samples it wrote. Servers
+ * before 2026.9.30 don't say which node wrote a sample, so nothing matches.
+ */
+export function nodeSeries(
+  samples: Metric[],
+  nodeId: number,
+  ids: string[],
+  from: Date,
+  to: Date,
+  buckets: number,
+): number[] {
+  return series(
+    samples.filter((m) => m.nodeId === nodeId),
+    ids,
+    from,
+    to,
+    buckets,
+  );
+}
 
 /** A node is reported stale when it hasn't renewed its lease in this long. */
 export const STALE_AFTER_MS = 3 * 60_000;

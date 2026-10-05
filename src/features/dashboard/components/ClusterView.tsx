@@ -15,12 +15,15 @@ import { useLiveMetricsStore } from '../stores/liveMetricsStore';
 import { formatValue, getBucketCount } from '../helpers';
 import {
   CLUSTER_IDS,
+  CONNECTION_STARTS,
   COORDINATION,
   LIVE_IDS,
   STALE_AFTER_MS,
   STORE_ERRORS,
   THREAD_ERRORS,
+  NODE_MAIL,
   cleanShare,
+  nodeSeries,
   series,
   total,
 } from '../commandCenter';
@@ -30,7 +33,7 @@ import { usePageHistory } from '../usePageHistory';
 import type { Tone } from '../tones';
 import { Gauge } from './Gauge';
 import { Panel } from './Panel';
-import { Readout } from './Readout';
+import { BarStrip, Readout } from './Readout';
 import { TrendChart } from './TrendChart';
 
 const NODES_VIEW = 'x:ClusterNode';
@@ -145,6 +148,16 @@ export function ClusterView() {
   ];
   const nodesHref = nodesSection && canViewObject(NODES_VIEW) ? `/${nodesSection}/${NODES_VIEW}` : null;
   const n = (v: number) => formatValue(v, 'number');
+  // inbuxa: each node's own traffic, from servers that say which node wrote a sample.
+  const perNode = samples.some((m) => m.nodeId !== undefined);
+  const nodeStrips = (nodeId: number) =>
+    [
+      { label: t('cc.nodeMail', 'Mail'), ids: NODE_MAIL },
+      { label: t('cc.nodeConnections', 'Connections'), ids: CONNECTION_STARTS },
+    ].map((row) => {
+      const bars = nodeSeries(samples, nodeId, row.ids, window.from, window.to, STRIP);
+      return { ...row, bars, total: bars.reduce((a, b) => a + b, 0) };
+    });
 
   return (
     <div className="space-y-5">
@@ -278,6 +291,21 @@ export function ClusterView() {
                     style={{ width: `${Math.max(2, share * 100)}%` }}
                   />
                 </div>
+                {perNode && node.nodeId !== undefined && (
+                  <div className="mt-3 space-y-1.5 border-t pt-2.5">
+                    {nodeStrips(Number(node.nodeId)).map((row) => (
+                      <div key={row.label} className="grid grid-cols-[6.5rem_1fr] items-end gap-2">
+                        <div className="flex items-baseline justify-between gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                          <span className="truncate">{row.label}</span>
+                          <span className="font-mono text-xs font-semibold tabular-nums text-foreground">
+                            {n(row.total)}
+                          </span>
+                        </div>
+                        <BarStrip bars={row.bars} tone={up ? 'primary' : 'crit'} className="h-4" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
