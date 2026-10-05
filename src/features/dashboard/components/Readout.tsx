@@ -25,7 +25,6 @@ interface ReadoutProps {
  * strip of bars showing how it moved over the period.
  */
 export function Readout({ label, value, detail, bars, tone = 'primary', href }: ReadoutProps) {
-  const max = bars ? Math.max(1, ...bars) : 1;
   const body = (
     <div
       className={cn(
@@ -38,21 +37,7 @@ export function Readout({ label, value, detail, bars, tone = 'primary', href }: 
       </div>
       <div className="mt-1.5 font-mono text-2xl font-semibold leading-none tabular-nums tracking-tight">{value}</div>
       {detail && <div className="mt-1 truncate text-[11px] text-muted-foreground">{detail}</div>}
-      {bars && bars.length > 0 && (
-        <div className="mt-auto flex h-5 items-end gap-px pt-2" aria-hidden>
-          {bars.map((b, i) => (
-            <span
-              key={i}
-              className="flex-1 rounded-[1px]"
-              style={{
-                height: `${Math.max(8, (b / max) * 100)}%`,
-                background: TONE_VAR[tone],
-                opacity: b === 0 ? 0.15 : 0.35 + 0.65 * (b / max),
-              }}
-            />
-          ))}
-        </div>
-      )}
+      {bars && bars.length > 0 && <BarStrip bars={bars} tone={tone} className="mt-auto pt-2" />}
     </div>
   );
   return href ? (
@@ -64,5 +49,25 @@ export function Readout({ label, value, detail, bars, tone = 'primary', href }: 
     </Link>
   ) : (
     body
+  );
+}
+
+/** The period in slices, as a strip of bars: taller and brighter as the slice is busier. */
+export function BarStrip({ bars, tone = 'primary', className }: { bars: number[]; tone?: Tone; className?: string }) {
+  const max = Math.max(1, ...bars);
+  return (
+    <div className={cn('flex h-5 items-end gap-px', className)} aria-hidden>
+      {bars.map((b, i) => (
+        <span
+          key={i}
+          className="flex-1 rounded-[1px]"
+          style={{
+            height: `${Math.max(8, (b / max) * 100)}%`,
+            background: TONE_VAR[tone],
+            opacity: b === 0 ? 0.15 : 0.35 + 0.65 * (b / max),
+          }}
+        />
+      ))}
+    </div>
   );
 }

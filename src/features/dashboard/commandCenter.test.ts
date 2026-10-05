@@ -10,6 +10,7 @@ import {
   cleanShare,
   latest,
   load,
+  nodeSeries,
   mean,
   nearQuota,
   queueHealth,
@@ -136,5 +137,27 @@ describe('cleanShare', () => {
   it('is the share of slices without a single event', () => {
     expect(cleanShare([0, 0, 3, 0])).toBe(0.75);
     expect(cleanShare([])).toBe(1);
+  });
+});
+
+describe('nodeSeries', () => {
+  const from = new Date('2026-10-05T00:00:00Z');
+  const to = new Date('2026-10-05T04:00:00Z');
+  const count = (hour: number, n: number, nodeId?: number): Metric => ({
+    '@type': 'Counter',
+    metric: 'queue.message-queued',
+    count: n,
+    timestamp: `2026-10-05T0${hour}:30:00Z`,
+    nodeId,
+  });
+  const samples = [count(0, 3, 1), count(0, 5, 2), count(2, 4, 1), count(3, 7, 2)];
+
+  it('counts only what the node wrote, slice by slice', () => {
+    expect(nodeSeries(samples, 1, ['queue.message-queued'], from, to, 4)).toEqual([3, 0, 4, 0]);
+    expect(nodeSeries(samples, 2, ['queue.message-queued'], from, to, 4)).toEqual([5, 0, 0, 7]);
+  });
+
+  it('finds nothing in samples that don’t say which node wrote them', () => {
+    expect(nodeSeries([count(0, 3), count(1, 2)], 1, ['queue.message-queued'], from, to, 4)).toEqual([0, 0, 0, 0]);
   });
 });
