@@ -1971,5 +1971,32 @@
     "guideLimits": "Set up sending and receiving limits",
     "guideDirectory": "Connect a sign-in directory",
     "guideCertificates": "Set up automatic certificates"
+  },
+  "sharedMailbox": {
+    "bannerTitle": "Shared mailbox: receives mail; nobody signs in to it.",
+    "bannerPeople": "Opened by",
+    "updated": "People changed",
+    "created": "Shared mailbox ready. Nobody can sign in to it now.",
+    "failed": "Nothing changed",
+    "editTitle": "Who has {{name}}",
+    "newTitle": "Add a shared mailbox",
+    "newBody": "Choose the account for the address, such as support@. From now on nobody signs in to it: the people below open it beside their own mail, and what they send goes out as it. Its automatic replies keep working. Make the account first under Accounts if it doesn’t exist yet.",
+    "account": "Account",
+    "chooseAccount": "Choose the account, such as support@",
+    "peopleHint": "People who open this mailbox beside their own mail. Each message sent as it is recorded with who sent it.",
+    "addPerson": "Add a person",
+    "createGo": "Make it shared",
+    "stopped": "No longer shared",
+    "stopTitle": "Stop sharing {{name}}",
+    "stopBody": "The people here lose it, and it becomes an ordinary account again: anyone who knows its password can sign in. Its mail stays where it is.",
+    "stopGo": "Stop sharing",
+    "unavailable": "This server doesn’t offer shared mailboxes.",
+    "title": "Shared mailboxes",
+    "subtitle": "Addresses like support@ or legal@ that belong to no one person. Nobody signs in to them; the people you choose open them beside their own mail, and replies go out from the shared address.",
+    "addAction": "Add a shared mailbox…",
+    "none": "No shared mailboxes yet.",
+    "editAction": "People…",
+    "stopAction": "Stop sharing…",
+    "noPeople": "Nobody has it yet."
   }
 }
