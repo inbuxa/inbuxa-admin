@@ -6,7 +6,8 @@
  * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Zap, Loader2, ChevronRight, CircleCheck, CircleAlert } from 'lucide-react';
 import i18n from '@/i18n';
@@ -26,6 +27,8 @@ import { spamVerdictSubject } from '@/features/ai/explain/explain';
 
 type ActionState =
   | { kind: 'pick' }
+  // inbuxa: an action without options, chosen from the command palette, waits to be confirmed.
+  | { kind: 'confirm'; variant: ObjectVariant }
   | { kind: 'form'; variant: ObjectVariant; formData: Record<string, unknown> }
   | { kind: 'submitting'; variant: ObjectVariant }
   | {
@@ -46,6 +49,7 @@ export function ActionPage({ viewName }: ActionPageProps) {
   const hasObjectPermission = useAccountStore((s) => s.hasObjectPermission);
   const hasPermission = useAccountStore((s) => s.hasPermission);
   const [state, setState] = useState<ActionState>({ kind: 'pick' });
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const resolved = useMemo(() => {
     if (!schema) return null;
@@ -155,7 +159,63 @@ export function ActionPage({ viewName }: ActionPageProps) {
     [schema, resolved, t],
   );
 
+  // inbuxa: `?action=<name>` from the command palette opens that action. One
+  // with options shows its form; one without asks first, since here a click
+  // on it runs it at once. Read while rendering, so it also works when the
+  // palette is used on this page; the effect then takes it out of the address.
+  const requested = searchParams.get('action');
+  const [openedFromPalette, setOpenedFromPalette] = useState<string | null>(null);
+  if (requested !== openedFromPalette) {
+    setOpenedFromPalette(requested);
+    const variant = requested && sch?.type === 'multiple' ? sch.variants.find((v) => v.name === requested) : undefined;
+    if (schema && variant && canCreate && hasPermission(`action${variant.name}`)) {
+      if (variant.schemaName) {
+        const defaults = schema.fields[variant.schemaName]?.defaults;
+        setState({ kind: 'form', variant, formData: defaults ? { ...defaults } : {} });
+      } else {
+        setState({ kind: 'confirm', variant });
+      }
+    }
+  }
+  useEffect(() => {
+    if (!requested) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('action');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [requested, setSearchParams]);
+
   if (!schema || !resolved || !sch) return null;
+
+  if (state.kind === 'confirm') {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 pt-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
+              {state.variant.label}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm">
+              {t('actions.confirmRun', 'This runs on the server as soon as you choose Run. It has no options.')}
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={() => handlePickVariant(state.variant)}>{t('actions.run', 'Run')}</Button>
+              <Button variant="outline" onClick={() => setState({ kind: 'pick' })}>
+                {t('actions.backToActions', 'Back to actions')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (state.kind === 'pick') {
     return (
