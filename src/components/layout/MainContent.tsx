@@ -147,6 +147,11 @@ const AccountLockBanner = lazyFeature(
   () => import('@/features/lock/AccountLockBanner'),
   (m) => m.AccountLockBanner,
 );
+// inbuxa: who may share mail (multi-account spec, MA-C)
+const SharingSwitches = lazyFeature(
+  () => import('@/features/sharing/SharingSwitches'),
+  (m) => m.SharingSwitches,
+);
 const TenantLegacyProtocols = lazyFeature(
   () => import('@/features/hardening/TenantLegacyProtocols'),
   (m) => m.TenantLegacyProtocols,
@@ -321,6 +326,15 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     if (resolved.objectName === 'x:SpamSettings') {
       return <SpamSettingsPage viewName={viewName} />;
     }
+    // inbuxa: Sharing opens with who may share (MA-C)
+    if (resolved.objectName === 'x:Sharing') {
+      return (
+        <div className="space-y-4">
+          <SharingSwitches />
+          <DynamicForm viewName={viewName} objectId="singleton" />
+        </div>
+      );
+    }
     if (resolved.objectName === 'x:Security') {
       return (
         <div className="space-y-4">
@@ -366,6 +380,7 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
       return (
         <div className="space-y-4">
           <TenantLegacyProtocols tenantId={id} />
+          <SharingSwitches tenantId={id} />
           {page}
         </div>
       );
