@@ -52,7 +52,8 @@ export const FIELD_HELP: Record<string, string> = {
   'x:UserAccount.credentials': 'How this person signs in: a password, app passwords for mail apps, and more.',
   'x:UserAccount.locale': 'The language for messages the server sends this person.',
   'x:UserAccount.timeZone': 'Used for calendar invitations and scheduled messages.',
-  'x:GroupAccount.name': 'The group’s address, before the @. Mail to it reaches every member.',
+  'x:GroupAccount.name':
+    'The group’s address, before the @. Mail to it lands in a mailbox the members share, not in each member’s own.',
 
   // DNS providers
   'x:DnsServerCloudflare.secret':
