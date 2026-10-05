@@ -9,7 +9,14 @@
 
 import type { Metric, MetricId, Period } from './types/metrics';
 import type { Card, Series, MetricFormat, Aggregate } from './types/schema';
-import { PRESET_MS, BUCKET_CONFIG, CUSTOM_BUCKET_COUNT, SPARKLINE_BUCKET_COUNT } from './types/metrics';
+import {
+  PRESET_MS,
+  BUCKET_CONFIG,
+  CUSTOM_BUCKET_COUNT,
+  HOUR_MS,
+  MIN_ZOOM_MS,
+  SPARKLINE_BUCKET_COUNT,
+} from './types/metrics';
 
 export function metricToScalar(m: Metric): number {
   if (m['@type'] === 'Histogram') {
@@ -82,7 +89,11 @@ export function periodKey(p: Period): string {
 }
 
 export function getBucketCount(p: Period): number {
-  if (p.kind === 'custom') return CUSTOM_BUCKET_COUNT;
+  if (p.kind === 'custom') {
+    // inbuxa: a slice per hour of the window, as history is sampled hourly.
+    const hours = Math.round((p.to.getTime() - p.from.getTime()) / HOUR_MS);
+    return Math.min(CUSTOM_BUCKET_COUNT, Math.max(MIN_ZOOM_MS / HOUR_MS, hours));
+  }
   return BUCKET_CONFIG[p.preset];
 }
 
@@ -290,4 +301,45 @@ export function collectLiveMetricIds(cards: Card[] | undefined): Set<MetricId> {
     }
   }
   return ids;
+}
+
+/**
+ * inbuxa: the window a drag across slices `a` to `b` of a chart zooms to: from
+ * the start of the first slice to the end of the last. A window under three
+ * hours widens around its middle, staying inside the chart's own. Null when
+ * the chart's window is already that narrow, so there's nothing to zoom into.
+ */
+export function zoomWindow(
+  from: Date,
+  to: Date,
+  buckets: number,
+  a: number,
+  b: number,
+): { from: Date; to: Date } | null {
+  const start = from.getTime();
+  const end = to.getTime();
+  if (end - start <= MIN_ZOOM_MS || buckets <= 0) return null;
+  const width = (end - start) / buckets;
+  const lo = Math.max(0, Math.min(a, b));
+  const hi = Math.min(buckets - 1, Math.max(a, b));
+  let zFrom = start + lo * width;
+  let zTo = start + (hi + 1) * width;
+  if (zTo - zFrom < MIN_ZOOM_MS) {
+    const mid = (zFrom + zTo) / 2;
+    zFrom = Math.max(start, Math.min(end - MIN_ZOOM_MS, mid - MIN_ZOOM_MS / 2));
+    zTo = zFrom + MIN_ZOOM_MS;
+  }
+  return { from: new Date(Math.round(zFrom)), to: new Date(Math.round(zTo)) };
+}
+
+/**
+ * inbuxa: which of `buckets` slices a pointer at `x` is over, on a plot from
+ * `left` to `right`. Lines and areas put the slices on points, first at the
+ * left edge and last at the right; bars put each in a band of its own.
+ */
+export function sliceAt(x: number, left: number, right: number, buckets: number, band: boolean): number | null {
+  if (buckets <= 0 || right <= left) return null;
+  const f = Math.min(1, Math.max(0, (x - left) / (right - left)));
+  const i = band ? Math.floor(f * buckets) : Math.round(f * (buckets - 1));
+  return Math.min(buckets - 1, i);
 }

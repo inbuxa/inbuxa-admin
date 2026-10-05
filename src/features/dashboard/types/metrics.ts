@@ -49,4 +49,8 @@ export const BUCKET_CONFIG: Record<PresetKey, number> = {
 };
 
 export const CUSTOM_BUCKET_COUNT = 60;
+// inbuxa: history is sampled hourly unless set otherwise (`metricsCollectionInterval`),
+// so a zoomed window gets a slice per hour, 3 to 60 of them, and is never under 3 hours.
+export const HOUR_MS = 3_600_000;
+export const MIN_ZOOM_MS = 3 * HOUR_MS;
 export const SPARKLINE_BUCKET_COUNT = 20;
