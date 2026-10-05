@@ -7,7 +7,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { Gauge as GaugeIcon, RefreshCw } from 'lucide-react';
+import { Gauge as GaugeIcon, RefreshCw, X } from 'lucide-react';
 import type { Dashboard } from '../types/schema';
 import { cn } from '@/lib/utils';
 import { AUTO_REFRESH, useDashboardStore, type AutoRefresh } from '../stores/dashboardStore';
@@ -71,6 +71,8 @@ export function PeriodSwitch({ loading = false }: { loading?: boolean }) {
   const { t } = useTranslation();
   const period = useDashboardStore((s) => s.period);
   const setPreset = useDashboardStore((s) => s.setPreset);
+  const zoomedFrom = useDashboardStore((s) => s.zoomedFrom);
+  const resetZoom = useDashboardStore((s) => s.resetZoom);
   const every = useDashboardStore((s) => s.autoRefresh);
   const setEvery = useDashboardStore((s) => s.setAutoRefresh);
   const onRefresh = useDashboardStore((s) => s.bump);
@@ -103,6 +105,21 @@ export function PeriodSwitch({ loading = false }: { loading?: boolean }) {
           </button>
         ))}
       </div>
+      {/* inbuxa: zoomed in from a chart, the window shown, and the way back. */}
+      {zoomedFrom && period.kind === 'custom' && (
+        <button
+          type="button"
+          onClick={resetZoom}
+          title={t('cc.zoomReset', 'Back to {{period}}', {
+            period: zoomedFrom.kind === 'preset' ? zoomedFrom.preset.toUpperCase() : '',
+          })}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/50 bg-primary/10 px-2.5 py-1 font-mono text-[11px] font-semibold tracking-wider text-foreground transition-colors hover:bg-primary/20"
+        >
+          <span className="uppercase text-muted-foreground">{t('cc.zoomed', 'Zoom')}</span>
+          {formatZoom(period.from, period.to)}
+          <X className="h-3 w-3 text-muted-foreground" aria-hidden />
+        </button>
+      )}
       <div className="flex items-center rounded-lg border bg-background/60">
         <button
           type="button"
@@ -208,4 +225,13 @@ export function DashNav({
       )}
     </nav>
   );
+}
+
+/** inbuxa: a zoomed window, short: "5 Oct 14:00 – 17:00", or both dates when it spans days. */
+function formatZoom(from: Date, to: Date): string {
+  const day = (d: Date) => d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  const time = (d: Date) => d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return day(from) === day(to)
+    ? `${day(from)} ${time(from)} – ${time(to)}`
+    : `${day(from)} ${time(from)} – ${day(to)} ${time(to)}`;
 }

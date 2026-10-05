@@ -1951,7 +1951,10 @@
     },
     "now": "now",
     "avgZone": "average · {{zone}}",
-    "average": "average"
+    "average": "average",
+    "zoomReset": "Back to {{period}}",
+    "zoomed": "Zoom",
+    "dragToZoom": "Drag to zoom"
   },
   "commands": {
     "actionHint": "Server action",

@@ -29,7 +29,10 @@ import {
   formatValue,
   getBucketCount,
   seriesBucketValue,
+  sliceAt,
+  zoomWindow,
 } from '../helpers';
+import { useDashboardStore } from '../stores/dashboardStore';
 import { LATENCIES, summarize } from '../commandCenter';
 import { hrefFor, linkForMetrics } from '../links';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -74,11 +77,16 @@ export function TrendChart({ chart, samples, window: { from, to }, period, class
   const format = chart.valueFormat ?? 'number';
   const timing = format === 'duration';
   const buckets = getBucketCount(period);
+  const zoomTo = useDashboardStore((s) => s.zoomTo);
+  // Dragging across the chart: the slices it started and is now over.
+  const [drag, setDrag] = useState<{ a: number; b: number } | null>(null);
+  const canZoom = zoomWindow(from, to, buckets, 0, 1) !== null;
 
   const data = useMemo(() => {
     const slices = bucketize(samples, from, to, buckets);
     return bucketTimestamps(from, to, buckets).map((ts, i) => {
-      const point: Record<string, number | string | null> = { tick: formatTimeTick(ts, period) };
+      // Charted by slice, so two slices that print alike ("14:00" on two days) stay apart.
+      const point: Record<string, number | string | null> = { i, tick: formatTimeTick(ts, period) };
       for (const s of chart.series) point[s.label] = seriesBucketValue(s, slices[i]) ?? (timing ? null : 0);
       return point;
     });
@@ -90,10 +98,10 @@ export function TrendChart({ chart, samples, window: { from, to }, period, class
   const peak = useMemo(() => {
     if (timing || chart.kind === 'bar' || chart.series.length === 0) return null;
     const keys = chart.stacked ? chart.series.map((s) => s.label) : [chart.series[0].label];
-    let best: { tick: string; v: number } | null = null;
+    let best: { i: number; v: number } | null = null;
     for (const p of data) {
       const v = keys.reduce((sum, k) => sum + Number(p[k] ?? 0), 0);
-      if (v > 0 && (!best || v > best.v)) best = { tick: String(p.tick), v };
+      if (v > 0 && (!best || v > best.v)) best = { i: Number(p.i), v };
     }
     return best;
   }, [data, chart.series, chart.stacked, chart.kind, timing]);
@@ -105,7 +113,51 @@ export function TrendChart({ chart, samples, window: { from, to }, period, class
   const href = link && canViewObject(link.viewName) ? hrefFor(link) : null;
   const fmt = (v: number) => formatValue(v, format);
 
-  const common = { data, width, height: HEIGHT, margin: { top: 16, right: 24, left: 0, bottom: 0 } };
+  const tickAt = (i: unknown) => String(data[Number(i)]?.tick ?? '');
+  // Dragging is read off the pointer against the plot area (the chart's grid),
+  // not off recharts' hover state, which runs a frame behind: a quick sweep
+  // would end on the slice it started from.
+  const band = chart.kind === 'bar';
+  const sliceAtPointer = (clientX: number) => {
+    const plot = ref.current?.querySelector('.recharts-cartesian-grid')?.getBoundingClientRect();
+    return plot ? sliceAt(clientX, plot.left, plot.right, buckets, band) : null;
+  };
+  const dragRef = useRef<{ a: number; b: number } | null>(null);
+  const setDragBoth = (d: { a: number; b: number } | null) => {
+    dragRef.current = d;
+    setDrag(d);
+  };
+  const zoomHandlers = canZoom
+    ? {
+        onMouseDown: (e: React.MouseEvent) => {
+          if (e.button !== 0) return;
+          const i = sliceAtPointer(e.clientX);
+          if (i !== null) setDragBoth({ a: i, b: i });
+        },
+        onMouseMove: (e: React.MouseEvent) => {
+          const d = dragRef.current;
+          const i = d ? sliceAtPointer(e.clientX) : null;
+          if (d && i !== null && i !== d.b) setDragBoth({ a: d.a, b: i });
+        },
+        onMouseUp: (e: React.MouseEvent) => {
+          const d = dragRef.current;
+          const end = d ? (sliceAtPointer(e.clientX) ?? d.b) : null;
+          // A click isn't a drag: only a sweep over two slices or more zooms.
+          if (d && end !== null && d.a !== end) {
+            const w = zoomWindow(from, to, buckets, d.a, end);
+            if (w) zoomTo(w.from, w.to);
+          }
+          setDragBoth(null);
+        },
+        onMouseLeave: () => setDragBoth(null),
+      }
+    : {};
+  const common = {
+    data,
+    width,
+    height: HEIGHT,
+    margin: { top: 16, right: 24, left: 0, bottom: 0 },
+  };
   const chrome = (
     <>
       <defs>
@@ -117,7 +169,7 @@ export function TrendChart({ chart, samples, window: { from, to }, period, class
         ))}
       </defs>
       <CartesianGrid vertical={false} stroke="var(--border)" />
-      <XAxis dataKey="tick" tick={AXIS} tickLine={false} axisLine={false} minTickGap={28} />
+      <XAxis dataKey="i" tick={AXIS} tickLine={false} axisLine={false} minTickGap={28} tickFormatter={tickAt} />
       <YAxis tick={AXIS} tickLine={false} axisLine={false} width={56} tickFormatter={fmt} allowDecimals={timing} />
       {zones && (
         <>
@@ -142,7 +194,7 @@ export function TrendChart({ chart, samples, window: { from, to }, period, class
         content={({ active, payload, label }) =>
           active && payload?.length ? (
             <div className="rounded-lg border bg-popover px-3 py-2 font-mono text-xs shadow-md">
-              <div className="mb-1 text-muted-foreground">{label}</div>
+              <div className="mb-1 text-muted-foreground">{tickAt(label)}</div>
               {payload.map((p) => (
                 <div key={String(p.dataKey)} className="flex items-center gap-2">
                   <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
@@ -156,9 +208,19 @@ export function TrendChart({ chart, samples, window: { from, to }, period, class
           ) : null
         }
       />
+      {drag && drag.a !== drag.b && (
+        <ReferenceArea
+          x1={Math.min(drag.a, drag.b)}
+          x2={Math.max(drag.a, drag.b)}
+          fill="var(--primary)"
+          fillOpacity={0.12}
+          stroke="var(--primary)"
+          strokeOpacity={0.5}
+        />
+      )}
       {peak && (
         <ReferenceDot
-          x={peak.tick}
+          x={peak.i}
           y={peak.v}
           r={4}
           fill="var(--card)"
@@ -245,9 +307,20 @@ export function TrendChart({ chart, samples, window: { from, to }, period, class
             {timing && <span className="text-[10px] uppercase text-muted-foreground">{t('cc.avg', 'avg')}</span>}
           </span>
         ))}
+        {canZoom && (
+          <span className="ml-auto self-center font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            {t('cc.dragToZoom', 'Drag to zoom')}
+          </span>
+        )}
         {chart.description && <span className="basis-full text-xs text-muted-foreground">{chart.description}</span>}
       </div>
-      <div ref={ref} style={{ height: HEIGHT }}>
+      <div
+        ref={ref}
+        // A press to drag focuses the chart; keep the ring for the keyboard only.
+        className="[&_.recharts-surface:focus:not(:focus-visible)]:outline-none"
+        style={{ height: HEIGHT, ...(canZoom ? { cursor: 'crosshair', userSelect: 'none' } : {}) }}
+        {...zoomHandlers}
+      >
         {width > 0 && (
           <Kind {...common}>
             {chrome}

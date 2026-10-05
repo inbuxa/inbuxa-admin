@@ -18,6 +18,14 @@ interface DashboardState {
   period: Period;
   setPeriod: (period: Period) => void;
   setPreset: (preset: PresetKey) => void;
+  /**
+   * inbuxa: the period a chart was zoomed from, while zoomed. Zooming makes the
+   * period a custom window; only this one is remembered, so a reload is back
+   * at the preset rather than in an old window.
+   */
+  zoomedFrom: Period | null;
+  zoomTo: (from: Date, to: Date) => void;
+  resetZoom: () => void;
   /** INBUXA: minutes between automatic refreshes of the dashboards; 0 is off. */
   autoRefresh: AutoRefresh;
   setAutoRefresh: (minutes: AutoRefresh) => void;
@@ -31,8 +39,12 @@ export const useDashboardStore = create<DashboardState>()(
     (set) => ({
       period: { kind: 'preset', preset: '24h' } as Period,
 
-      setPeriod: (period) => set({ period }),
-      setPreset: (preset) => set({ period: { kind: 'preset', preset } }),
+      setPeriod: (period) => set({ period, zoomedFrom: null }),
+      setPreset: (preset) => set({ period: { kind: 'preset', preset }, zoomedFrom: null }),
+      zoomedFrom: null,
+      zoomTo: (from, to) =>
+        set((s) => ({ period: { kind: 'custom', from, to }, zoomedFrom: s.zoomedFrom ?? s.period })),
+      resetZoom: () => set((s) => (s.zoomedFrom ? { period: s.zoomedFrom, zoomedFrom: null } : {})),
       autoRefresh: 5,
       setAutoRefresh: (autoRefresh) => set({ autoRefresh }),
       tick: 0,
@@ -40,7 +52,7 @@ export const useDashboardStore = create<DashboardState>()(
     }),
     {
       name: 'dashboard.period',
-      partialize: (state) => ({ period: state.period, autoRefresh: state.autoRefresh }),
+      partialize: (state) => ({ period: state.zoomedFrom ?? state.period, autoRefresh: state.autoRefresh }),
     },
   ),
 );
