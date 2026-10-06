@@ -13,6 +13,7 @@ import { LEGACY_PROTOCOLS_VIEW } from '@/features/hardening/LegacyProtocolsBanne
 import { useLegacyProtocolsOff } from '@/features/hardening/useLegacyProtocolsOff';
 import { useCriticalCount } from '@/features/security/useCriticalCount';
 import { useDeliverabilityAlarms } from '@/features/deliverability/useDeliverabilityAlarms';
+import { useReportFailures } from '@/features/scheduledReports/useReportFailures';
 import { useSchemaStore } from '@/stores/schemaStore';
 import type { Dashboard } from '../types/schema';
 import type { Metric } from '../types/metrics';
@@ -64,6 +65,8 @@ export function DashboardShell({
   const critical = useCriticalCount();
   // inbuxa: DL-18
   const deliverability = useDeliverabilityAlarms(tick);
+  const failingReports = useReportFailures(tick);
+  const reportsSection = useSchemaStore((s) => s.viewToSection['CustomComponent/ScheduledReports']);
   const deliverabilitySection = useSchemaStore((s) => s.viewToSection['CustomComponent/Deliverability']);
   const legacyOff = useLegacyProtocolsOff();
 
@@ -106,6 +109,8 @@ export function DashboardShell({
     critical,
     deliverability,
     deliverabilityHref: deliverabilitySection ? `/${deliverabilitySection}/CustomComponent/Deliverability` : null,
+    failingReports,
+    failingReportsHref: reportsSection ? `/${reportsSection}/CustomComponent/ScheduledReports` : null,
     samples,
     liveStatus,
     nodesHref: health ? `/${section}/Dashboard/cluster` : null,

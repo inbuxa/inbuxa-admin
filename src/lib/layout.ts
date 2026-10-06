@@ -119,6 +119,10 @@ function checkSpecialLink(
   if (viewName === 'CustomComponent/Deliverability') {
     return { visible: canGet ? canGet('sysDeliverability') : true, enterprise: false };
   }
+  // inbuxa: Reports › Scheduled, for whoever may see the reports (scheduled-reports spec)
+  if (viewName === 'CustomComponent/ScheduledReports') {
+    return { visible: canGet ? canGet('sysScheduledReport') : true, enterprise: false };
+  }
 
   // INBUXA: a page this console can't draw is hidden. A server newer than the
   // console lists pages the console doesn't know yet, and counting them as
