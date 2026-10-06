@@ -17,7 +17,8 @@
     "i18n": "node tools/i18n-extract.mjs",
     "i18n:check": "node tools/i18n-extract.mjs --check",
     "notice:check": "node tools/notice-check.mjs",
-    "notice:fix": "node tools/notice-check.mjs --fix"
+    "notice:fix": "node tools/notice-check.mjs --fix",
+    "manual": "node tools/build-manual.mjs --schema ../inbuxa-server/resources/schema/schema.json.gz --out ../inbuxa.org/docs-site/docs/reference"
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",
