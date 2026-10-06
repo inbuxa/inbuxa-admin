@@ -30,6 +30,8 @@ import { SenderChecksPage } from '@/features/senderChecks/SenderChecksPage';
 import { DirectorySetupCard } from '@/features/directory/DirectorySetupCard';
 import { SendingSetupCard } from '@/features/sending/SendingSetupCard';
 import { CertificateSetupCard } from '@/features/certificates/CertificateSetupCard';
+import { DmarcSummaryCard } from '@/features/incomingReports/DmarcSummaryCard';
+import { TlsSummaryCard } from '@/features/incomingReports/TlsSummaryCard';
 import type { Schema } from '@/types/schema';
 
 function lazyFeature<M, P>(load: () => Promise<M>, select: (module: M) => ComponentType<P>) {
@@ -410,6 +412,15 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     return (
       <div className="space-y-4">
         <CertificateSetupCard />
+        <DynamicList viewName={viewName} />
+      </div>
+    );
+  }
+  // inbuxa: received reports open with who sends as us and whether they pass (admin UX roadmap, item 6).
+  if (viewName === 'x:DmarcExternalReport' || viewName === 'x:TlsExternalReport') {
+    return (
+      <div className="space-y-4">
+        {viewName === 'x:DmarcExternalReport' ? <DmarcSummaryCard /> : <TlsSummaryCard />}
         <DynamicList viewName={viewName} />
       </div>
     );
