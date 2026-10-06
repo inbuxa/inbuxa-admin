@@ -42,6 +42,9 @@ export interface AttentionInput {
   /** inbuxa: blocklist and reverse-DNS failures on Domains › Deliverability (DL-18). */
   deliverability?: number | null;
   deliverabilityHref?: string | null;
+  /** inbuxa: scheduled reports whose last two runs failed (RP-17). */
+  failingReports?: number | null;
+  failingReportsHref?: string | null;
   samples: Metric[];
   liveStatus: string;
   nodesHref: string | null;
@@ -58,6 +61,8 @@ export function buildAttention({
   critical,
   deliverability,
   deliverabilityHref,
+  failingReports,
+  failingReportsHref,
   samples,
   liveStatus,
   nodesHref,
@@ -94,6 +99,20 @@ export function buildAttention({
       }),
       detail: t('cc.a.deliverabilityDetail', 'Other mail servers may refuse mail from this one.'),
       href: deliverabilityHref ?? null,
+    });
+  if (failingReports)
+    attention.push({
+      id: 'scheduledReports',
+      severity: 'warn',
+      icon: MailWarning,
+      count: failingReports,
+      title: t('cc.a.scheduledReports', {
+        count: failingReports,
+        defaultValue_one: 'scheduled report keeps failing',
+        defaultValue_other: 'scheduled reports keep failing',
+      }),
+      detail: t('cc.a.scheduledReportsDetail', 'Their last two runs failed; the report page says why.'),
+      href: failingReportsHref ?? null,
     });
   if (health && health.unhealthy)
     attention.push({
