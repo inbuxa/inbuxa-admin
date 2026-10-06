@@ -2141,5 +2141,13 @@
     "sessions": "{{succeeded}} secure deliveries, {{failed}} failed",
     "failedSessions_one": "({{count}} connection",
     "failedSessions_other": "({{count}} connections"
+  },
+  "undoDelete": {
+    "failed_one": "Not deleted",
+    "failed_other": "{{count}} not deleted",
+    "deleted": "Deleted {{what}}",
+    "undo": "Undo",
+    "count_one": "{{count}} {{name}}",
+    "count_other": "{{count}} {{name}}"
   }
 }

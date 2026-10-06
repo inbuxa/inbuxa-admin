@@ -53,6 +53,7 @@ import {
   resolveSchema,
   resolveList,
   resolveForm,
+  getDisplayProperty,
   resolveVariantForm,
   buildCreateDefaults,
   buildEmbeddedDefaults,
@@ -63,6 +64,7 @@ import { friendlySetError, validationErrorMessage } from '@/lib/jmapErrors';
 import { coerceLabel } from '@/lib/objectOptions';
 import { SECRET_MASK } from '@/lib/jmapUtils';
 import { toast } from '@/hooks/use-toast';
+import { deleteWithUndo } from '@/components/common/undoableDelete';
 import { logFormChange } from '@/lib/debug';
 import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DnsConnectCard } from '@/features/dns/DnsConnectCard';
@@ -115,7 +117,6 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
   const [serverCreatedProps, setServerCreatedProps] = useState<Record<string, unknown> | null>(null);
   const [createdObjectId, setCreatedObjectId] = useState<string | null>(null);
 
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
 
   const currentFields = useMemo((): Fields | null => {
@@ -680,41 +681,22 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
     t,
   ]);
 
-  const handleDelete = useCallback(async () => {
+  // inbuxa: no "Are you sure?"; the delete waits behind an Undo toast (admin UX roadmap, item 9).
+  const handleDelete = useCallback(() => {
     if (!resolved || !objectId) return;
-
-    setSaving(true);
-    setGeneralError(null);
-
-    try {
-      const { obj } = resolved;
-      const accountId = getAccountId(obj.objectName);
-      const responses = await jmapSet(obj.objectName, accountId, { destroy: [objectId] });
-      const setResponse = responses[responses.length - 1];
-      const setResult = setResponse[1] as unknown as JmapSetResponse;
-
-      if (setResult.destroyed && setResult.destroyed.includes(objectId)) {
-        const list = resolveList(schema!, viewName, obj.objectName);
-        const label = list?.singularName ?? obj.objectType.description;
-        toast({
-          title: t('form.deletedSuccess', '{{name}} deleted successfully', {
-            name: label.charAt(0).toUpperCase() + label.slice(1),
-          }),
-          variant: 'success',
-        });
-        setOriginalData({ ...formData });
-        const section = viewToSection[viewName] ?? '';
-        navigate(`/${section}/${viewName}`);
-      } else if (setResult.notDestroyed && setResult.notDestroyed[objectId]) {
-        const error = setResult.notDestroyed[objectId];
-        setGeneralError(friendlySetError(error));
-      }
-    } catch (err) {
-      setGeneralError(err instanceof Error ? err.message : t('form.failedToDelete', 'Failed to delete.'));
-    } finally {
-      setSaving(false);
-    }
-  }, [resolved, viewName, objectId, viewToSection, navigate, schema, formData, t]);
+    const { obj } = resolved;
+    const list = resolveList(schema!, viewName, obj.objectName);
+    const label = (list?.singularName ?? obj.objectType.description).toLowerCase();
+    const shown = formData[getDisplayProperty(schema!, obj.objectName)];
+    deleteWithUndo({
+      objectName: obj.objectName,
+      ids: [objectId],
+      what: typeof shown === 'string' && shown ? shown : label,
+    });
+    setOriginalData({ ...formData });
+    const section = viewToSection[viewName] ?? '';
+    navigate(`/${section}/${viewName}`);
+  }, [resolved, viewName, objectId, viewToSection, navigate, schema, formData]);
 
   const canEdit = isCreate || canUpdateObject(viewName);
   const canDelete = !isCreate && !isSingleton && canDestroyObject(viewName);
@@ -948,7 +930,7 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
         <div className="flex items-center justify-between pt-2 pb-8">
           <div className="flex items-center gap-3">
             {canDelete && (
-              <Button type="button" variant="destructive" disabled={saving} onClick={() => setDeleteConfirmOpen(true)}>
+              <Button type="button" variant="destructive" disabled={saving} onClick={handleDelete}>
                 <Trash2 className="h-4 w-4 mr-2" />
                 {t('common.delete', 'Delete')}
               </Button>
@@ -1042,51 +1024,6 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
               }}
             >
               {t('form.resetConfirm', 'Fill in defaults')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={deleteConfirmOpen}
-        onOpenChange={(open) => {
-          if (!open) setDeleteConfirmOpen(false);
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            {(() => {
-              const list = resolved ? resolveList(schema, viewName, resolved.obj.objectName) : null;
-              const label = (
-                list?.singularName ??
-                resolved?.obj.objectType.description ??
-                t('form.item', 'item')
-              ).toLowerCase();
-              const titleLabel = label.charAt(0).toUpperCase() + label.slice(1);
-              return (
-                <>
-                  <AlertDialogTitle>{t('form.deleteTitle', 'Delete {{name}}?', { name: titleLabel })}</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {t(
-                      'form.deleteDescription',
-                      'This action cannot be undone. This will permanently delete this {{name}}.',
-                      { name: label },
-                    )}
-                  </AlertDialogDescription>
-                </>
-              );
-            })()}
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t('common.cancel', 'Cancel')}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setDeleteConfirmOpen(false);
-                handleDelete();
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {t('common.delete', 'Delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

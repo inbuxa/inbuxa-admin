@@ -159,7 +159,8 @@ function toast({ ...props }: Toast) {
     },
   });
 
-  setTimeout(dismiss, TOAST_AUTO_DISMISS_MS);
+  // inbuxa: honor the toast's own duration (an Undo toast stays up longer).
+  setTimeout(dismiss, props.duration ?? TOAST_AUTO_DISMISS_MS);
 
   return {
     id: id,
