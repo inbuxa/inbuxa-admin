@@ -17,7 +17,7 @@ visible to everyone, including whoever would use it, before there is a fix.
 
 Report it privately by email to:
 
-**johnellisATlinuxDOTcom**
+**securityATcoffeylabsDOTorg**
 
 Include as much as you can of: what it lets someone do, how to reproduce it,
 the version or commit affected, and whether it needs an authenticated session
