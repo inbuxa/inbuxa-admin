@@ -16,6 +16,9 @@ import { getAccountId, jmapRequest } from '@/services/jmap/client';
 /** At most this many of each kind are read; the newest ones win. */
 export const REPORT_LIMIT = 500;
 
+/** The server sends an objectList as a map keyed by index ("0", "1", …); read it with jmapMapToArray. */
+export type JmapList<T> = T[] | Record<string, T>;
+
 export type DmarcResult = 'pass' | 'fail' | 'unspecified';
 export type Disposition = 'none' | 'pass' | 'quarantine' | 'reject' | 'unspecified';
 
@@ -27,8 +30,8 @@ export interface DmarcRecord {
   evaluatedDisposition: Disposition;
   evaluatedDkim: DmarcResult;
   evaluatedSpf: DmarcResult;
-  dkimResults?: { domain: string; selector?: string; result: string }[];
-  spfResults?: { domain: string; result: string }[];
+  dkimResults?: JmapList<{ domain: string; selector?: string; result: string }>;
+  spfResults?: JmapList<{ domain: string; result: string }>;
 }
 
 export interface DmarcReport {
@@ -38,7 +41,7 @@ export interface DmarcReport {
   policyDomain: string;
   policyDisposition?: string;
   policyTestingMode?: boolean;
-  records: DmarcRecord[];
+  records: JmapList<DmarcRecord>;
 }
 
 export interface DmarcExternalReport {
@@ -59,7 +62,7 @@ export interface TlsPolicy {
   policyType?: string;
   totalSuccessfulSessions: number;
   totalFailedSessions: number;
-  failureDetails?: TlsFailure[];
+  failureDetails?: JmapList<TlsFailure>;
 }
 
 export interface TlsExternalReport {
@@ -69,7 +72,7 @@ export interface TlsExternalReport {
     organizationName?: string | null;
     dateRangeStart: string;
     dateRangeEnd: string;
-    policies: TlsPolicy[];
+    policies: JmapList<TlsPolicy>;
   };
 }
 
