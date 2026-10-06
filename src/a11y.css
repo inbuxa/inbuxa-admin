@@ -1,0 +1,102 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+/*
+ * inbuxa: high contrast and reduced motion (admin UX roadmap, item 13).
+ * Set on <html> by src/lib/a11yPrefs.ts from the reader's choice or the
+ * system's. High contrast uses its own colors over any palette: text at
+ * 7:1 or better (WCAG AAA), borders and inputs that stand out, and a thick
+ * focus ring. Imported after palettes.css; the selectors are also more
+ * specific than a palette's, so they win in light and dark alike.
+ */
+
+:root[data-contrast='high']:not(.dark) {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --content-background: #ffffff;
+  --primary: #00524d;
+  --primary-foreground: #ffffff;
+  --secondary: #ebebeb;
+  --secondary-foreground: #000000;
+  --muted: #ebebeb;
+  --muted-foreground: #333333;
+  --accent: #d3efec;
+  --accent-foreground: #002e2b;
+  --highlight: #8a4300;
+  --highlight-soft: #fde6cc;
+  --destructive: #a3001b;
+  --destructive-foreground: #ffffff;
+  --border: #595959;
+  --input: #3d3d3d;
+  --ring: #000000;
+}
+
+:root.dark[data-contrast='high'] {
+  --background: #000000;
+  --foreground: #ffffff;
+  --card: #0a0a0a;
+  --card-foreground: #ffffff;
+  --popover: #0a0a0a;
+  --popover-foreground: #ffffff;
+  --content-background: #000000;
+  --primary: #7ff0e8;
+  --primary-foreground: #000000;
+  --secondary: #1f1f1f;
+  --secondary-foreground: #ffffff;
+  --muted: #1f1f1f;
+  --muted-foreground: #d9d9d9;
+  --accent: #003b38;
+  --accent-foreground: #c2fffa;
+  --highlight: #ffb866;
+  --highlight-soft: #3d2600;
+  --destructive: #ff9494;
+  --destructive-foreground: #000000;
+  --border: #a6a6a6;
+  --input: #c4c4c4;
+  --ring: #ffffff;
+}
+
+/* Where keyboard focus is, plainly. */
+:root[data-contrast='high'] :focus-visible {
+  outline: 3px solid var(--ring) !important;
+  outline-offset: 2px !important;
+}
+
+/* Links read as links without relying on color. */
+:root[data-contrast='high'] main a:not([role]):not(:has(> svg:only-child)) {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Reduced motion: no animations or transitions, and no smooth scrolling. */
+:root[data-motion='reduce'] *,
+:root[data-motion='reduce'] *::before,
+:root[data-motion='reduce'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* The "skip to content" link: out of sight until it has keyboard focus. */
+.skip-link {
+  position: absolute;
+  left: 0.75rem;
+  top: -4rem;
+  z-index: 100;
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  padding: 0.5rem 0.875rem;
+  font-weight: 500;
+}
+.skip-link:focus {
+  top: 0.75rem;
+}

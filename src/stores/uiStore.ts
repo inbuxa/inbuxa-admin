@@ -9,6 +9,7 @@
 
 import { queueAccountTheme } from '@/lib/accountSettings';
 import { applyPalette, DEFAULT_PALETTE, isPaletteId, type PaletteId } from '@/lib/palettes';
+import { applyA11yPrefs, isContrastPref, isMotionPref, type ContrastPref, type MotionPref } from '@/lib/a11yPrefs';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -34,6 +35,9 @@ interface UIState {
   palette: PaletteId;
   /** INBUXA: the navigation shell, the reader's own choice. */
   adminLayout: AdminLayout;
+  /** inbuxa: high contrast and reduced motion, or the system's setting (roadmap item 13). */
+  contrast: ContrastPref;
+  motion: MotionPref;
   sidebarOpen: boolean;
   /** INBUXA: the sidebar folded to a rail of icon tiles, on wide screens. */
   sidebarCollapsed: boolean;
@@ -43,6 +47,8 @@ interface UIState {
   setTheme: (theme: Theme) => void;
   setPalette: (palette: PaletteId) => void;
   setAdminLayout: (layout: AdminLayout) => void;
+  setContrast: (contrast: ContrastPref) => void;
+  setMotion: (motion: MotionPref) => void;
   /** INBUXA: take the theme stored with the account, without writing it back. */
   applyAccountTheme: (palette: PaletteId | null, mode: 'system' | 'light' | 'dark' | null) => void;
   toggleSidebar: () => void;
@@ -68,6 +74,8 @@ export const useUIStore = create<UIState>()(
       sidebarCollapsed: false,
       palette: DEFAULT_PALETTE,
       adminLayout: DEFAULT_ADMIN_LAYOUT,
+      contrast: 'system',
+      motion: 'system',
       activeSection: '',
 
       toggleTheme: () => {
@@ -101,6 +109,16 @@ export const useUIStore = create<UIState>()(
         set({ adminLayout: layout });
       },
 
+      setContrast: (contrast) => {
+        applyA11yPrefs(contrast, get().motion);
+        set({ contrast });
+      },
+
+      setMotion: (motion) => {
+        applyA11yPrefs(get().contrast, motion);
+        set({ motion });
+      },
+
       applyAccountTheme: (palette, mode) => {
         const next: Partial<UIState> = {};
         if (palette) {
@@ -130,6 +148,8 @@ export const useUIStore = create<UIState>()(
         theme: state.theme,
         palette: state.palette,
         adminLayout: state.adminLayout,
+        contrast: state.contrast,
+        motion: state.motion,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
       onRehydrateStorage: () => {
@@ -138,6 +158,9 @@ export const useUIStore = create<UIState>()(
             applyThemeClass(state.theme);
             applyPalette(isPaletteId(state.palette) ? state.palette : DEFAULT_PALETTE);
             if (!isAdminLayout(state.adminLayout)) state.adminLayout = DEFAULT_ADMIN_LAYOUT;
+            if (!isContrastPref(state.contrast)) state.contrast = 'system';
+            if (!isMotionPref(state.motion)) state.motion = 'system';
+            applyA11yPrefs(state.contrast, state.motion);
           }
         };
       },

@@ -10,9 +10,12 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import * as LucideIcons from 'lucide-react';
-const { Sun, Moon, User, LogOut, Check, Menu, Search, FileCode, Palette, LayoutTemplate } = LucideIcons;
+const { Sun, Moon, User, LogOut, Check, Menu, Search, FileCode, Palette, LayoutTemplate, Accessibility, Keyboard } =
+  LucideIcons;
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/common/CommandPalette';
+import { OPEN_COMMAND_BAR, OPEN_SHORTCUTS } from '@/lib/shortcuts';
+import { isContrastPref, isMotionPref } from '@/lib/a11yPrefs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,6 +64,10 @@ export function TopBar() {
   const setPalette = useUIStore((s) => s.setPalette);
   const adminLayout = useUIStore((s) => s.adminLayout);
   const setAdminLayout = useUIStore((s) => s.setAdminLayout);
+  const contrast = useUIStore((s) => s.contrast);
+  const setContrast = useUIStore((s) => s.setContrast);
+  const motion = useUIStore((s) => s.motion);
+  const setMotion = useUIStore((s) => s.setMotion);
   const toggleSidebar = useUIStore((s) => s.toggleSidebar);
   const setActiveSection = useUIStore((s) => s.setActiveSection);
   const activeSection = useUIStore((s) => s.activeSection);
@@ -81,8 +88,14 @@ export function TopBar() {
         setPaletteOpen((open) => !open);
       }
     }
+    // inbuxa: `/` asks for it too (keyboard shortcuts, roadmap item 13)
+    const open = () => setPaletteOpen(true);
     document.addEventListener('keydown', handleGlobalKeyDown);
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener(OPEN_COMMAND_BAR, open);
+    return () => {
+      document.removeEventListener('keydown', handleGlobalKeyDown);
+      window.removeEventListener(OPEN_COMMAND_BAR, open);
+    };
   }, []);
 
   const navigableLayouts = schema
@@ -282,6 +295,43 @@ export function TopBar() {
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+
+            {/* inbuxa: contrast and motion, over any theme (roadmap item 13) */}
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Accessibility className="mr-2 h-4 w-4" />
+                {t('a11y.menu', 'Accessibility')}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-60">
+                <DropdownMenuLabel>{t('a11y.contrast', 'Contrast')}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={contrast} onValueChange={(v) => isContrastPref(v) && setContrast(v)}>
+                  <DropdownMenuRadioItem value="system">
+                    {t('a11y.followSystem', 'Follow the system')}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="standard">
+                    {t('a11y.contrastStandard', 'Standard')}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="high">{t('a11y.contrastHigh', 'High')}</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{t('a11y.motion', 'Motion')}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={motion} onValueChange={(v) => isMotionPref(v) && setMotion(v)}>
+                  <DropdownMenuRadioItem value="system">
+                    {t('a11y.followSystem', 'Follow the system')}
+                  </DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="reduce">{t('a11y.motionReduce', 'Reduce')}</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="full">{t('a11y.motionFull', 'Full')}</DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(OPEN_SHORTCUTS))}>
+                  <Keyboard className="mr-2 h-4 w-4" />
+                  {t('a11y.shortcuts', 'Keyboard shortcuts')}
+                  <span aria-hidden="true" className="ml-auto font-mono text-xs text-muted-foreground">
+                    ?
+                  </span>
+                </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuSeparator />

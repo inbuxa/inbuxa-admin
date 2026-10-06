@@ -19,6 +19,7 @@ import { getApiBaseUrl } from '@/services/api';
 import { loadAccountTheme, setAccountSettingsTarget } from '@/lib/accountSettings';
 import { setLocale } from '@/i18n';
 import { TopBar } from '@/components/layout/TopBar';
+import { KeyboardShortcuts } from '@/components/common/KeyboardShortcuts';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SectionNav } from '@/components/layout/SectionNav';
 import { MainContent } from '@/components/layout/MainContent';
@@ -324,13 +325,20 @@ export default function AdminPanel() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      {/* inbuxa: keyboard users can jump past the menus (roadmap item 13) */}
+      <a href="#main" className="skip-link">
+        {t('a11y.skip', 'Skip to content')}
+      </a>
+      <KeyboardShortcuts />
       <TopBar />
       {useSectionNav && currentLayout && <SectionNav layout={currentLayout} />}
       <div className="flex flex-1">
         <Sidebar mobileOnly={useSectionNav} />
         <main
+          id="main"
+          tabIndex={-1}
           className={cn(
-            'flex-1 overflow-auto bg-content-background p-6 transition-[margin]',
+            'flex-1 overflow-auto bg-content-background p-6 transition-[margin] focus:outline-none',
             !useSectionNav && sidebarOpen && (sidebarCollapsed ? 'md:ml-[4.5rem]' : 'md:ml-64'),
           )}
         >

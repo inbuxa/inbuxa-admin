@@ -9,6 +9,7 @@
 
 @import 'tailwindcss';
 @import './palettes.css';
+@import './a11y.css';
 
 :root {
   /* INBUXA, light: warm paper, the mark's navy for text, its teal to act. */

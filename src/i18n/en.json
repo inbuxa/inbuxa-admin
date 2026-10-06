@@ -308,7 +308,8 @@
     "sort": "Sort",
     "unknownError": "Unknown error",
     "emptyTitle": "Nothing here yet",
-    "showingRange": "Showing {{from}}-{{to}} {{name}}"
+    "showingRange": "Showing {{from}}-{{to}} {{name}}",
+    "rowActions": "Actions for {{name}}"
   },
   "login": {
     "continue": "Continue",
@@ -2149,5 +2150,31 @@
     "undo": "Undo",
     "count_one": "{{count}} {{name}}",
     "count_other": "{{count}} {{name}}"
+  },
+  "shortcuts": {
+    "sheet": "Show these shortcuts",
+    "commandBar": "Search pages and run actions",
+    "commandBarToo": "The same, from anywhere, even in a field",
+    "goHome": "Go to the dashboard",
+    "goPeople": "Go to people",
+    "goDomains": "Go to domains",
+    "goSettings": "Go to settings",
+    "goAccount": "Go to your account",
+    "new": "Create a new one, on a list",
+    "escape": "Close a dialog or menu",
+    "title": "Keyboard shortcuts",
+    "hint": "Single keys work anywhere except while you type in a field."
+  },
+  "a11y": {
+    "menu": "Accessibility",
+    "contrast": "Contrast",
+    "followSystem": "Follow the system",
+    "contrastStandard": "Standard",
+    "contrastHigh": "High",
+    "motion": "Motion",
+    "motionReduce": "Reduce",
+    "motionFull": "Full",
+    "shortcuts": "Keyboard shortcuts",
+    "skip": "Skip to content"
   }
 }

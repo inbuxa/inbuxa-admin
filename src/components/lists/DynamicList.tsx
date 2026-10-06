@@ -60,6 +60,7 @@ import { ObjectPicker } from '@/components/common/ObjectPicker';
 import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
 import { toast } from '@/hooks/use-toast';
 import { deleteWithUndo } from '@/components/common/undoableDelete';
+import { useShortcut } from '@/lib/shortcuts';
 import { isPendingDelete, usePendingDeletes } from '@/lib/pendingDeletes';
 import { friendlySetError } from '@/lib/jmapErrors';
 import { coerceLabel } from '@/lib/objectOptions';
@@ -852,6 +853,16 @@ export function DynamicList({ viewName }: DynamicListProps) {
   );
 
   const canCreate = resolved ? hasObjectPermission(resolved.obj.permissionPrefix, 'Create') : false;
+  // inbuxa: `n` creates a new one, as the Create button does (roadmap item 13)
+  useShortcut(
+    'n',
+    canCreate && resolved?.obj.objectType.type === 'object'
+      ? () => {
+          const section = viewToSection[viewName];
+          if (section) navigate(`/${section}/${viewName}/new`);
+        }
+      : null,
+  );
   const canUpdate = resolved ? hasObjectPermission(resolved.obj.permissionPrefix, 'Update') : false;
   const canDelete = resolved ? hasObjectPermission(resolved.obj.permissionPrefix, 'Destroy') : false;
 
@@ -1088,6 +1099,12 @@ export function DynamicList({ viewName }: DynamicListProps) {
     );
   }
 
+  /** inbuxa: what a screen reader calls a row (roadmap item 13). */
+  function rowName(item: Record<string, unknown>): string {
+    const shown = schema && resolved ? item[getDisplayProperty(schema, resolved.obj.objectName)] : undefined;
+    return typeof shown === 'string' && shown ? shown : String(item.id ?? '');
+  }
+
   function renderItemActions(item: Record<string, unknown>): React.ReactNode {
     // inbuxa: Lock… or Unlock… for a person (AL-1)
     const lockItems = directoryLocks.menuItems(item);
@@ -1114,7 +1131,13 @@ export function DynamicList({ viewName }: DynamicListProps) {
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={(e) => e.stopPropagation()}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={(e) => e.stopPropagation()}
+            aria-label={t('list.rowActions', 'Actions for {{name}}', { name: rowName(item) })}
+          >
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -1348,8 +1371,16 @@ export function DynamicList({ viewName }: DynamicListProps) {
                   return (
                     <tr
                       key={itemId}
-                      className="border-b cursor-pointer transition-colors hover:bg-muted/50"
+                      className="border-b cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
                       onClick={() => handleRowClick(item)}
+                      // inbuxa: a row opens from the keyboard too (roadmap item 13)
+                      tabIndex={0}
+                      onKeyDown={(e) => {
+                        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          handleRowClick(item);
+                        }
+                      }}
                     >
                       {hasMassActions && (
                         <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
