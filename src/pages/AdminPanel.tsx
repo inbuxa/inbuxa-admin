@@ -20,6 +20,7 @@ import { loadAccountTheme, setAccountSettingsTarget } from '@/lib/accountSetting
 import { setLocale } from '@/i18n';
 import { TopBar } from '@/components/layout/TopBar';
 import { KeyboardShortcuts } from '@/components/common/KeyboardShortcuts';
+import { FirstDomainCelebration } from '@/features/celebrate/FirstDomainCelebration';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SectionNav } from '@/components/layout/SectionNav';
 import { MainContent } from '@/components/layout/MainContent';
@@ -330,6 +331,7 @@ export default function AdminPanel() {
         {t('a11y.skip', 'Skip to content')}
       </a>
       <KeyboardShortcuts />
+      <FirstDomainCelebration />
       <TopBar />
       {useSectionNav && currentLayout && <SectionNav layout={currentLayout} />}
       <div className="flex flex-1">

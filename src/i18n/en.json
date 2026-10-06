@@ -2176,5 +2176,46 @@
     "motionFull": "Full",
     "shortcuts": "Keyboard shortcuts",
     "skip": "Skip to content"
+  },
+  "people": {
+    "layout": "Show people as",
+    "cards": "Cards",
+    "table": "Table",
+    "usedNoLimit": "{{used}} used, no limit",
+    "usedOf": "{{used}} of {{quota}}",
+    "select": "Select {{name}}",
+    "percentFull": "{{percent}}% full",
+    "groups_one": "In {{count}} group",
+    "groups_other": "In {{count}} groups",
+    "since": "Since {{date}}"
+  },
+  "empty": {
+    "filteredTitle": "Nothing matches",
+    "filteredHint": "No {{plural}} match these filters.",
+    "clearFilters": "Clear filters",
+    "domainsTitle": "No domains yet",
+    "domainsHint": "A domain is the part after the @. Add yours and you’ll get the DNS records to publish for it.",
+    "peopleTitle": "No people yet",
+    "peopleHint": "Each person gets a mailbox, a calendar and contacts. Add the first one.",
+    "groupsTitle": "No groups yet",
+    "groupsHint": "A group gives several people one address, and can share mailboxes with them.",
+    "listsTitle": "No mailing lists yet",
+    "listsHint": "A mailing list sends one message on to everyone on it.",
+    "queueTitle": "The queue is empty",
+    "queueHint": "Mail waiting to be delivered shows up here until it goes out.",
+    "reportsTitle": "No reports yet",
+    "reportsHint": "Large providers send one the day after they get mail from your domains.",
+    "apiKeysTitle": "No API keys yet",
+    "apiKeysHint": "An API key lets a script or another app manage this server.",
+    "webhooksTitle": "No webhooks yet",
+    "webhooksHint": "A webhook tells another app when something happens here.",
+    "title": "No {{plural}} yet",
+    "hint": "When one is added, it shows up here."
+  },
+  "firstDomain": {
+    "title": "Your first domain is in",
+    "body": "{{name}} is on the server. Once its DNS records are published, mail for it starts arriving here.",
+    "dns": "Set up its DNS",
+    "person": "Add the first person"
   }
 }
