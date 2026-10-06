@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// SPDX-FileCopyrightText: 2026 Coffey Labs
+// SPDX-FileCopyrightText: 2026 Coffey Labs LLC
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // Writes the admin manual's reference section: one page per settings object
