@@ -216,7 +216,14 @@ export function DmarcSummaryCard() {
     };
   }, []);
 
-  const summaries = useMemo(() => (reports ? summarizeDmarc(reports) : []), [reports]);
+  // A report shaped in a way we don't expect shows as an error here, not a broken page.
+  const [summaries, summaryError] = useMemo(() => {
+    try {
+      return [reports ? summarizeDmarc(reports) : [], null] as const;
+    } catch (e) {
+      return [[], e instanceof Error ? e.message : String(e)] as const;
+    }
+  }, [reports]);
 
   return (
     <section className="space-y-3 rounded-xl border p-4">
@@ -232,8 +239,8 @@ export function DmarcSummaryCard() {
           </p>
         </div>
       </div>
-      {error ? (
-        <p className="text-sm text-destructive">{error}</p>
+      {error || summaryError ? (
+        <p className="text-sm text-destructive">{error ?? summaryError}</p>
       ) : !reports ? (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       ) : summaries.length === 0 ? (

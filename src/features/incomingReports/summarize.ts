@@ -10,7 +10,8 @@
  * tested without a server.
  */
 
-import type { Disposition, DmarcExternalReport, DmarcRecord, TlsExternalReport } from './api';
+import { jmapMapToArray } from '@/lib/jmapUtils';
+import type { Disposition, DmarcExternalReport, DmarcRecord, TlsExternalReport, TlsFailure, TlsPolicy } from './api';
 
 /** One server (or service) that sent mail with one of our domains in From. */
 export interface Source {
@@ -52,9 +53,13 @@ function handling(d: Disposition): keyof Source['failedHandling'] {
 
 /** Who the sender proved to be. A pass without a passing domain falls back to the IP. */
 function identify(r: DmarcRecord): Pick<Source, 'label' | 'provedBy'> {
-  const dkim = r.dkimResults?.find((d) => d.result === 'pass' && d.domain);
+  const dkim = jmapMapToArray<{ domain: string; result: string }>(r.dkimResults).find(
+    (d) => d.result === 'pass' && d.domain,
+  );
   if (dkim) return { label: dkim.domain.toLowerCase(), provedBy: 'dkim' };
-  const spf = r.spfResults?.find((s) => s.result === 'pass' && s.domain);
+  const spf = jmapMapToArray<{ domain: string; result: string }>(r.spfResults).find(
+    (s) => s.result === 'pass' && s.domain,
+  );
   if (spf) return { label: spf.domain.toLowerCase(), provedBy: 'spf' };
   return { label: r.sourceIp ?? '?', provedBy: null };
 }
@@ -64,6 +69,7 @@ export function summarizeDmarc(reports: DmarcExternalReport[]): DomainSummary[] 
   /** Per domain, the end of the newest report, whose policy wins. */
   const newest = new Map<string, string>();
   for (const { report } of reports) {
+    if (!report?.policyDomain) continue;
     const name = report.policyDomain.toLowerCase();
     let d = domains.get(name);
     if (!d) {
@@ -91,7 +97,7 @@ export function summarizeDmarc(reports: DmarcExternalReport[]): DomainSummary[] 
       d.policy = p === 'none' || p === 'quarantine' || p === 'reject' ? p : 'unknown';
       d.testing = report.policyTestingMode === true;
     }
-    for (const r of report.records ?? []) {
+    for (const r of jmapMapToArray<DmarcRecord>(report.records)) {
       const count = r.count ?? 0;
       const ok = passes(r);
       const who = identify(r);
@@ -173,8 +179,10 @@ const KINDS = new Set<string>([
 export function summarizeTls(reports: TlsExternalReport[]): TlsSummary[] {
   const domains = new Map<string, TlsSummary & { kinds: Map<TlsFailureKind, { sessions: number; hosts: string[] }> }>();
   for (const { report } of reports) {
+    if (!report) continue;
     const counted = new Set<string>();
-    for (const p of report.policies ?? []) {
+    for (const p of jmapMapToArray<TlsPolicy>(report.policies)) {
+      if (!p.policyDomain) continue;
       const name = p.policyDomain.toLowerCase();
       let d = domains.get(name);
       if (!d) {
@@ -189,7 +197,7 @@ export function summarizeTls(reports: TlsExternalReport[]): TlsSummary[] {
       d.failed += p.totalFailedSessions ?? 0;
       const org = report.organizationName;
       if (org && !d.reporters.includes(org)) d.reporters.push(org);
-      for (const f of p.failureDetails ?? []) {
+      for (const f of jmapMapToArray<TlsFailure>(p.failureDetails)) {
         const kind = (f.resultType && KINDS.has(f.resultType) ? f.resultType : 'other') as TlsFailureKind;
         const k = d.kinds.get(kind) ?? { sessions: 0, hosts: [] };
         k.sessions += f.failedSessionCount ?? 0;

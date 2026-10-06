@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { DmarcExternalReport, DmarcRecord, DmarcReport, TlsExternalReport, TlsPolicy } from './api';
+import type { DmarcExternalReport, DmarcRecord, DmarcReport, JmapList, TlsExternalReport, TlsPolicy } from './api';
 import { summarizeDmarc, summarizeTls } from './summarize';
 
 function record(over: Partial<DmarcRecord> = {}): DmarcRecord {
@@ -39,6 +39,23 @@ function dmarc(records: DmarcRecord[], over: Partial<DmarcReport> = {}, id = 'a'
 }
 
 describe('summarizeDmarc', () => {
+  it('reads lists the way the server sends them: maps keyed by index', () => {
+    const wire = dmarc([]);
+    wire.report.records = {
+      '0': record({ dkimResults: { '0': { domain: 'example.org', result: 'pass' } }, spfResults: {} }),
+      '1': record({
+        sourceIp: '203.0.113.5',
+        evaluatedDkim: 'fail',
+        evaluatedSpf: 'fail',
+        dkimResults: {},
+        spfResults: {},
+      }),
+    };
+    const [d] = summarizeDmarc([wire]);
+    expect(d).toMatchObject({ messages: 20, passed: 10, failed: 10 });
+    expect(d.sources.map((s) => s.label)).toEqual(['203.0.113.5', 'example.org']);
+  });
+
   it('counts passing mail under the domain that proved it', () => {
     const [d] = summarizeDmarc([
       dmarc([record(), record({ sourceIp: '192.0.2.11', count: 5 })]),
@@ -102,7 +119,7 @@ describe('summarizeDmarc', () => {
   });
 });
 
-function tls(policies: TlsPolicy[], org = 'google.com'): TlsExternalReport {
+function tls(policies: JmapList<TlsPolicy>, org = 'google.com'): TlsExternalReport {
   return {
     id: org,
     receivedAt: '2026-10-02T00:00:00Z',
@@ -116,6 +133,21 @@ function tls(policies: TlsPolicy[], org = 'google.com'): TlsExternalReport {
 }
 
 describe('summarizeTls', () => {
+  it('reads policies and failures sent as maps keyed by index', () => {
+    const [d] = summarizeTls([
+      tls({
+        '0': {
+          policyDomain: 'example.org',
+          totalSuccessfulSessions: 5,
+          totalFailedSessions: 2,
+          failureDetails: { '0': { resultType: 'certificateExpired', failedSessionCount: 2 } },
+        },
+      }),
+    ]);
+    expect(d).toMatchObject({ domain: 'example.org', succeeded: 5, failed: 2 });
+    expect(d.failures).toEqual([{ kind: 'certificateExpired', sessions: 2, hosts: [] }]);
+  });
+
   it('adds up sessions per domain and groups failures by kind', () => {
     const [d] = summarizeTls([
       tls([
