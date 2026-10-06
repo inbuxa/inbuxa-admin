@@ -59,6 +59,8 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { ObjectPicker } from '@/components/common/ObjectPicker';
 import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
 import { toast } from '@/hooks/use-toast';
+import { deleteWithUndo } from '@/components/common/undoableDelete';
+import { isPendingDelete, usePendingDeletes } from '@/lib/pendingDeletes';
 import { friendlySetError } from '@/lib/jmapErrors';
 import { coerceLabel } from '@/lib/objectOptions';
 import { buildJmapFilter } from '@/lib/listFilter';
@@ -501,9 +503,12 @@ export function DynamicList({ viewName }: DynamicListProps) {
 
         // inbuxa: a server that can't count (logs past the first page) leaves
         // total out; the last page's total must not stand in for it
-        setTotal(queryData.total ?? null);
+        // inbuxa: objects waiting behind an Undo toast are already gone here (item 9)
+        const listed = getData.list ?? [];
+        const shown = listed.filter((item) => !isPendingDelete(obj.objectName, item.id as string));
+        setTotal(queryData.total == null ? null : queryData.total - (listed.length - shown.length));
 
-        setItems(getData.list ?? []);
+        setItems(shown);
         setSelectedIds(new Set());
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -513,6 +518,15 @@ export function DynamicList({ viewName }: DynamicListProps) {
     },
     [resolved, schema, buildFilter, buildSort, t],
   );
+
+  // inbuxa: reload when a delete of this kind is held, undone or sent (item 9)
+  const pendingVersion = usePendingDeletes((s) => (resolved ? (s.versions[resolved.obj.objectName] ?? 0) : 0));
+  useEffect(() => {
+    if (pendingVersion === 0) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchData(currentAnchor, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingVersion]);
 
   useEffect(() => {
     if (!resolved?.list) return;
@@ -711,15 +725,21 @@ export function DynamicList({ viewName }: DynamicListProps) {
         const allErrors: Record<string, JmapSetError> = {};
 
         if (action.type === 'delete') {
-          for (let i = 0; i < targetIds.length; i += batchSize) {
-            const batch = targetIds.slice(i, i + batchSize);
-            const raw = await jmapSet(obj.objectName, accountId, { destroy: batch });
-            const resp = parseSetResponse(raw);
-            if (resp) {
-              totalSuccess += resp.destroyed?.length ?? 0;
-              if (resp.notDestroyed) Object.assign(allErrors, resp.notDestroyed);
-            }
-          }
+          // inbuxa: held behind an Undo toast, which reports what the server refused (item 9)
+          const names = resolved.list;
+          deleteWithUndo({
+            objectName: obj.objectName,
+            ids: targetIds,
+            what: t('undoDelete.count', {
+              count: targetIds.length,
+              name: targetIds.length === 1 ? names?.singularName : names?.pluralName,
+              defaultValue_one: '{{count}} {{name}}',
+              defaultValue_other: '{{count}} {{name}}',
+            }),
+          });
+          setSelectedIds(new Set());
+          setSelectAllMode(false);
+          return;
         } else if (action.type === 'setProperty') {
           for (let i = 0; i < targetIds.length; i += batchSize) {
             const batch = targetIds.slice(i, i + batchSize);
@@ -739,7 +759,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
         const summary = bulkResultSummary(
           totalSuccess,
           Object.keys(allErrors).length > 0 ? allErrors : null,
-          action.type === 'delete' ? 'delete' : 'update',
+          'update',
           t,
         );
         if (summary) {
@@ -802,34 +822,23 @@ export function DynamicList({ viewName }: DynamicListProps) {
           break;
         }
         case 'delete': {
-          try {
-            setLoading(true);
-            const accountId = getAccountId(obj.objectName);
-            const raw = await jmapSet(obj.objectName, accountId, {
-              destroy: [itemId],
-            });
-            const resp = parseSetResponse(raw);
-            if (resp?.notDestroyed?.[itemId]) {
-              setError(friendlySetError(resp.notDestroyed[itemId]));
-            } else if (resp?.destroyed?.includes(itemId)) {
-              fetchData(currentAnchor, 0);
-            } else {
-              setError(
-                t('list.deleteNotConfirmed', 'Delete failed: item was not confirmed as destroyed by the server.'),
-              );
-            }
-          } catch (err) {
-            setError(err instanceof Error ? err.message : String(err));
-          } finally {
-            setLoading(false);
-          }
+          // inbuxa: no "Are you sure?"; held behind an Undo toast (item 9)
+          const shown = schema ? item[getDisplayProperty(schema, obj.objectName)] : undefined;
+          deleteWithUndo({
+            objectName: obj.objectName,
+            ids: [itemId],
+            what:
+              typeof shown === 'string' && shown
+                ? shown
+                : (resolved.list?.singularName ?? obj.objectType.description).toLowerCase(),
+          });
           break;
         }
         case 'separator':
           break;
       }
     },
-    [resolved, viewName, viewToSection, navigate, fetchData, currentAnchor, t],
+    [resolved, schema, viewName, viewToSection, navigate, fetchData, currentAnchor],
   );
 
   const handleRowClick = useCallback(
@@ -1116,7 +1125,8 @@ export function DynamicList({ viewName }: DynamicListProps) {
             }
 
             const isDestructive = action.type === 'delete';
-            const needsConfirmation = action.type === 'delete' || action.type === 'setProperty';
+            // inbuxa: a delete offers Undo instead (item 9); changing a property still asks
+            const needsConfirmation = action.type === 'setProperty';
 
             return (
               <DropdownMenuItem
@@ -1181,6 +1191,12 @@ export function DynamicList({ viewName }: DynamicListProps) {
                       key={`mass-${idx}`}
                       className={isDestructive ? 'text-destructive' : undefined}
                       onClick={() => {
+                        // inbuxa: deleting the rows you ticked offers Undo instead of asking (item 9);
+                        // "all matching" can reach far past the page, so it still asks first
+                        if (isDestructive && !selectAllMode) {
+                          void executeMassAction(action);
+                          return;
+                        }
                         setConfirmAction({
                           label: t('list.actionWithCount', '{{action}} ({{count}} {{name}})', {
                             action: action.label,
