@@ -65,6 +65,7 @@ import { coerceLabel } from '@/lib/objectOptions';
 import { SECRET_MASK } from '@/lib/jmapUtils';
 import { toast } from '@/hooks/use-toast';
 import { deleteWithUndo } from '@/components/common/undoableDelete';
+import { celebrateIfFirstDomain } from '@/features/celebrate/firstDomain';
 import { logFormChange } from '@/lib/debug';
 import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DnsConnectCard } from '@/features/dns/DnsConnectCard';
@@ -529,6 +530,8 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
         if (setResult.created && setResult.created['new-0']) {
           const createdData = setResult.created['new-0'];
           const newId = createdData.id as string;
+          // inbuxa: the server's first domain gets a moment of its own (roadmap item 12)
+          if (obj.objectName === 'x:Domain') void celebrateIfFirstDomain(newId, String(formData.name ?? ''));
 
           const noisyKeys = new Set(['id', 'blobId']);
           const extraKeys = Object.keys(createdData).filter((k) => !noisyKeys.has(k));

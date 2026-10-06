@@ -8,7 +8,7 @@
  */
 
 import { pageAbout } from '@/help/texts';
-import { EmptyState } from '@/components/common/EmptyState';
+import { ListEmptyState } from '@/components/lists/ListEmptyState';
 import { PageHeader } from '@/components/common/PageHeader';
 import { HelpPanel } from '@/help/HelpPanel';
 import { ObjectHoverCard } from '@/features/hovercards/ObjectHoverCard';
@@ -29,6 +29,8 @@ import {
   Lock,
   Search,
   RotateCcw,
+  LayoutGrid,
+  Rows3,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -61,6 +63,14 @@ import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
 import { toast } from '@/hooks/use-toast';
 import { deleteWithUndo } from '@/components/common/undoableDelete';
 import { useShortcut } from '@/lib/shortcuts';
+import { PersonCard } from '@/features/people/PersonCard';
+import {
+  PERSON_CARD_PROPERTIES,
+  personOf,
+  readPeopleLayout,
+  writePeopleLayout,
+  type PeopleLayout,
+} from '@/features/people/person';
 import { isPendingDelete, usePendingDeletes } from '@/lib/pendingDeletes';
 import { friendlySetError } from '@/lib/jmapErrors';
 import { coerceLabel } from '@/lib/objectOptions';
@@ -374,6 +384,9 @@ interface DynamicListProps {
   viewName: string;
 }
 
+/** inbuxa: the People list, which can show cards (roadmap item 10). */
+const PEOPLE_VIEW = 'x:Account/User';
+
 export function DynamicList({ viewName }: DynamicListProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -397,6 +410,10 @@ export function DynamicList({ viewName }: DynamicListProps) {
   }, [schema, viewName]);
   // inbuxa: lock and unlock people from the account list (AL-1)
   const directoryLocks = useDirectoryLocks(resolved?.obj.objectName === 'x:Account');
+  // inbuxa: People can be cards or the plain table (roadmap item 10)
+  const peopleView = viewName === PEOPLE_VIEW;
+  const [peopleLayout, setPeopleLayout] = useState<PeopleLayout>(readPeopleLayout);
+  const showCards = peopleView && peopleLayout === 'cards';
 
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -464,7 +481,11 @@ export function DynamicList({ viewName }: DynamicListProps) {
 
       try {
         const accountId = getAccountId(obj.objectName);
-        const properties = ['id', ...list.columns.map((c) => c.name)];
+        const properties = [
+          'id',
+          ...list.columns.map((c) => c.name),
+          ...(viewName === PEOPLE_VIEW ? PERSON_CARD_PROPERTIES : []),
+        ];
         const filter = buildFilter();
         const sortArr = buildSort();
 
@@ -517,7 +538,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
         setLoading(false);
       }
     },
-    [resolved, schema, buildFilter, buildSort, t],
+    [resolved, schema, viewName, buildFilter, buildSort, t],
   );
 
   // inbuxa: reload when a delete of this kind is held, undone or sent (item 9)
@@ -904,6 +925,25 @@ export function DynamicList({ viewName }: DynamicListProps) {
   const explainLogs = explainAvailable && obj.objectName === 'x:Log';
   const hasRowCell = hasItemActions || explainLogs || directoryLocks.enabled;
 
+  // inbuxa: an empty list says why, and what to do (roadmap item 12)
+  const emptyState = (
+    <ListEmptyState
+      viewName={viewName}
+      plural={list.pluralName ?? list.title.toLowerCase()}
+      singular={list.singularName ?? list.title.toLowerCase()}
+      filtered={Object.values(appliedFilters).some((v) => v !== '' && v != null)}
+      onClearFilters={resetFilters}
+      onCreate={
+        canCreate && obj.objectType.type === 'object'
+          ? () => {
+              const section = viewToSection[viewName];
+              if (section) navigate(`/${section}/${viewName}/new`);
+            }
+          : undefined
+      }
+    />
+  );
+
   const pageStart = anchorStack.length * PAGE_SIZE;
   const rangeStart = pageStart + 1;
   const rangeEnd = pageStart + items.length;
@@ -1190,6 +1230,34 @@ export function DynamicList({ viewName }: DynamicListProps) {
         />
         <div className="flex items-center gap-2">
           <HelpPanel viewName={viewName} title={list.title} />
+          {peopleView && (
+            <div
+              className="flex rounded-md border p-0.5"
+              role="group"
+              aria-label={t('people.layout', 'Show people as')}
+            >
+              {(['cards', 'table'] as const).map((mode) => (
+                <Button
+                  key={mode}
+                  type="button"
+                  variant={peopleLayout === mode ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-7 px-2"
+                  aria-pressed={peopleLayout === mode}
+                  title={mode === 'cards' ? t('people.cards', 'Cards') : t('people.table', 'Table')}
+                  onClick={() => {
+                    setPeopleLayout(mode);
+                    writePeopleLayout(mode);
+                  }}
+                >
+                  {mode === 'cards' ? <LayoutGrid className="h-4 w-4" /> : <Rows3 className="h-4 w-4" />}
+                  <span className="sr-only">
+                    {mode === 'cards' ? t('people.cards', 'Cards') : t('people.table', 'Table')}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          )}
           {hasMassActions && selectedIds.size > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1317,127 +1385,165 @@ export function DynamicList({ viewName }: DynamicListProps) {
         </div>
       )}
 
-      <div className="rounded-xl border bg-card shadow-soft">
-        <div className="overflow-x-auto rounded-[calc(var(--radius-xl)-1px)]">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
-                {hasMassActions && (
-                  <th className="w-10 px-3 py-3">
-                    <Checkbox
-                      checked={items.length > 0 && selectedIds.size === items.length}
-                      onCheckedChange={toggleSelectAll}
-                      aria-label={t('list.selectAll', 'Select all')}
-                    />
-                  </th>
-                )}
-                {list.columns.map((col) => (
-                  <th key={col.name} className="px-3 py-3 text-left font-medium text-muted-foreground">
-                    <div className="flex items-center">
-                      {col.label}
-                      {renderSortIndicator(col.name)}
-                    </div>
-                  </th>
-                ))}
-                {hasRowCell && (
-                  <th className="w-12 px-3 py-3 text-right font-medium text-muted-foreground">
-                    {t('list.actions', 'Actions')}
-                  </th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {loading && items.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasRowCell ? 1 : 0)}
-                    className="px-3 py-12 text-center"
-                  >
-                    <Loader2 className="mx-auto h-6 w-6 animate-spin" />
-                  </td>
+      {showCards ? (
+        loading && items.length === 0 ? (
+          <div className="py-12 text-center">
+            <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="rounded-xl border bg-card shadow-soft">{emptyState}</div>
+        ) : (
+          <div className="space-y-3">
+            {hasMassActions && (
+              <label className="flex w-fit items-center gap-2 text-sm text-muted-foreground">
+                <Checkbox
+                  checked={items.length > 0 && selectedIds.size === items.length}
+                  onCheckedChange={toggleSelectAll}
+                />
+                {t('list.selectAll', 'Select all')}
+              </label>
+            )}
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {items.map((item) => {
+                const itemId = item.id as string;
+                return (
+                  <PersonCard
+                    key={itemId}
+                    person={personOf(item)}
+                    selected={selectedIds.has(itemId)}
+                    onToggleSelect={hasMassActions ? () => toggleSelectItem(itemId) : undefined}
+                    onOpen={() => handleRowClick(item)}
+                    actions={renderItemActions(item)}
+                    badge={directoryLocks.badge(item)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )
+      ) : (
+        <div className="rounded-xl border bg-card shadow-soft">
+          <div className="overflow-x-auto rounded-[calc(var(--radius-xl)-1px)]">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
+                  {hasMassActions && (
+                    <th className="w-10 px-3 py-3">
+                      <Checkbox
+                        checked={items.length > 0 && selectedIds.size === items.length}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label={t('list.selectAll', 'Select all')}
+                      />
+                    </th>
+                  )}
+                  {list.columns.map((col) => (
+                    <th key={col.name} className="px-3 py-3 text-left font-medium text-muted-foreground">
+                      <div className="flex items-center">
+                        {col.label}
+                        {renderSortIndicator(col.name)}
+                      </div>
+                    </th>
+                  ))}
+                  {hasRowCell && (
+                    <th className="w-12 px-3 py-3 text-right font-medium text-muted-foreground">
+                      {t('list.actions', 'Actions')}
+                    </th>
+                  )}
                 </tr>
-              ) : items.length === 0 ? (
-                <tr>
-                  <td colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasRowCell ? 1 : 0)} className="px-3">
-                    <EmptyState
-                      title={t('list.emptyTitle', 'Nothing here yet')}
-                      hint={t('list.noResults', 'No results found')}
-                    />
-                  </td>
-                </tr>
-              ) : (
-                items.map((item) => {
-                  const itemId = item.id as string;
-                  return (
-                    <tr
-                      key={itemId}
-                      className="border-b cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
-                      onClick={() => handleRowClick(item)}
-                      // inbuxa: a row opens from the keyboard too (roadmap item 13)
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                          e.preventDefault();
-                          handleRowClick(item);
-                        }
-                      }}
+              </thead>
+              <tbody>
+                {loading && items.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasRowCell ? 1 : 0)}
+                      className="px-3 py-12 text-center"
                     >
-                      {hasMassActions && (
-                        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                          <Checkbox
-                            checked={selectedIds.has(itemId)}
-                            onCheckedChange={() => toggleSelectItem(itemId)}
-                            aria-label={t('list.selectItem', 'Select item')}
-                          />
-                        </td>
-                      )}
-                      {list.columns.map((col, colIndex) => {
-                        const cell = renderCellValue(
-                          item[col.name],
-                          fields[col.name],
-                          col.name,
-                          schema!,
-                          resolved.obj.objectName,
-                          getDisplayName,
-                        );
-                        return (
-                          <td key={col.name} className="px-3 py-2">
-                            {colIndex === 0 && item[col.name] != null ? (
-                              <>
-                                <ObjectHoverCard objectName={resolved.obj.objectName} id={itemId}>
-                                  {cell}
-                                </ObjectHoverCard>
-                                {directoryLocks.badge(item)}
-                              </>
-                            ) : (
-                              cell
-                            )}
+                      <Loader2 className="mx-auto h-6 w-6 animate-spin" />
+                    </td>
+                  </tr>
+                ) : items.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasRowCell ? 1 : 0)}
+                      className="px-3"
+                    >
+                      {emptyState}
+                    </td>
+                  </tr>
+                ) : (
+                  items.map((item) => {
+                    const itemId = item.id as string;
+                    return (
+                      <tr
+                        key={itemId}
+                        className="border-b cursor-pointer transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+                        onClick={() => handleRowClick(item)}
+                        // inbuxa: a row opens from the keyboard too (roadmap item 13)
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                            e.preventDefault();
+                            handleRowClick(item);
+                          }
+                        }}
+                      >
+                        {hasMassActions && (
+                          <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedIds.has(itemId)}
+                              onCheckedChange={() => toggleSelectItem(itemId)}
+                              aria-label={t('list.selectItem', 'Select item')}
+                            />
                           </td>
-                        );
-                      })}
-                      {hasRowCell && (
-                        <td className="px-3 py-2 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            {explainLogs && item.id != null && (
-                              <ExplainButton
-                                icon
-                                className="h-8 w-8"
-                                title={String(item.event ?? item.id)}
-                                subject={{ '@type': 'LogEntry', logId: String(item.id) }}
-                              />
-                            )}
-                            {renderItemActions(item)}
-                          </div>
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        )}
+                        {list.columns.map((col, colIndex) => {
+                          const cell = renderCellValue(
+                            item[col.name],
+                            fields[col.name],
+                            col.name,
+                            schema!,
+                            resolved.obj.objectName,
+                            getDisplayName,
+                          );
+                          return (
+                            <td key={col.name} className="px-3 py-2">
+                              {colIndex === 0 && item[col.name] != null ? (
+                                <>
+                                  <ObjectHoverCard objectName={resolved.obj.objectName} id={itemId}>
+                                    {cell}
+                                  </ObjectHoverCard>
+                                  {directoryLocks.badge(item)}
+                                </>
+                              ) : (
+                                cell
+                              )}
+                            </td>
+                          );
+                        })}
+                        {hasRowCell && (
+                          <td className="px-3 py-2 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              {explainLogs && item.id != null && (
+                                <ExplainButton
+                                  icon
+                                  className="h-8 w-8"
+                                  title={String(item.event ?? item.id)}
+                                  subject={{ '@type': 'LogEntry', logId: String(item.id) }}
+                                />
+                              )}
+                              {renderItemActions(item)}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
 
       {items.length > 0 && (
         <div className="flex items-center justify-between text-sm text-muted-foreground">
