@@ -328,7 +328,9 @@ export function TopBar() {
                 <DropdownMenuItem onClick={() => window.dispatchEvent(new Event(OPEN_SHORTCUTS))}>
                   <Keyboard className="mr-2 h-4 w-4" />
                   {t('a11y.shortcuts', 'Keyboard shortcuts')}
-                  <span className="ml-auto font-mono text-xs text-muted-foreground">?</span>
+                  <span aria-hidden="true" className="ml-auto font-mono text-xs text-muted-foreground">
+                    ?
+                  </span>
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>

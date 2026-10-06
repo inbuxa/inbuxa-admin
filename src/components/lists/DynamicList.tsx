@@ -1136,7 +1136,6 @@ export function DynamicList({ viewName }: DynamicListProps) {
             size="sm"
             className="h-8 w-8 p-0"
             onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
             aria-label={t('list.rowActions', 'Actions for {{name}}', { name: rowName(item) })}
           >
             <MoreHorizontal className="h-4 w-4" />
