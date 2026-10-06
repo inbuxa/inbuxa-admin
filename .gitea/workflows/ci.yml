@@ -68,6 +68,21 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # A changed upstream file without the AGPL 5(a) notice, as inbuxa-server's
+  # fork-checks job catches for the server. Seconds and no npm install, so it
+  # runs here whatever BUILD_ON says. It diffs against the upstream release
+  # this fork is built on, hence the full fetch.
+  notices:
+    runs-on: light
+    container:
+      image: node:22-bookworm-slim@sha256:48e4b67d85f87bd551df43704e24d252f56cc5f8e9718841aace50f19948f0f9 # 22-bookworm-slim
+    steps:
+      - uses: coffey-labs/actions/checkout@fab0c4d45e0162963965f1555df27b7bed5e20ec
+        with:
+          fetch-depth: 0
+      - run: command -v git >/dev/null || { apt-get update -qq && apt-get install -y -qq --no-install-recommends git >/dev/null; }
+      - run: git config --global --add safe.directory "$PWD" && node tools/notice-check.mjs
+
   # ----------------------------------------------------------- publish ------
   # Port of publish.yml, to the owner's own registry now that GHCR went with
   # the GitHub account: <REGISTRY>/inbuxa/inbuxa-admin, the same path the
