@@ -12,6 +12,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { LEGACY_PROTOCOLS_VIEW } from '@/features/hardening/LegacyProtocolsBanner';
 import { useLegacyProtocolsOff } from '@/features/hardening/useLegacyProtocolsOff';
 import { useCriticalCount } from '@/features/security/useCriticalCount';
+import { useDeliverabilityAlarms } from '@/features/deliverability/useDeliverabilityAlarms';
+import { useSchemaStore } from '@/stores/schemaStore';
 import type { Dashboard } from '../types/schema';
 import type { Metric } from '../types/metrics';
 import { useDashboardStore } from '../stores/dashboardStore';
@@ -60,6 +62,9 @@ export function DashboardShell({
   const facts = useServerFacts(tick).facts;
   const cluster = useClusterState(tick);
   const critical = useCriticalCount();
+  // inbuxa: DL-18
+  const deliverability = useDeliverabilityAlarms(tick);
+  const deliverabilitySection = useSchemaStore((s) => s.viewToSection['CustomComponent/Deliverability']);
   const legacyOff = useLegacyProtocolsOff();
 
   const cacheKey = `${COMMAND_CACHE}|${periodKey(period)}`;
@@ -99,6 +104,8 @@ export function DashboardShell({
     facts,
     health,
     critical,
+    deliverability,
+    deliverabilityHref: deliverabilitySection ? `/${deliverabilitySection}/CustomComponent/Deliverability` : null,
     samples,
     liveStatus,
     nodesHref: health ? `/${section}/Dashboard/cluster` : null,

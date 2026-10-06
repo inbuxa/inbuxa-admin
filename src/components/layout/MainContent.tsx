@@ -135,6 +135,11 @@ const SharedMailboxesPage = lazyFeature(
   () => import('@/features/lock/SharedMailboxesPage'),
   (m) => m.SharedMailboxesPage,
 );
+// inbuxa: Domains › Deliverability (deliverability spec, DL-17).
+const DeliverabilityPage = lazyFeature(
+  () => import('@/features/deliverability/DeliverabilityPage'),
+  (m) => m.DeliverabilityPage,
+);
 const LegalHoldsPage = lazyFeature(
   () => import('@/features/hold/LegalHoldsPage'),
   (m) => m.LegalHoldsPage,
@@ -245,6 +250,9 @@ function renderView(schema: Schema | null, viewName?: string, id?: string, secti
     }
     if (componentName === 'SharedMailboxes') {
       return <SharedMailboxesPage />;
+    }
+    if (componentName === 'Deliverability') {
+      return <DeliverabilityPage />;
     }
     if (componentName === 'LegalHolds') {
       return <LegalHoldsPage />;
