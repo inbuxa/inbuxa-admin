@@ -66,23 +66,3 @@ export function personOf(item: Record<string, unknown>): Person {
     createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
   };
 }
-
-/** Cards or the plain table, remembered per browser. */
-export type PeopleLayout = 'cards' | 'table';
-const LAYOUT_KEY = 'inbuxa-people-layout';
-
-export function readPeopleLayout(): PeopleLayout {
-  try {
-    return localStorage.getItem(LAYOUT_KEY) === 'table' ? 'table' : 'cards';
-  } catch {
-    return 'cards';
-  }
-}
-
-export function writePeopleLayout(layout: PeopleLayout) {
-  try {
-    localStorage.setItem(LAYOUT_KEY, layout);
-  } catch {
-    // Private windows can refuse storage; the choice just isn't remembered.
-  }
-}

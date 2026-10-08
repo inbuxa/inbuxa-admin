@@ -64,13 +64,16 @@ import { toast } from '@/hooks/use-toast';
 import { deleteWithUndo } from '@/components/common/undoableDelete';
 import { useShortcut } from '@/lib/shortcuts';
 import { PersonCard } from '@/features/people/PersonCard';
+import { personOf } from '@/features/people/person';
+import { ObjectCard } from '@/features/cards/ObjectCard';
+import { cardOf } from '@/features/cards/objectCard';
 import {
-  PERSON_CARD_PROPERTIES,
-  personOf,
-  readPeopleLayout,
-  writePeopleLayout,
-  type PeopleLayout,
-} from '@/features/people/person';
+  cardKindOf,
+  cardPropertiesFor,
+  readListLayout,
+  writeListLayout,
+  type ListLayout,
+} from '@/features/cards/layout';
 import { isPendingDelete, usePendingDeletes } from '@/lib/pendingDeletes';
 import { friendlySetError } from '@/lib/jmapErrors';
 import { coerceLabel } from '@/lib/objectOptions';
@@ -384,9 +387,6 @@ interface DynamicListProps {
   viewName: string;
 }
 
-/** inbuxa: the People list, which can show cards (roadmap item 10). */
-const PEOPLE_VIEW = 'x:Account/User';
-
 export function DynamicList({ viewName }: DynamicListProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -410,10 +410,11 @@ export function DynamicList({ viewName }: DynamicListProps) {
   }, [schema, viewName]);
   // inbuxa: lock and unlock people from the account list (AL-1)
   const directoryLocks = useDirectoryLocks(resolved?.obj.objectName === 'x:Account');
-  // inbuxa: People can be cards or the plain table (roadmap item 10)
-  const peopleView = viewName === PEOPLE_VIEW;
-  const [peopleLayout, setPeopleLayout] = useState<PeopleLayout>(readPeopleLayout);
-  const showCards = peopleView && peopleLayout === 'cards';
+  // inbuxa: Directory and Domains lists can be cards or the plain table (roadmap item 10)
+  const cardKind = cardKindOf(viewName);
+  const [layouts, setLayouts] = useState<Record<string, ListLayout>>({});
+  const layout = layouts[viewName] ?? readListLayout(viewName);
+  const showCards = cardKind !== undefined && layout === 'cards';
 
   const [items, setItems] = useState<Record<string, unknown>[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -484,7 +485,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
         const properties = [
           'id',
           ...list.columns.map((c) => c.name),
-          ...(viewName === PEOPLE_VIEW ? PERSON_CARD_PROPERTIES : []),
+          ...cardPropertiesFor(viewName).filter((p) => !list.columns.some((c) => c.name === p)),
         ];
         const filter = buildFilter();
         const sortArr = buildSort();
@@ -1230,29 +1231,25 @@ export function DynamicList({ viewName }: DynamicListProps) {
         />
         <div className="flex items-center gap-2">
           <HelpPanel viewName={viewName} title={list.title} />
-          {peopleView && (
-            <div
-              className="flex rounded-md border p-0.5"
-              role="group"
-              aria-label={t('people.layout', 'Show people as')}
-            >
+          {cardKind && (
+            <div className="flex rounded-md border p-0.5" role="group" aria-label={t('list.layout', 'Show as')}>
               {(['cards', 'table'] as const).map((mode) => (
                 <Button
                   key={mode}
                   type="button"
-                  variant={peopleLayout === mode ? 'secondary' : 'ghost'}
+                  variant={layout === mode ? 'secondary' : 'ghost'}
                   size="sm"
                   className="h-7 px-2"
-                  aria-pressed={peopleLayout === mode}
-                  title={mode === 'cards' ? t('people.cards', 'Cards') : t('people.table', 'Table')}
+                  aria-pressed={layout === mode}
+                  title={mode === 'cards' ? t('list.cards', 'Cards') : t('list.table', 'List')}
                   onClick={() => {
-                    setPeopleLayout(mode);
-                    writePeopleLayout(mode);
+                    setLayouts((all) => ({ ...all, [viewName]: mode }));
+                    writeListLayout(viewName, mode);
                   }}
                 >
                   {mode === 'cards' ? <LayoutGrid className="h-4 w-4" /> : <Rows3 className="h-4 w-4" />}
                   <span className="sr-only">
-                    {mode === 'cards' ? t('people.cards', 'Cards') : t('people.table', 'Table')}
+                    {mode === 'cards' ? t('list.cards', 'Cards') : t('list.table', 'List')}
                   </span>
                 </Button>
               ))}
@@ -1403,9 +1400,21 @@ export function DynamicList({ viewName }: DynamicListProps) {
                 {t('list.selectAll', 'Select all')}
               </label>
             )}
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {items.map((item) => {
                 const itemId = item.id as string;
+                if (cardKind !== 'person' && cardKind !== 'group') {
+                  return (
+                    <ObjectCard
+                      key={itemId}
+                      card={cardOf(cardKind!, item)}
+                      selected={selectedIds.has(itemId)}
+                      onToggleSelect={hasMassActions ? () => toggleSelectItem(itemId) : undefined}
+                      onOpen={() => handleRowClick(item)}
+                      actions={renderItemActions(item)}
+                    />
+                  );
+                }
                 return (
                   <PersonCard
                     key={itemId}
@@ -1415,6 +1424,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
                     onOpen={() => handleRowClick(item)}
                     actions={renderItemActions(item)}
                     badge={directoryLocks.badge(item)}
+                    hideEmptyStorage={cardKind === 'group'}
                   />
                 );
               })}
