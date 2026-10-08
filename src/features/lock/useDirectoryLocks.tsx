@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Lock, Unlock } from 'lucide-react';
+import { Lock, Unlock, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useAccountStore } from '@/stores/accountStore';
@@ -100,9 +100,19 @@ export function useDirectoryLocks(active: boolean) {
     );
   };
 
-  /** A badge beside a locked account's name. */
+  /** A badge beside a locked account's name, or a shared mailbox's. */
   const badge = (item: Record<string, unknown>): ReactNode => {
-    if (!enabled || !locks.has(String(item.id))) return null;
+    const lock = enabled ? locks.get(String(item.id)) : undefined;
+    if (!lock) return null;
+    // A shared mailbox is locked on purpose: say what it is, not that it's shut (MA-S)
+    if (lock.kind === 'sharedMailbox') {
+      return (
+        <Badge variant="secondary" className="ml-2 gap-1 align-middle">
+          <Users className="h-3 w-3" />
+          {t('lock.sharedBadge', 'Shared mailbox')}
+        </Badge>
+      );
+    }
     return (
       <Badge variant="destructive" className="ml-2 gap-1 align-middle">
         <Lock className="h-3 w-3" />

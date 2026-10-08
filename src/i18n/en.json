@@ -309,7 +309,10 @@
     "unknownError": "Unknown error",
     "emptyTitle": "Nothing here yet",
     "showingRange": "Showing {{from}}-{{to}} {{name}}",
-    "rowActions": "Actions for {{name}}"
+    "rowActions": "Actions for {{name}}",
+    "layout": "Show as",
+    "cards": "Cards",
+    "table": "List"
   },
   "login": {
     "continue": "Continue",
@@ -1392,7 +1395,8 @@
     "unlockTitle": "Unlock {{name}}",
     "unlockBody": "The account can sign in again and its forwarding and vacation reply resume. Delegates lose it, and any shares they had before get back what they were. The password is unchanged: if someone else may know it, set a new one on the account’s page too.",
     "unlockGo": "Unlock",
-    "lockedBadge": "Locked"
+    "lockedBadge": "Locked",
+    "sharedBadge": "Shared mailbox"
   },
   "metricsConnect": {
     "copied": "Copied",
@@ -2181,9 +2185,6 @@
     "skip": "Skip to content"
   },
   "people": {
-    "layout": "Show people as",
-    "cards": "Cards",
-    "table": "Table",
     "usedNoLimit": "{{used}} used, no limit",
     "usedOf": "{{used}} of {{quota}}",
     "select": "Select {{name}}",
@@ -2312,5 +2313,23 @@
     "daily": "Every day at {{time}} ({{zone}})",
     "monthly": "Day {{day}} of each month at {{time}} ({{zone}})",
     "weekly": "Every {{day}} at {{time}} ({{zone}})"
+  },
+  "cards": {
+    "recipients_one": "{{count}} recipient",
+    "recipients_other": "{{count}} recipients",
+    "aliases_one": "{{count}} other address",
+    "aliases_other": "{{count}} other addresses",
+    "granted_one": "{{count}} permission granted",
+    "granted_other": "{{count}} permissions granted",
+    "includes_one": "Includes {{count}} role",
+    "includes_other": "Includes {{count}} roles",
+    "removed_one": "{{count}} taken away",
+    "removed_other": "{{count}} taken away",
+    "redirects_one": "{{count}} sign-in return address",
+    "redirects_other": "{{count}} sign-in return addresses",
+    "expired": "Expired {{date}}",
+    "expires": "Expires {{date}}",
+    "domainAliases_one": "{{count}} alias domain",
+    "domainAliases_other": "{{count}} alias domains"
   }
 }
