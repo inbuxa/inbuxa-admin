@@ -7,7 +7,10 @@
 # It is built here rather than copied from `dist/`, which is committed for the
 # convenience of people serving the tree directly. An image built from a stale
 # `dist/` would be a build nobody can reproduce from the commit it claims.
-FROM docker.io/node:26-alpine AS build
+# Docker Hub images, pulled through Google's mirror: GitHub's shared runners
+# hit Docker Hub's anonymous pull limit (429), which the mirror is not subject
+# to. Same images, same digests (checked 2026-10-09).
+FROM mirror.gcr.io/library/node:26-alpine AS build
 WORKDIR /build
 # The lockfile alone first, so a commit that changes no dependency reuses this
 # layer instead of resolving the tree again.
@@ -18,7 +21,7 @@ COPY . .
 # this builds, so there is nothing to pass in here.
 RUN npm run build
 
-FROM docker.io/nginxinc/nginx-unprivileged:1.29-alpine
+FROM mirror.gcr.io/nginxinc/nginx-unprivileged:1.29-alpine
 # Unprivileged nginx, which runs as uid 101 and cannot bind 80. 8080 is the
 # port it listens on and the one to publish.
 EXPOSE 8080
