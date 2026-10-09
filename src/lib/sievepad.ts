@@ -7,13 +7,17 @@
  * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
-export const SIEVEPAD_URL = 'https://sievepad.com/';
+// inbuxa: the Sieve playground ships with the console (sieve-playground.ts)
+// and runs the server's own interpreter, so the script never leaves the
+// console's origin.
+export function playgroundUrl(): string {
+  return new URL(__SIEVE_PLAYGROUND__, document.baseURI).href;
+}
 
 const SIEVEPAD_FORMAT_VERSION = 1;
 const SIEVEPAD_MAX_NAME_LENGTH = 80;
 const SIEVEPAD_MAIN_SCRIPT = 'main';
 const BASE64_CHUNK_SIZE = 0x8000;
-const WARNING_DISMISSED_KEY = 'inbuxa-sievepad-warning-dismissed';
 
 const SIEVE_SCRIPT_FIELDS: Record<string, string> = {
   'x:SieveSystemScript': 'contents',
@@ -33,7 +37,7 @@ function toBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export async function sievepadLink(name: string, source: string, base = SIEVEPAD_URL): Promise<string> {
+export async function sievepadLink(name: string, source: string, base = playgroundUrl()): Promise<string> {
   const json = JSON.stringify({
     v: SIEVEPAD_FORMAT_VERSION,
     name: name.slice(0, SIEVEPAD_MAX_NAME_LENGTH),
@@ -60,21 +64,5 @@ export async function openInSievepad(name: string, source: string): Promise<void
     tab.location.replace(link);
   } else {
     window.open(link, '_blank', 'noopener,noreferrer');
-  }
-}
-
-export function isSievepadWarningDismissed(): boolean {
-  try {
-    return localStorage.getItem(WARNING_DISMISSED_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-export function dismissSievepadWarning(): void {
-  try {
-    localStorage.setItem(WARNING_DISMISSED_KEY, 'true');
-  } catch {
-    return;
   }
 }

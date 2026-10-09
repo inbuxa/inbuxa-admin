@@ -21,5 +21,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "source-archive.ts"]
+  "include": ["vite.config.ts", "source-archive.ts", "sieve-playground.ts"]
 }

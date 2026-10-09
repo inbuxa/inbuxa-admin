@@ -9,13 +9,14 @@ import { version } from './package.json' with { type: 'json' }
 // INBUXA's own dated version lives apart from package.json, whose version
 // follows upstream WebUI so its bumps merge without conflicts.
 import inbuxa from './inbuxa-version.json' with { type: 'json' }
+import { sievePlayground } from './sieve-playground.ts'
 
 export default defineConfig({
   base: './',
   define: {
     __APP_VERSION__: JSON.stringify(`${inbuxa.version} (base ${version})`),
   },
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), sievePlayground()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
