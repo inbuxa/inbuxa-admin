@@ -6,7 +6,7 @@
 
 import { create } from 'zustand';
 import type { MetricId, Metric } from '../types/metrics';
-import { apiFetch } from '@/services/api';
+import { apiFetch, getApiBaseUrl } from '@/services/api';
 import i18n from '@/i18n';
 
 type LiveStatus = 'idle' | 'connecting' | 'open' | 'error' | 'closed';
@@ -107,9 +107,13 @@ async function openStream(ids: Set<MetricId>) {
 }
 
 function getOrigin(): string {
-  const envUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
-  if (envUrl && envUrl.length > 0) return envUrl.replace(/\/+$/, '');
-  return window.location.origin;
+  // Honor the deploy-time API base (VITE_API_BASE_URL or the api-base-url
+  // meta tag) exactly like every other /api/live caller. Using
+  // window.location.origin here breaks Dashboard live metrics in any split
+  // deployment where the Admin origin is not the server (e.g. Admin in Docker
+  // pointed at the server via API_BASE_URL): the EventSource hits the Admin
+  // nginx instead, which answers with the SPA shell.
+  return getApiBaseUrl();
 }
 
 let visibilityTimer: ReturnType<typeof setTimeout> | null = null;
