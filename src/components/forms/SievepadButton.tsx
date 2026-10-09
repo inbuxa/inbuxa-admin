@@ -13,19 +13,22 @@ import { Bug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { openInSievepad } from '@/lib/sievepad';
+import type { SieveInterpreter } from '@/lib/sieveLimits';
 
 interface SievepadButtonProps {
   scriptName: string;
   source: string;
+  interpreter: SieveInterpreter;
 }
 
 // inbuxa: the playground ships with the console, so the script goes nowhere
-// else and there is nothing to warn about first.
-export function SievepadButton({ scriptName, source }: SievepadButtonProps) {
+// else and there is nothing to warn about first. It runs under the limits
+// of the interpreter that runs it on the server.
+export function SievepadButton({ scriptName, source, interpreter }: SievepadButtonProps) {
   const { t } = useTranslation();
 
   const open = () => {
-    openInSievepad(scriptName || t('sievepad.defaultName', 'Sieve script'), source).catch(() => {
+    openInSievepad(scriptName || t('sievepad.defaultName', 'Sieve script'), source, interpreter).catch(() => {
       toast({ title: t('sievepad.failed', "Couldn't open the Sieve playground."), variant: 'destructive' });
     });
   };

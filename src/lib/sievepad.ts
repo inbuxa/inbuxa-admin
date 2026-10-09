@@ -7,6 +7,8 @@
  * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
+import { fetchPlaygroundSettings, type SieveInterpreter } from './sieveLimits';
+
 // inbuxa: the Sieve playground ships with the console (sieve-playground.ts)
 // and runs the server's own interpreter, so the script never leaves the
 // console's origin.
@@ -37,25 +39,32 @@ function toBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export async function sievepadLink(name: string, source: string, base = playgroundUrl()): Promise<string> {
+export async function sievepadLink(
+  name: string,
+  source: string,
+  settings: Record<string, unknown> = {},
+  base = playgroundUrl(),
+): Promise<string> {
   const json = JSON.stringify({
     v: SIEVEPAD_FORMAT_VERSION,
     name: name.slice(0, SIEVEPAD_MAX_NAME_LENGTH),
     scripts: [{ name: SIEVEPAD_MAIN_SCRIPT, source: source.replace(/\r\n/g, '\n') }],
     messages: [],
-    settings: {},
+    settings,
   });
   const stream = new Blob([new TextEncoder().encode(json)]).stream().pipeThrough(new CompressionStream('deflate-raw'));
   const packed = new Uint8Array(await new Response(stream).arrayBuffer());
   return `${base}#w=${toBase64Url(packed)}`;
 }
 
-export async function openInSievepad(name: string, source: string): Promise<void> {
+// inbuxa: the script runs under the limits of the interpreter that runs it
+// on the server (sieveLimits.ts).
+export async function openInSievepad(name: string, source: string, interpreter: SieveInterpreter): Promise<void> {
   const tab = window.open('about:blank', '_blank');
   if (tab) tab.opener = null;
   let link: string;
   try {
-    link = await sievepadLink(name, source);
+    link = await sievepadLink(name, source, await fetchPlaygroundSettings(interpreter));
   } catch (err) {
     tab?.close();
     throw err;

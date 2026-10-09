@@ -34,6 +34,7 @@ import { EventPicker } from '@/features/events/EventPicker';
 import type { ExpressionHints } from '@/components/expression/simple';
 import { OtpAuthField } from '@/components/forms/OtpAuthField';
 import { SievepadButton } from '@/components/forms/SievepadButton';
+import type { SieveInterpreter } from '@/lib/sieveLimits';
 import {
   bytesToHuman,
   humanToBytes,
@@ -70,6 +71,8 @@ export interface FieldWidgetProps {
   error?: string;
   schema: Schema;
   sieveScriptName?: string;
+  /** inbuxa: the interpreter that runs that script, for the playground's limits. */
+  sieveInterpreter?: SieveInterpreter;
   /** INBUXA: the object or schema that owns this field, for its help id (`scope.field`). */
   helpScope?: string;
   /** inbuxa: the saved record this field belongs to, for "Explain this" (ai-explain EX-17). */
@@ -94,8 +97,19 @@ function getRequiredMarker(field: Field, readOnly: boolean): 'required' | 'optio
 
 export function FieldWidget(props: FieldWidgetProps) {
   const { t } = useTranslation();
-  const { field, formField, value, onChange, readOnly, error, schema, sieveScriptName, helpScope, explainTarget } =
-    props;
+  const {
+    field,
+    formField,
+    value,
+    onChange,
+    readOnly,
+    error,
+    schema,
+    sieveScriptName,
+    sieveInterpreter = 'user',
+    helpScope,
+    explainTarget,
+  } = props;
   const helpId = helpScope ? `${helpScope}.${formField.name}` : undefined;
   // INBUXA: the option's default, for its tooltip, and whether it has been changed.
   const defaultValue = helpScope ? schema.fields[helpScope]?.defaults?.[formField.name] : undefined;
@@ -158,7 +172,15 @@ export function FieldWidget(props: FieldWidgetProps) {
           />
         );
       case 'blobId':
-        return <BlobField value={value} onChange={onChange} readOnly={readOnly} sieveScriptName={sieveScriptName} />;
+        return (
+          <BlobField
+            value={value}
+            onChange={onChange}
+            readOnly={readOnly}
+            sieveScriptName={sieveScriptName}
+            sieveInterpreter={sieveInterpreter}
+          />
+        );
       case 'objectId':
         return (
           <ObjectIdField
@@ -281,7 +303,11 @@ export function FieldWidget(props: FieldWidgetProps) {
       </div>
       {widget}
       {sieveScriptName !== undefined && ft.type === 'string' && (
-        <SievepadButton scriptName={sieveScriptName} source={typeof value === 'string' ? value : ''} />
+        <SievepadButton
+          scriptName={sieveScriptName}
+          source={typeof value === 'string' ? value : ''}
+          interpreter={sieveInterpreter}
+        />
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
@@ -1034,9 +1060,10 @@ interface BlobFieldProps {
   onChange: (value: unknown) => void;
   readOnly: boolean;
   sieveScriptName?: string;
+  sieveInterpreter: SieveInterpreter;
 }
 
-function BlobField({ value, onChange, readOnly, sieveScriptName }: BlobFieldProps) {
+function BlobField({ value, onChange, readOnly, sieveScriptName, sieveInterpreter }: BlobFieldProps) {
   const { t } = useTranslation();
   const blobId = typeof value === 'string' ? value : null;
   const [content, setContent] = useState<string>('');
@@ -1102,7 +1129,9 @@ function BlobField({ value, onChange, readOnly, sieveScriptName }: BlobFieldProp
         rows={8}
         className="font-mono text-xs"
       />
-      {sieveScriptName !== undefined && <SievepadButton scriptName={sieveScriptName} source={content} />}
+      {sieveScriptName !== undefined && (
+        <SievepadButton scriptName={sieveScriptName} source={content} interpreter={sieveInterpreter} />
+      )}
       {modified && (
         <p className="text-xs text-muted-foreground">
           {t('field.contentModified', 'Content modified (will be saved as a new blob)')}
