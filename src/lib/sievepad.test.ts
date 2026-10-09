@@ -41,6 +41,11 @@ describe('sievepadLink', () => {
     });
   });
 
+  it('carries the interpreter settings it is given', async () => {
+    const link = await sievepadLink('Filters', 'keep;', { cpuLimit: 5000, capabilities: ['fileinto'] });
+    expect((decode(link) as { settings: unknown }).settings).toEqual({ cpuLimit: 5000, capabilities: ['fileinto'] });
+  });
+
   it('truncates long workspace names', async () => {
     const link = await sievepadLink('x'.repeat(200), 'keep;');
     expect((decode(link) as { name: string }).name).toHaveLength(80);

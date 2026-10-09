@@ -71,6 +71,7 @@ import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DnsConnectCard } from '@/features/dns/DnsConnectCard';
 import { changedFields } from '@/features/settings/changedFromDefault';
 import { isSieveScriptField } from '@/lib/sievepad';
+import { interpreterFor } from '@/lib/sieveLimits';
 import { reloadActionFor } from '@/lib/settingsApply';
 
 import type { Field, Fields, Form, FormField, Schema } from '@/types/schema';
@@ -899,6 +900,7 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
                       sieveScriptName={
                         isSieveScriptField(resolved.obj.objectName, formField.name) ? scriptName : undefined
                       }
+                      sieveInterpreter={interpreterFor(resolved.obj.objectName)}
                       helpScope={helpScope}
                       explainTarget={
                         isCreate
