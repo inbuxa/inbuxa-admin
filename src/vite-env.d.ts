@@ -22,3 +22,6 @@ interface ImportMeta {
 }
 
 declare const __APP_VERSION__: string;
+// inbuxa: the Sieve playground's page, relative to the console
+// (sieve-playground.ts)
+declare const __SIEVE_PLAYGROUND__: string;

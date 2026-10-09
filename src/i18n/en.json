@@ -387,11 +387,9 @@
   },
   "sievepad": {
     "debug": "Debug",
+    "debugHint": "Test a copy of this script in the Sieve playground",
     "defaultName": "Sieve script",
-    "dontShowAgain": "Don't show this again",
-    "failed": "Failed to open Sievepad.",
-    "warningDescription": "A new tab will open sievepad.com with a copy of this script. Sievepad compiles and runs the script entirely in your browser: nothing is uploaded to or stored on any server.",
-    "warningTitle": "Debug in Sievepad"
+    "failed": "Couldn't open the Sieve playground."
   },
   "toggleTheme": "Toggle theme",
   "tracing": {
