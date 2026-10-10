@@ -4,9 +4,10 @@
 # from the browser, never from here -- so this is nginx with a SPA fallback and
 # no back end of its own.
 #
-# It is built here rather than copied from `dist/`, which is committed for the
-# convenience of people serving the tree directly. An image built from a stale
-# `dist/` would be a build nobody can reproduce from the commit it claims.
+# It is built here from the source, not copied from a `dist/` built outside.
+# `dist/` is not in the repository (.gitignore keeps it out), and an image
+# made from a local one would be a build nobody can reproduce from the commit
+# it claims.
 # Docker Hub images, pulled through Google's mirror: GitHub's shared runners
 # hit Docker Hub's anonymous pull limit (429), which the mirror is not subject
 # to. Same images, same digests (checked 2026-10-09).
