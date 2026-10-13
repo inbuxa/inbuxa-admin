@@ -69,6 +69,7 @@ import { celebrateIfFirstDomain } from '@/features/celebrate/firstDomain';
 import { logFormChange } from '@/lib/debug';
 import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DnsConnectCard } from '@/features/dns/DnsConnectCard';
+import { DirectoryTestCard } from '@/features/directory/DirectoryTestCard';
 import { changedFields } from '@/features/settings/changedFromDefault';
 import { isSieveScriptField } from '@/lib/sievepad';
 import { interpreterFor } from '@/lib/sieveLimits';
@@ -931,6 +932,11 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
             </CardContent>
           </Card>
         ))}
+
+        {/* inbuxa: try a saved directory, as the guided setup does (admin #109) */}
+        {resolved.obj.objectName === 'x:Directory' && objectId && !isCreate && (
+          <DirectoryTestCard directoryId={String(objectId)} kind={selectedVariant} dirty={isDirty} />
+        )}
 
         <div className="flex items-center justify-between pt-2 pb-8">
           <div className="flex items-center gap-3">

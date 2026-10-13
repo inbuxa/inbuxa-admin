@@ -17,7 +17,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -25,35 +25,20 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { WizardNote, WizardShell, type WizardStep } from '@/components/wizard/WizardShell';
-import { apiFetch } from '@/services/api';
 import { getAccountId, jmapRequest, jmapSet } from '@/services/jmap/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useSchemaStore } from '@/stores/schemaStore';
 import type { JmapSetResponse } from '@/types/jmap';
 import { cn } from '@/lib/utils';
 import { directoryObject, PRESETS, type Connection, type Preset } from './presets';
+import { testDirectory, type DirectoryTestResult } from './directoryTest';
+import { DirectoryTestResults } from './DirectoryTestResults';
 
 interface DomainRow {
   id: string;
   name: string;
   directoryId: string | null;
   accounts: number | null;
-}
-
-interface TestResult {
-  kind?: string;
-  opened: boolean;
-  error?: string;
-  oidc?: { issuer: string };
-  lookup?: {
-    found?: 'account' | 'group' | 'none';
-    email?: string;
-    aliases?: string[];
-    groups?: string[];
-    description?: string | null;
-    error?: string;
-  };
-  signIn?: { ok: boolean; wrongPassword?: boolean; error?: string; email?: string };
 }
 
 function failure(body: JmapSetResponse | undefined, kind: 'notCreated' | 'notUpdated'): string | null {
@@ -118,7 +103,7 @@ export function DirectorySetupPage() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [testAddress, setTestAddress] = useState('');
   const [testPassword, setTestPassword] = useState('');
-  const [result, setResult] = useState<TestResult | null>(null);
+  const [result, setResult] = useState<DirectoryTestResult | null>(null);
   const [data, setData] = useState<{ domains: DomainRow[]; serverDefault: string | null } | null>(null);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [asDefault, setAsDefault] = useState(false);
@@ -193,28 +178,11 @@ export function DirectorySetupPage() {
     setBusy(true);
     setError(null);
     try {
-      // The server rebuilds directories a moment after a save.
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const res = await apiFetch('/api/directory/test', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          // OpenID Connect has no lookup to try, so any address will do there.
-          body: JSON.stringify({
-            directoryId: id,
-            address: testAddress.trim() || 'check@invalid',
-            password: testPassword || undefined,
-          }),
-        });
-        if (!res.ok) {
-          const problem = (await res.json().catch(() => ({}))) as { detail?: string; title?: string };
-          throw new Error(problem.detail ?? problem.title ?? `The test failed (${res.status}).`);
-        }
-        const body = (await res.json()) as TestResult;
-        if (body.opened || !body.error?.startsWith("The server hasn't loaded")) {
-          setResult(body);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 1500));
+      // OpenID Connect has no lookup to try, so any address will do there.
+      const body = await testDirectory(id, testAddress, testPassword);
+      if (body) {
+        setResult(body);
+        return;
       }
       setResult({ opened: false, error: t('dirSetup.notLoaded', 'The server hasn’t loaded the directory yet.') });
     } catch (e) {
@@ -494,70 +462,7 @@ export function DirectorySetupPage() {
           </Button>
         )}
 
-        {r && (
-          <ul className="space-y-2 text-sm">
-            <li className="flex items-start gap-2">
-              {r.opened ? (
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              ) : (
-                <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-              )}
-              {r.opened
-                ? r.oidc
-                  ? t('dirSetup.oidcOk', 'The provider answered, as {{issuer}}.', { issuer: r.oidc.issuer })
-                  : t('dirSetup.opened', 'The server can use this directory.')
-                : t('dirSetup.notOpened', 'The directory didn’t open: {{error}}', { error: r.error ?? '' })}
-            </li>
-            {r.lookup && (
-              <li className="flex items-start gap-2">
-                {r.lookup.found === 'account' ? (
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                ) : (
-                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                )}
-                <span>
-                  {r.lookup.error
-                    ? t('dirSetup.lookupError', 'The lookup failed: {{error}}', { error: r.lookup.error })
-                    : r.lookup.found === 'account'
-                      ? t('dirSetup.found', 'Found {{name}} <{{email}}>.', {
-                          name: r.lookup.description ?? '',
-                          email: r.lookup.email,
-                        })
-                      : r.lookup.found === 'group'
-                        ? t('dirSetup.foundGroup', 'That address is a group, not a person. Try a person’s address.')
-                        : t(
-                            'dirSetup.notFound',
-                            'Nobody with that address. Check the search base and that the address is in the mail attribute.',
-                          )}
-                  {r.lookup.found === 'account' && (r.lookup.aliases?.length || r.lookup.groups?.length) ? (
-                    <span className="block text-xs text-muted-foreground">
-                      {r.lookup.aliases?.length
-                        ? t('dirSetup.aliases', 'Also receives: {{list}}. ', { list: r.lookup.aliases.join(', ') })
-                        : ''}
-                      {r.lookup.groups?.length
-                        ? t('dirSetup.groups', 'Groups: {{list}}.', { list: r.lookup.groups.join(', ') })
-                        : ''}
-                    </span>
-                  ) : null}
-                </span>
-              </li>
-            )}
-            {r.signIn && (
-              <li className="flex items-start gap-2">
-                {r.signIn.ok ? (
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                ) : (
-                  <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                )}
-                {r.signIn.ok
-                  ? t('dirSetup.signInOk', 'The password signs in.')
-                  : r.signIn.wrongPassword
-                    ? t('dirSetup.wrongPassword', 'The directory says that password is wrong.')
-                    : t('dirSetup.signInError', 'Signing in failed: {{error}}', { error: r.signIn.error ?? '' })}
-              </li>
-            )}
-          </ul>
-        )}
+        {r && <DirectoryTestResults result={r} />}
         {r && !testPassed && (
           <p className="text-sm text-muted-foreground">
             {t('dirSetup.fixHint', 'Go back to change the connection. Saving again updates the same directory.')}
