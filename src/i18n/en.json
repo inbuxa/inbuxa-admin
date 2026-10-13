@@ -2329,5 +2329,13 @@
     "expires": "Expires {{date}}",
     "domainAliases_one": "{{count}} alias domain",
     "domainAliases_other": "{{count}} alias domains"
+  },
+  "dirTest": {
+    "title": "Test this directory",
+    "saveFirst": "Save your changes first. The test uses the saved settings.",
+    "how": "The test uses the saved settings. Nothing is created, and a wrong password doesn’t count against anyone.",
+    "check": "Check the connection",
+    "searchFailed": "The directory opened, but searching it failed: {{error}}",
+    "connected": "The server can connect to this directory and search it."
   }
 }

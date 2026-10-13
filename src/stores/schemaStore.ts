@@ -10,6 +10,7 @@
 import { create } from 'zustand';
 import type { Schema, LayoutSubItem } from '@/types/schema';
 import { withRegroupedSettings } from '@/lib/settingsLayout';
+import { withExtraColumns } from '@/lib/listColumns';
 
 export interface SearchIndexEntry {
   text: string;
@@ -168,8 +169,9 @@ export const useSchemaStore = create<SchemaState>()((set) => ({
   searchIndex: [],
 
   setSchema: (served) => {
-    // inbuxa: Settings grouped by task, not by config file (settings-reorg).
-    const schema = withRegroupedSettings(served);
+    // inbuxa: Settings grouped by task, not by config file (settings-reorg),
+    // and columns the served lists leave out.
+    const schema = withExtraColumns(withRegroupedSettings(served));
     const { viewToSection, linkEntries } = walkLayouts(schema);
     const searchIndex = buildSearchIndex(schema, viewToSection, linkEntries);
     set({
