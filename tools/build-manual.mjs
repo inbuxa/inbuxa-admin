@@ -7,7 +7,7 @@
 // tooltip or help panel makes (src/help/manual.ts) lands on its own entry.
 //
 //   node tools/build-manual.mjs --schema ../inbuxa-server/resources/schema/schema.json.gz \
-//                               --out ../inbuxa.org/docs-site/docs/reference
+//                               --out ../inbuxa.org/docs-site/content/docs/reference
 //
 // The words are the console's own: the help texts in src/help/texts.ts first,
 // the schema's descriptions where we haven't written any, and defaults
@@ -15,6 +15,10 @@
 // anchors come from manualPath(), the same function the console links with,
 // so the two can't drift apart. Run it again after a schema or help change;
 // it rewrites the whole directory.
+//
+// The docs site is HotDog CMS (MkDocs until October 2026): each page opens
+// with front matter naming its title, which the docs' layout shows, and the
+// index is the folder's own page, _index.md.
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -24,7 +28,7 @@ import { createServer } from 'vite';
 function arg(name) {
   const i = process.argv.indexOf(`--${name}`);
   if (i < 0 || !process.argv[i + 1]) {
-    console.error(`usage: build-manual.mjs --schema <schema.json.gz> --out <docs/reference>`);
+    console.error(`usage: build-manual.mjs --schema <schema.json.gz> --out <content/docs/reference>`);
     process.exit(2);
   }
   return process.argv[i + 1];
@@ -46,6 +50,11 @@ await vite.close();
 const WORDS = { on: 'On', off: 'Off', none: 'None' };
 
 /** Text for markdown: angle brackets would read as HTML. */
+/** A page's front matter: its title (JSON's quoting is YAML's). */
+function front(pageTitle) {
+  return ['---', `title: ${JSON.stringify(String(pageTitle))}`, '---', ''];
+}
+
 function md(text) {
   return String(text ?? '')
     .replace(/&/g, '&amp;')
@@ -212,8 +221,7 @@ function fieldEntry(scope, f) {
 }
 
 function schemaPage(name) {
-  const lines = [];
-  lines.push(`# ${md(title(name))}`, '');
+  const lines = front(title(name));
   const where = whereInConsole.get(name);
   if (where) lines.push(`*In the console: ${where.map(md).join(' › ')}*`, '');
   const text = about(name);
@@ -251,7 +259,7 @@ function schemaPage(name) {
 /** A page of the console's own, with what it's for (its options live in the code, not the schema). */
 function ownPage(name) {
   const help = PAGE_HELP[name];
-  const lines = [`# ${md(title(name))}`, ''];
+  const lines = front(title(name));
   const where = whereInConsole.get(name);
   if (where) lines.push(`*In the console: ${where.map(md).join(' › ')}*`, '');
   if (help?.about) lines.push(md(help.about), '');
@@ -284,8 +292,7 @@ for (const [name, render] of pages) {
 
 // The index: the console's menus first, then everything else
 const index = [
-  '# Reference',
-  '',
+  ...front('Reference'),
   'Every setting in the console, page by page: what it does, what it’s set to unless you change it, and the name the API uses. The **Learn more** link in a tooltip or a page’s help panel opens its entry here.',
   '',
   'These pages are generated from the server’s own description of its settings, with the console’s help text. To set things up step by step, start with [Run it](../run/topology.md) instead.',
@@ -321,6 +328,6 @@ if (rest.length) {
   for (const e of rest) index.push(`- [${md(title(e.name))}](${e.file})`);
   index.push('');
 }
-writeFileSync(join(outDir, 'index.md'), `${index.join('\n')}\n`);
+writeFileSync(join(outDir, '_index.md'), `${index.join('\n')}\n`);
 
 console.log(`wrote ${written.length} pages and an index to ${outDir}`);
