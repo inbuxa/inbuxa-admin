@@ -247,7 +247,7 @@ export function evaluate(s: Snapshot, defaults: Defaults): Result {
         subject: '',
         value: normalizeExpr(now),
         title: 'The rule for who may relay mail has been changed',
-        why: 'A wrong rule makes this an open relay that spammers find within hours. It may be deliberate, so check it.',
+        why: 'A rule that lets anyone relay makes this an open relay, which spammers find within hours. An edge server in front of another one changes it on purpose, to take in mail for your own domains: if that’s this server, check the rule names only them, then accept it.',
         action: {
           kind: 'review',
           viewName: 'x:MtaStageRcpt',
@@ -261,7 +261,7 @@ export function evaluate(s: Snapshot, defaults: Defaults): Result {
     ];
   });
 
-  check('SS-3', 'Domains that relay for anyone', ['domains'], () => {
+  check('SS-3', 'Domains that accept unknown addresses', ['domains'], () => {
     const relaying = (s.domains ?? []).filter((d) => d.allowRelaying).map((d) => d.name);
     if (relaying.length === 0) return [];
     return [
@@ -272,9 +272,9 @@ export function evaluate(s: Snapshot, defaults: Defaults): Result {
         value: [...relaying].sort(),
         title:
           relaying.length === 1
-            ? `${relaying[0]} relays mail for anyone`
-            : `${relaying.length} domains relay mail for anyone`,
-        why: 'Mail claiming to be from these domains is passed on without sign-in, which spammers can use.',
+            ? `${relaying[0]} accepts mail for addresses that don’t exist here`
+            : `${relaying.length} domains accept mail for addresses that don’t exist here`,
+        why: 'Mail to an unknown address at these domains is taken in to be passed on, instead of refused. That’s right for a domain split between this server and another. Turned on by mistake, those messages bounce later, often to forged senders.',
         action: {
           kind: 'review',
           viewName: 'x:Domain',
