@@ -1,52 +1,47 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2023 shadcn
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: MIT
  */
+
+// Structure from shadcn/ui 4.21.1 (MIT), styled for inbuxa.
 
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('rounded-2xl border bg-card text-card-foreground shadow-soft', className)} {...props} />
-));
-Card.displayName = 'Card';
+// The card has no padding of its own: header, content and footer each pad
+// themselves, and content and footer skip the top so they sit under the header.
 
-const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />
-  ),
-);
-CardHeader.displayName = 'CardHeader';
+function Card({ className, ...props }: React.ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="card"
+      className={cn('rounded-2xl border bg-card text-card-foreground shadow-soft', className)}
+      {...props}
+    />
+  );
+}
 
-const CardTitle = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('font-display font-semibold leading-none', className)} {...props} />
-  ),
-);
-CardTitle.displayName = 'CardTitle';
+function CardHeader({ className, ...props }: React.ComponentProps<'div'>) {
+  return <div data-slot="card-header" className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />;
+}
 
-const CardDescription = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('text-sm text-muted-foreground', className)} {...props} />
-  ),
-);
-CardDescription.displayName = 'CardDescription';
+function CardTitle({ className, ...props }: React.ComponentProps<'div'>) {
+  return <div data-slot="card-title" className={cn('font-display leading-none font-semibold', className)} {...props} />;
+}
 
-const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => <div ref={ref} className={cn('p-6 pt-0', className)} {...props} />,
-);
-CardContent.displayName = 'CardContent';
+function CardDescription({ className, ...props }: React.ComponentProps<'div'>) {
+  return <div data-slot="card-description" className={cn('text-sm text-muted-foreground', className)} {...props} />;
+}
 
-const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('flex items-center p-6 pt-0', className)} {...props} />
-  ),
-);
-CardFooter.displayName = 'CardFooter';
+function CardContent({ className, ...props }: React.ComponentProps<'div'>) {
+  return <div data-slot="card-content" className={cn('p-6 pt-0', className)} {...props} />;
+}
+
+function CardFooter({ className, ...props }: React.ComponentProps<'div'>) {
+  return <div data-slot="card-footer" className={cn('flex items-center p-6 pt-0', className)} {...props} />;
+}
 
 export { Card, CardHeader, CardFooter, CardTitle, CardDescription, CardContent };
