@@ -1,0 +1,152 @@
+# Watch the upstream web UI for new versions, and open an issue for each one
+# so it can be read for features worth writing here.
+#
+# The console no longer merges upstream (README › Upstream): later versions
+# include code under a proprietary license. So the issue lists what changed,
+# file by file, grouped by each file's license header, for a reader to know
+# which files may be opened at all. Enterprise-only files, and files holding
+# Enterprise snippets, are named but must never be opened.
+#
+# Reads metadata only: the tag list and the compare between two tags from
+# GitHub's API. Each changed file is fetched just to read its license header
+# lines; nothing of upstream's code is kept, printed, or put in the issue, only
+# paths, change counts and licenses. Titles and bodies stay free of the
+# upstream project's name, as the rest of the fork's user-visible text does.
+#
+# Each version since the fork point (v1.0.11) gets one issue, compared with
+# the version before it. An existing issue with the same title, open or
+# closed, stops a second. Tags are watched rather than releases: upstream has
+# tagged versions before publishing them as releases.
+#
+# Daily 06:47 UTC; run it by hand with workflow_dispatch. DRY_RUN=1 prints
+# the issues instead of opening them.
+name: upstream-watch
+
+on:
+  schedule:
+    - cron: '47 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  upstream-watch:
+    runs-on: light
+    container:
+      image: python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0 # 3.13-slim
+    env:
+      TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+    steps:
+      - shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, urllib.parse, urllib.request
+
+          FORK_BASE = "v1.0.11"
+          UPSTREAM = "stalwartlabs/webui"
+          DRY_RUN = os.environ.get("DRY_RUN") == "1"
+
+          api = f"{os.environ.get('CI_SERVER_INTERNAL', '')}/api/v1/repos/{os.environ.get('REPO', '')}"
+          def call(method, url, body=None, token=None, raw=False):
+              headers = {"User-Agent": "inbuxa-admin-upstream-watch"}
+              if body is not None:
+                  headers["Content-Type"] = "application/json"
+              if token:
+                  headers["Authorization"] = f"token {token}"
+              req = urllib.request.Request(url, method=method, headers=headers,
+                  data=json.dumps(body).encode() if body is not None else None)
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return r.read() if raw else json.load(r)
+          SEMVER = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
+          def key(tag):
+              return tuple(int(x) for x in SEMVER.match(tag).groups())
+          def plural(n, word):
+              return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+          # Unauthenticated: a public repo, once a day, well inside the limit.
+          tags = call("GET", f"https://api.github.com/repos/{UPSTREAM}/tags?per_page=100")
+          newer = sorted((t["name"] for t in tags
+                          if SEMVER.match(t["name"]) and key(t["name"]) > key(FORK_BASE)), key=key)
+          if not newer:
+              print(f"Nothing new: {FORK_BASE}, the fork point, is the newest version."); sys.exit(0)
+
+          if DRY_RUN:
+              existing = set()
+          else:
+              existing = {i["title"] for i in call("GET", f"{api}/issues?state=all&type=issues"
+                          "&q=Review+upstream+web+UI&limit=50", token=os.environ["TOKEN"])}
+
+          SPDX = re.compile(r"SPDX-License-Identifier:\s*(.+?)\s*(?:\*/|-->)?\s*$", re.M)
+          def license_of(tag, path):
+              """One of: enterprise, snippets, dual, other:<id>, none. Reads only the license lines."""
+              url = f"https://raw.githubusercontent.com/{UPSTREAM}/{urllib.parse.quote(tag)}/{urllib.parse.quote(path)}"
+              text = call("GET", url, raw=True).decode("utf-8", "replace")
+              ids = SPDX.findall(text)
+              if not ids:
+                  return "none"
+              head = ids[0]
+              if head == "LicenseRef-SEL":
+                  return "enterprise"
+              if "SPDX-SnippetBegin" in text or "LicenseRef-SEL" in ids[1:]:
+                  return "snippets"
+              if head == "AGPL-3.0-only OR LicenseRef-SEL":
+                  return "dual"
+              return f"other:{head}"
+
+          GROUPS = [
+              ("enterprise", "Enterprise only: never open"),
+              ("snippets", "Dual, holding Enterprise snippets: never open"),
+              ("removed", "Removed"),
+              ("dual", "Dual (AGPL-3.0-only OR LicenseRef-SEL): may be read"),
+              ("none", "No license header: check before reading"),
+          ]
+
+          prev = FORK_BASE
+          for tag in newer:
+              title = f"Review upstream web UI {tag}"
+              if title in existing:
+                  print(f"{tag}: issue already exists."); prev = tag; continue
+              cmp = call("GET", f"https://api.github.com/repos/{UPSTREAM}/compare/{prev}...{tag}")
+              files = cmp.get("files", [])
+              groups = {}
+              for f in files:
+                  if f["status"] == "removed":
+                      group = "removed"
+                  else:
+                      group = license_of(tag, f["filename"])
+                  line = f"- `{f['filename']}` ({f['status']}, +{f['additions']} −{f['deletions']})"
+                  if f["status"] == "renamed":
+                      line += f", from `{f['previous_filename']}`"
+                  groups.setdefault(group, []).append(line)
+
+              date = cmp["commits"][-1]["commit"]["committer"]["date"][:10] if cmp.get("commits") else "?"
+              parts = [
+                  f"Upstream tagged the web UI {tag} ({date}): {plural(cmp.get('total_commits', 0), 'commit')} and "
+                  f"{plural(len(files), 'changed file')} since {prev}. The console was forked at {FORK_BASE} and "
+                  "no longer merges upstream (README › Upstream).",
+                  "Read what changed and note here anything worth writing ourselves, in our own code. "
+                  "Open only files marked *may be read*. Never open a file marked *never open*, "
+                  "and don't hand one to anyone who writes console code.",
+              ]
+              if len(files) >= 300:
+                  parts.append("**The compare stops at 300 files, so this list is incomplete.**")
+              labels = dict(GROUPS)
+              order = [g for g, _ in GROUPS] + sorted(g for g in groups if g not in labels)
+              for group in order:
+                  if group not in groups:
+                      continue
+                  label = labels.get(group, f"Other license ({group[6:]}): check before reading")
+                  parts.append(f"<details><summary>{label}: {len(groups[group])}</summary>\n\n"
+                               + "\n".join(sorted(groups[group])) + "\n\n</details>")
+              body = "\n\n".join(parts)
+
+              if DRY_RUN:
+                  print(f"=== {title}\n{body}\n")
+              else:
+                  issue = call("POST", f"{api}/issues", {"title": title, "body": body}, token=os.environ["TOKEN"])
+                  print(f"{tag}: opened #{issue['number']}.")
+              prev = tag
+          PY
