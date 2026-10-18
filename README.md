@@ -48,21 +48,18 @@ npm run typecheck && npx eslint src/ && npx vitest run
 npm run build
 ```
 
-## Keeping up with upstream
+## Upstream
 
-The upstream codebase's history contains no code under a proprietary license,
-so this is an ordinary git fork. `upstream` is a fetch-only remote:
-
-```bash
-git fetch upstream --tags
-git merge v1.0.12        # the next release tag
-```
+INBUXA Admin was forked from upstream at v1.0.11 and no longer takes upstream's
+changes. Later upstream releases include code under a proprietary license, so
+nothing after v1.0.11 is merged or copied in. Upstream releases are still
+followed, and a feature worth having is written here, in this fork's own code.
 
 ## Versions
 
 INBUXA Admin has its own dated version (`inbuxa-version.json`), shown with the
-upstream release it's based on: `INBUXA Admin 2026.9.18 (base 1.0.11)`.
-`package.json` keeps upstream's version, so upstream's bumps merge cleanly.
+upstream release it was forked from: `INBUXA Admin 2026.9.18 (base 1.0.11)`.
+`package.json` keeps that release's version.
 
 ## Source code
 

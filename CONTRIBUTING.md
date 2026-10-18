@@ -23,12 +23,13 @@ there are not merged.
 ## What this is
 
 A fork of Stalwart's web interface, taken under the AGPL-3.0-only half of its
-dual licence, talking to INBUXA over JMAP and OAuth. Upstream's copyright
+dual license, talking to INBUXA over JMAP and OAuth. Upstream's copyright
 headers stay where they are, and a file this fork has changed says so beneath
 them. New files carry Coffey Labs' own header and `AGPL-3.0-only`.
 
-Changes to files that came from upstream are kept small, so the next import
-merges cleanly and a reader can tell fork from base.
+Nothing from upstream after v1.0.11 is merged or copied in: later upstream
+releases include code under a proprietary license. A feature upstream adds
+later is written here from scratch, never copied.
 
 ## Before you push
 
