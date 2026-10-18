@@ -1,7 +1,10 @@
 /*
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { useEffect, useState } from 'react';
@@ -13,6 +16,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { getBasePath } from '@/lib/basePath';
 import { exchangeCode, getStoredOAuthData, clearStoredOAuthData, getOAuthRedirectUri } from '@/services/auth/oauth';
+import { claimCode, settleCode } from '@/services/auth/codeOnce';
 
 export default function OAuthCallback() {
   const { t } = useTranslation();
@@ -24,8 +28,19 @@ export default function OAuthCallback() {
 
   useEffect(() => {
     async function handleCallback() {
+      // inbuxa: each code is traded once (see codeOnce.ts). Back on this page
+      // with a code already traded, go on as signed in, or sign in afresh.
+      const code = searchParams.get('code');
+      if (code) {
+        const claim = claimCode(code);
+        if (claim === 'inFlight') return;
+        if (claim === 'traded') {
+          navigate(useAuthStore.getState().isAuthenticated() ? '/' : '/login', { replace: true });
+          return;
+        }
+      }
+      let traded = false;
       try {
-        const code = searchParams.get('code');
         const stateParam = searchParams.get('state');
         const errorParam = searchParams.get('error');
         const errorDescription = searchParams.get('error_description');
@@ -60,6 +75,7 @@ export default function OAuthCallback() {
             tokenEndpoint,
             endSessionEndpoint,
           );
+        traded = true;
 
         clearStoredOAuthData();
 
@@ -76,6 +92,8 @@ export default function OAuthCallback() {
       } catch (err) {
         clearStoredOAuthData();
         setError(err instanceof Error ? err.message : t('oauth.error', 'Authentication failed'));
+      } finally {
+        if (code) settleCode(code, traded);
       }
     }
 
