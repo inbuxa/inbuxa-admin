@@ -2337,5 +2337,9 @@
     "check": "Check the connection",
     "searchFailed": "The directory opened, but searching it failed: {{error}}",
     "connected": "The server can connect to this directory and search it."
+  },
+  "connection": {
+    "unreachable": "Can't reach the server. You're still signed in, and it keeps trying.",
+    "retry": "Try now"
   }
 }

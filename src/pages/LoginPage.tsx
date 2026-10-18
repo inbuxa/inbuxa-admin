@@ -17,6 +17,7 @@ import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { startAuthFlow } from '@/services/auth/oauth';
+import { clearReturnPath, readReturnPath } from '@/services/auth/session';
 import { SourceLink } from '@/components/common/SourceLink';
 
 /**
@@ -28,7 +29,9 @@ import { SourceLink } from '@/components/common/SourceLink';
 export default function LoginPage() {
   const { t } = useTranslation();
   const location = useLocation();
-  const originalPath = (location.state as { from?: string } | null)?.from ?? null;
+  // The page before signing in: from the route guard, or kept by a session
+  // the server ended (see `endSession`).
+  const originalPath = (location.state as { from?: string } | null)?.from ?? readReturnPath();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const started = useRef(false);
@@ -40,6 +43,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await startAuthFlow(null, originalPath);
+      // The sign-in round trip carries it from here.
+      clearReturnPath();
     } catch (err) {
       setError(err instanceof Error ? err.message : t('login.error', 'An unexpected error occurred'));
       setLoading(false);
