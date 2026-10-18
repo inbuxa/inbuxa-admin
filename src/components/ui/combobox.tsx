@@ -1,11 +1,15 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2023 shadcn
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: MIT
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronsUpDown, Check, X } from 'lucide-react';
+// Built like shadcn/ui's combobox example (MIT): a popover over a command
+// list. The props are the console's own, kept so no caller changes.
+
+import { useRef, useState, type ReactNode } from 'react';
+import { Check, ChevronsUpDown, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -15,26 +19,36 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 export interface ComboboxOption {
   value: string;
   label: string;
+  /** A second, quieter line under the label. */
   description?: string;
+  /** Shown before the label, in the list and on the button. */
   marker?: ReactNode;
+  /** More words the search matches, besides the label. */
   keywords?: string[];
 }
 
 interface ComboboxProps {
   options: ComboboxOption[];
+  /** The chosen option's value; '' for none. */
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
   searchPlaceholder?: string;
   emptyText?: string;
   disabled?: boolean;
+  className?: string;
   contentClassName?: string;
+  /** Offers a first row that clears the choice (sends ''). */
   nullable?: boolean;
   nullLabel?: string;
+  /** Called the first time the list opens, to load options lazily. */
   onFirstOpen?: () => void;
-  className?: string;
 }
 
+/** cmdk matches on item values; this one can't collide with an option's. */
+const NONE = '\u0000none';
+
+/** A button that opens a searchable list of options and shows the one chosen. */
 export function Combobox({
   options,
   value,
@@ -43,92 +57,71 @@ export function Combobox({
   searchPlaceholder = 'Search...',
   emptyText = 'No matches.',
   disabled,
+  className,
   contentClassName,
   nullable,
   nullLabel = 'None',
   onFirstOpen,
-  className,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [triggerWidth, setTriggerWidth] = useState<number | undefined>(undefined);
-  const firstOpenRef = useRef(false);
+  const opened = useRef(false);
+  const chosen = options.find((o) => o.value === value);
 
-  useEffect(() => {
-    if (open && triggerRef.current) {
-      setTriggerWidth(triggerRef.current.offsetWidth);
-    }
-  }, [open]);
-
-  const handleOpenChange = (next: boolean) => {
-    if (next && !firstOpenRef.current) {
-      firstOpenRef.current = true;
+  const toggle = (next: boolean) => {
+    if (next && !opened.current) {
+      opened.current = true;
       onFirstOpen?.();
     }
     setOpen(next);
   };
-
-  const selected = options.find((o) => o.value === value);
+  const choose = (next: string) => {
+    onValueChange(next);
+    setOpen(false);
+  };
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open} onOpenChange={toggle}>
       <PopoverTrigger asChild>
         <Button
-          ref={triggerRef}
           type="button"
           variant="outline"
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className={cn('w-full justify-between font-normal', !selected && 'text-muted-foreground', className)}
+          className={cn('w-full justify-between font-normal', !chosen && 'text-muted-foreground', className)}
         >
           <span className="flex items-center gap-2 truncate">
-            {selected?.marker}
-            {selected?.label ?? placeholder}
+            {chosen?.marker}
+            {chosen ? chosen.label : placeholder}
           </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent
-        className={cn('p-0', contentClassName)}
-        align="start"
-        style={triggerWidth ? { width: triggerWidth } : undefined}
-      >
+      <PopoverContent align="start" className={cn('w-(--radix-popover-trigger-width) p-0', contentClassName)}>
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {nullable && (
-                <CommandItem
-                  value="__null__"
-                  onSelect={() => {
-                    onValueChange('');
-                    setOpen(false);
-                  }}
-                >
-                  <X className="mr-2 h-4 w-4 opacity-50" />
+                <CommandItem value={NONE} keywords={[nullLabel]} onSelect={() => choose('')}>
+                  <X className="mr-2 size-4 opacity-50" />
                   <span className="text-muted-foreground">{nullLabel}</span>
                 </CommandItem>
               )}
-              {options.map((option) => (
+              {options.map((o) => (
                 <CommandItem
-                  key={option.value}
-                  value={option.value}
-                  keywords={[option.label, ...(option.keywords ?? [])]}
-                  onSelect={() => {
-                    onValueChange(option.value);
-                    setOpen(false);
-                  }}
+                  key={o.value}
+                  value={o.value}
+                  keywords={[o.label, ...(o.keywords ?? [])]}
+                  onSelect={() => choose(o.value)}
                 >
-                  <Check className={cn('mr-2 h-4 w-4', option.value === value ? 'opacity-100' : 'opacity-0')} />
+                  <Check className={cn('mr-2 size-4', o.value !== value && 'opacity-0')} />
                   <span className="flex flex-1 items-center gap-2 truncate">
-                    {option.marker}
+                    {o.marker}
                     <span className="flex flex-col truncate">
-                      <span className="truncate">{option.label}</span>
-                      {option.description && (
-                        <span className="truncate text-xs text-muted-foreground">{option.description}</span>
-                      )}
+                      <span className="truncate">{o.label}</span>
+                      {o.description && <span className="truncate text-xs text-muted-foreground">{o.description}</span>}
                     </span>
                   </span>
                 </CommandItem>

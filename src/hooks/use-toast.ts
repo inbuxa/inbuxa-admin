@@ -1,193 +1,92 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import * as React from 'react';
+/**
+ * The console's toasts: one list for the whole app, outside React, so any
+ * module can raise a toast with `toast()`. `<Toaster />` shows the list.
+ */
+import { useSyncExternalStore, type ReactNode } from 'react';
 
-const TOAST_LIMIT = 5;
-const TOAST_REMOVE_DELAY = 300;
-const TOAST_AUTO_DISMISS_MS = 5000;
+/** At most this many show at once; the oldest goes first. */
+const MAX_SHOWN = 5;
+/** How long a toast stays up, unless it asks for longer (an Undo toast does). */
+const DEFAULT_DURATION_MS = 5000;
 
 type ToastVariant = 'default' | 'destructive' | 'success' | 'warning' | 'info';
 
-type ToasterToast = {
-  id: string;
-  title?: React.ReactNode;
-  description?: React.ReactNode;
+interface ToastInput {
+  title?: ReactNode;
+  description?: ReactNode;
   variant?: ToastVariant;
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  /** inbuxa: how long it stays up, in ms; longer for one that offers Undo. */
+  /** How long it stays up, in ms. */
   duration?: number;
-};
-
-let count = 0;
-
-function genId() {
-  count = (count + 1) % Number.MAX_SAFE_INTEGER;
-  return count.toString();
 }
 
-type Action =
-  | {
-      type: 'ADD_TOAST';
-      toast: ToasterToast;
-    }
-  | {
-      type: 'UPDATE_TOAST';
-      toast: Partial<ToasterToast>;
-    }
-  | {
-      type: 'DISMISS_TOAST';
-      toastId?: ToasterToast['id'];
-    }
-  | {
-      type: 'REMOVE_TOAST';
-      toastId?: ToasterToast['id'];
-    };
-
-interface State {
-  toasts: ToasterToast[];
+interface ToasterToast extends ToastInput {
+  id: string;
 }
 
-const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+let shown: ToasterToast[] = [];
+let lastId = 0;
+const subscribers = new Set<() => void>();
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
-const addToRemoveQueue = (toastId: string) => {
-  if (toastTimeouts.has(toastId)) {
+function publish(next: ToasterToast[]) {
+  shown = next;
+  for (const notify of subscribers) notify();
+}
+
+function clearTimer(id: string) {
+  clearTimeout(timers.get(id));
+  timers.delete(id);
+}
+
+/** Takes the toast down, or every toast when no id is given. */
+function dismiss(id?: string) {
+  if (id === undefined) {
+    for (const t of shown) clearTimer(t.id);
+    publish([]);
     return;
   }
-
-  const timeout = setTimeout(() => {
-    toastTimeouts.delete(toastId);
-    dispatch({
-      type: 'REMOVE_TOAST',
-      toastId: toastId,
-    });
-  }, TOAST_REMOVE_DELAY);
-
-  toastTimeouts.set(toastId, timeout);
-};
-
-export const reducer = (state: State, action: Action): State => {
-  switch (action.type) {
-    case 'ADD_TOAST':
-      return {
-        ...state,
-        toasts: [action.toast, ...state.toasts].slice(0, TOAST_LIMIT),
-      };
-
-    case 'UPDATE_TOAST':
-      return {
-        ...state,
-        toasts: state.toasts.map((t) => (t.id === action.toast.id ? { ...t, ...action.toast } : t)),
-      };
-
-    case 'DISMISS_TOAST': {
-      const { toastId } = action;
-
-      if (toastId) {
-        addToRemoveQueue(toastId);
-      } else {
-        state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id);
-        });
-      }
-
-      return {
-        ...state,
-        toasts: state.toasts.map((t) =>
-          t.id === toastId || toastId === undefined
-            ? {
-                ...t,
-                open: false,
-              }
-            : t,
-        ),
-      };
-    }
-    case 'REMOVE_TOAST':
-      if (action.toastId === undefined) {
-        return {
-          ...state,
-          toasts: [],
-        };
-      }
-      return {
-        ...state,
-        toasts: state.toasts.filter((t) => t.id !== action.toastId),
-      };
-  }
-};
-
-const listeners: Array<(state: State) => void> = [];
-
-let memoryState: State = { toasts: [] };
-
-function dispatch(action: Action) {
-  memoryState = reducer(memoryState, action);
-  listeners.forEach((listener) => {
-    listener(memoryState);
-  });
+  clearTimer(id);
+  if (shown.some((t) => t.id === id)) publish(shown.filter((t) => t.id !== id));
 }
 
-type Toast = Omit<ToasterToast, 'id'>;
-
-function toast({ ...props }: Toast) {
-  const id = genId();
-
-  const update = (props: ToasterToast) =>
-    dispatch({
-      type: 'UPDATE_TOAST',
-      toast: { ...props, id },
-    });
-  const dismiss = () => dispatch({ type: 'DISMISS_TOAST', toastId: id });
-
-  dispatch({
-    type: 'ADD_TOAST',
-    toast: {
-      ...props,
-      id,
-      open: true,
-      onOpenChange: (open) => {
-        if (!open) dismiss();
-      },
-    },
-  });
-
-  // inbuxa: honor the toast's own duration (an Undo toast stays up longer).
-  setTimeout(dismiss, props.duration ?? TOAST_AUTO_DISMISS_MS);
-
+/** Shows a toast, newest on top. The handle takes it down or changes it. */
+function toast(input: ToastInput) {
+  const id = String(++lastId);
+  const kept = shown.slice(0, MAX_SHOWN - 1);
+  for (const t of shown.slice(MAX_SHOWN - 1)) clearTimer(t.id);
+  publish([{ ...input, id }, ...kept]);
+  timers.set(
+    id,
+    setTimeout(() => dismiss(id), input.duration ?? DEFAULT_DURATION_MS),
+  );
   return {
-    id: id,
-    dismiss,
-    update,
+    id,
+    dismiss: () => dismiss(id),
+    update: (changes: ToastInput) => publish(shown.map((t) => (t.id === id ? { ...t, ...changes, id } : t))),
   };
 }
 
+function subscribe(notify: () => void) {
+  subscribers.add(notify);
+  return () => {
+    subscribers.delete(notify);
+  };
+}
+
+/** The toasts on screen, newest first. */
+const currentToasts = () => shown;
+
+/** The toasts on screen, with `toast` and `dismiss` for convenience. */
 function useToast() {
-  const [state, setState] = React.useState<State>(memoryState);
-
-  React.useEffect(() => {
-    listeners.push(setState);
-    return () => {
-      const index = listeners.indexOf(setState);
-      if (index > -1) {
-        listeners.splice(index, 1);
-      }
-    };
-  }, []);
-
-  return {
-    ...state,
-    toast,
-    dismiss: (toastId?: string) => dispatch({ type: 'DISMISS_TOAST', toastId }),
-  };
+  const toasts = useSyncExternalStore(subscribe, currentToasts, currentToasts);
+  return { toasts, toast, dismiss };
 }
 
-export { useToast, toast };
+export { useToast, toast, dismiss as dismissToast, currentToasts };
 export type { ToasterToast, ToastVariant };
