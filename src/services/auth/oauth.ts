@@ -10,6 +10,7 @@
 import { getApiBaseUrl } from '@/services/api';
 import { getBasePath } from '@/lib/basePath';
 import { getOAuthClientId } from '@/lib/oauthClientId';
+import { sha256 } from '@/lib/sha256';
 import i18n from '@/i18n';
 
 const SCOPES = import.meta.env.VITE_OAUTH_SCOPES as string | undefined;
@@ -82,17 +83,16 @@ export function generateCodeVerifier(length: number = 64): string {
   return out.join('');
 }
 
-export async function generateCodeChallenge(
-  verifier: string,
-): Promise<{ challenge: string; method: 'S256' | 'plain' }> {
-  if (typeof crypto === 'undefined' || typeof crypto.subtle === 'undefined') {
-    return { challenge: verifier, method: 'plain' };
-  }
-
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const digest = await crypto.subtle.digest('SHA-256', data);
-  return { challenge: base64UrlEncode(new Uint8Array(digest)), method: 'S256' };
+// inbuxa: always S256. Over plain HTTP, where browsers leave out
+// crypto.subtle, the digest comes from our own SHA-256 instead of falling
+// back to `plain`, which would send the verifier itself as the challenge.
+export async function generateCodeChallenge(verifier: string): Promise<{ challenge: string; method: 'S256' }> {
+  const data = new TextEncoder().encode(verifier);
+  const digest =
+    typeof crypto !== 'undefined' && typeof crypto.subtle !== 'undefined'
+      ? new Uint8Array(await crypto.subtle.digest('SHA-256', data))
+      : sha256(data);
+  return { challenge: base64UrlEncode(digest), method: 'S256' };
 }
 
 function generateState(): string {

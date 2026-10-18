@@ -87,16 +87,19 @@ describe('generateCodeChallenge', () => {
     expect(challenge).toHaveLength(43);
   });
 
-  it('falls back to plain when crypto.subtle is unavailable', async () => {
+  it('still uses S256, with the same challenge, when crypto.subtle is unavailable', async () => {
+    const verifier = generateCodeVerifier();
+    const withSubtle = await generateCodeChallenge(verifier);
     const originalSubtle = crypto.subtle;
     Object.defineProperty(crypto, 'subtle', {
       configurable: true,
       get: () => undefined,
     });
     try {
-      const { challenge, method } = await generateCodeChallenge('plain-verifier');
-      expect(method).toBe('plain');
-      expect(challenge).toBe('plain-verifier');
+      const { challenge, method } = await generateCodeChallenge(verifier);
+      expect(method).toBe('S256');
+      expect(challenge).toBe(withSubtle.challenge);
+      expect(challenge).not.toBe(verifier);
     } finally {
       Object.defineProperty(crypto, 'subtle', {
         configurable: true,
