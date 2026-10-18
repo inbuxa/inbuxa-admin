@@ -25,6 +25,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { SectionNav } from '@/components/layout/SectionNav';
 import { MainContent } from '@/components/layout/MainContent';
 import { SettingsApplyBanner } from '@/components/layout/SettingsApplyBanner';
+import { ConnectionBanner } from '@/components/layout/ConnectionBanner';
 import { ExplainPanel } from '@/features/ai/explain/ExplainPanel';
 import { useExplainStore } from '@/features/ai/explain/explainStore';
 import { explainAvailable } from '@/features/ai/explain/explain';
@@ -344,6 +345,7 @@ export default function AdminPanel() {
             !useSectionNav && sidebarOpen && (sidebarCollapsed ? 'md:ml-[4.5rem]' : 'md:ml-64'),
           )}
         >
+          <ConnectionBanner />
           <SettingsApplyBanner />
           <ErrorBoundary key={activeAccountId ?? 'none'}>
             <MainContent viewName={viewName} id={id} section={section} />
