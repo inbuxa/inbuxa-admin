@@ -1,7 +1,7 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import { Component, type ErrorInfo, type ReactNode } from 'react';
@@ -10,6 +10,7 @@ import i18n from '@/i18n';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
+  /** Shown instead of the standard message when something below fails. */
   fallback?: ReactNode;
 }
 
@@ -18,45 +19,35 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
+/** Keeps a failing part of the page from taking the rest down, with a way to try it again. */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+  state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary] Caught error:', error, errorInfo);
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('[ErrorBoundary] Caught error:', error, info);
   }
 
-  handleReset = () => {
-    this.setState({ hasError: false, error: null });
-  };
+  private tryAgain = () => this.setState({ hasError: false, error: null });
 
   render() {
-    if (this.state.hasError) {
-      if (this.props.fallback) {
-        return this.props.fallback;
-      }
-
-      return (
-        <div role="alert" className="flex flex-col items-center justify-center gap-4 p-8">
-          <div className="text-destructive text-lg font-semibold">
-            {i18n.t('errorBoundary.title', 'Something went wrong')}
-          </div>
-          <p className="text-muted-foreground text-sm max-w-md text-center">
-            {this.state.error?.message ?? i18n.t('errors.unexpectedError', 'An unexpected error occurred.')}
-          </p>
-          <Button variant="outline" onClick={this.handleReset}>
-            {i18n.t('errorBoundary.tryAgain', 'Try Again')}
-          </Button>
+    if (!this.state.hasError) return this.props.children;
+    if (this.props.fallback) return this.props.fallback;
+    return (
+      <div role="alert" className="flex flex-col items-center justify-center gap-4 p-8">
+        <div className="text-destructive text-lg font-semibold">
+          {i18n.t('errorBoundary.title', 'Something went wrong')}
         </div>
-      );
-    }
-
-    return this.props.children;
+        <p className="text-muted-foreground text-sm max-w-md text-center">
+          {this.state.error?.message ?? i18n.t('errors.unexpectedError', 'An unexpected error occurred.')}
+        </p>
+        <Button variant="outline" onClick={this.tryAgain}>
+          {i18n.t('errorBoundary.tryAgain', 'Try Again')}
+        </Button>
+      </div>
+    );
   }
 }

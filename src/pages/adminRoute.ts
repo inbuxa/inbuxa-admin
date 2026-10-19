@@ -17,7 +17,7 @@ import {
   type HasPermission,
 } from '@/lib/layout';
 import { sectionLandingLink } from '@/lib/lastVisited';
-import { friendlyName } from '@/hooks/useGlobalSearch';
+import { friendlyName } from '@/lib/globalSearch';
 
 /**
  * The page and record an address names, from what follows the section.
