@@ -1,26 +1,22 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Installed and built
+node_modules/
+dist/
+*.tsbuildinfo
 
-node_modules
-dist
-dist-ssr
+# Local settings and scratch space
 *.local
-
-.ignore
+*.log
+.ignore/
 scripts/
 
+# Dotfiles stay out unless listed here, so editor and tool state never lands
+# in a commit.
 .*
 !.gitignore
 !.prettierrc
 !.env.development
+!.gitea/
 !.github/
-!.gitlab-ci.yml
 !.vscode/
 .vscode/*
 !.vscode/extensions.json
