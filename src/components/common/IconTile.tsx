@@ -5,7 +5,7 @@
  */
 
 import { createElement } from 'react';
-import * as LucideIcons from 'lucide-react';
+import { iconByName } from '@/lib/iconByName';
 import { cn } from '@/lib/utils';
 import { toneFor, type Tone } from '@/lib/iconTones';
 
@@ -20,14 +20,6 @@ const TONE_CLASSES: Record<Tone, string> = {
   indigo: 'bg-indigo-500/15 text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-300',
   slate: 'bg-slate-500/15 text-slate-700 dark:bg-slate-400/15 dark:text-slate-300',
 };
-
-function iconComponent(name: string): LucideIcons.LucideIcon {
-  const pascal = name
-    .split('-')
-    .map((s) => (s ? s[0].toUpperCase() + s.slice(1) : s))
-    .join('');
-  return ((LucideIcons as Record<string, unknown>)[pascal] as LucideIcons.LucideIcon | undefined) ?? LucideIcons.Circle;
-}
 
 /**
  * A section's icon on a small colored tile. The color comes from what the
@@ -49,7 +41,7 @@ export function IconTile({
     <span
       className={cn('inline-flex shrink-0 items-center justify-center', box, TONE_CLASSES[toneFor(name)], className)}
     >
-      {createElement(iconComponent(name), { className: glyph, strokeWidth: 2, 'aria-hidden': true })}
+      {createElement(iconByName(name), { className: glyph, strokeWidth: 2, 'aria-hidden': true })}
     </span>
   );
 }

@@ -1,92 +1,71 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '@/stores/authStore';
-import { useSchemaStore } from '@/stores/schemaStore';
-import { useAccountStore } from '@/stores/accountStore';
-import { useUIStore } from '@/stores/uiStore';
-import { fetchSession, fetchSchema, fetchAccountInfo } from '@/services/jmap/client';
-import { getApiBaseUrl } from '@/services/api';
-import { loadAccountTheme, setAccountSettingsTarget } from '@/lib/accountSettings';
-import { setLocale } from '@/i18n';
+
+import { ConnectionBanner } from '@/components/layout/ConnectionBanner';
+import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
+import { MainContent } from '@/components/layout/MainContent';
+import { SectionNav } from '@/components/layout/SectionNav';
+import { SettingsApplyBanner } from '@/components/layout/SettingsApplyBanner';
+import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { KeyboardShortcuts } from '@/components/common/KeyboardShortcuts';
-import { FirstDomainCelebration } from '@/features/celebrate/FirstDomainCelebration';
-import { Sidebar } from '@/components/layout/Sidebar';
-import { SectionNav } from '@/components/layout/SectionNav';
-import { MainContent } from '@/components/layout/MainContent';
-import { SettingsApplyBanner } from '@/components/layout/SettingsApplyBanner';
-import { ConnectionBanner } from '@/components/layout/ConnectionBanner';
-import { ExplainPanel } from '@/features/ai/explain/ExplainPanel';
-import { useExplainStore } from '@/features/ai/explain/explainStore';
-import { explainAvailable } from '@/features/ai/explain/explain';
-import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
-import {
-  findFirstAccessibleLinkInLayout,
-  findFirstVisibleLinkInLayout,
-  isLinkAccessible,
-  visibleLayouts,
-} from '@/lib/layout';
-import { usePermissions } from '@/hooks/usePermissions';
+import { FirstDomainCelebration } from '@/features/celebrate/FirstDomainCelebration';
+import { ExplainPanel } from '@/features/ai/explain/ExplainPanel';
+import { explainAvailable } from '@/features/ai/explain/explain';
+import { useExplainStore } from '@/features/ai/explain/explainStore';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
-import { friendlyName } from '@/hooks/useGlobalSearch';
-import { rememberLastVisited, sectionLandingLink } from '@/lib/lastVisited';
+import { usePermissions } from '@/hooks/usePermissions';
+import { setLocale } from '@/i18n';
+import { loadAccountTheme, setAccountSettingsTarget } from '@/lib/accountSettings';
+import { rememberLastVisited } from '@/lib/lastVisited';
+import { visibleLayouts } from '@/lib/layout';
 import { fitsSectionNav } from '@/lib/navTree';
 import { cn } from '@/lib/utils';
+import { getApiBaseUrl } from '@/services/api';
+import { fetchAccountInfo, fetchSchema, fetchSession } from '@/services/jmap/client';
+import { useAccountStore } from '@/stores/accountStore';
+import { useAuthStore } from '@/stores/authStore';
+import { useSchemaStore } from '@/stores/schemaStore';
+import { useUIStore } from '@/stores/uiStore';
+
+import { adminPageTitle, landing, parseAdminPath, permissionChecks, readSessionInfo } from './adminRoute';
 
 const BootstrapWizard = lazy(() =>
   import('@/components/bootstrap/BootstrapWizard').then((m) => ({ default: m.BootstrapWizard })),
 );
 
+/**
+ * A development build may carry an access token, and a refresh token so it
+ * renews itself like a real sign-in instead of dying with the access token.
+ */
+function useDevelopmentToken(accessToken: string | null) {
+  useEffect(() => {
+    const token = import.meta.env.VITE_ACCESS_TOKEN;
+    if (!token || accessToken) return;
+    const refresh = (import.meta.env.VITE_REFRESH_TOKEN as string | undefined) ?? '';
+    const expiresIn = Number(import.meta.env.VITE_ACCESS_TOKEN_EXPIRES_IN ?? 86400);
+    useAuthStore.getState().setTokens(token, refresh, expiresIn, refresh ? `${getApiBaseUrl()}/auth/token` : '');
+  }, [accessToken]);
+}
+
+/** The console after sign-in: loads the session, schema and account once, then draws the shell around the page. */
 export default function AdminPanel() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { section, '*': splat } = useParams<{
-    section?: string;
-    '*'?: string;
-  }>();
-
-  let viewName: string | undefined;
-  let id: string | undefined;
-  if (splat) {
-    const parts = splat.split('/');
-    if (parts[parts.length - 1] === 'new') {
-      id = 'new';
-      viewName = parts.slice(0, -1).join('/');
-    } else if (parts[parts.length - 1] === 'singleton') {
-      id = 'singleton';
-      viewName = parts.slice(0, -1).join('/');
-    } else {
-      const schemaStore = useSchemaStore.getState();
-      const fullAsView = parts.join('/');
-      if (schemaStore.schema?.objects[fullAsView]) {
-        viewName = fullAsView;
-      } else if (parts.length > 1) {
-        const candidateView = parts.slice(0, -1).join('/');
-        if (schemaStore.schema?.objects[candidateView]) {
-          viewName = candidateView;
-          id = parts[parts.length - 1];
-        } else {
-          viewName = fullAsView;
-        }
-      } else {
-        viewName = fullAsView;
-      }
-    }
-  }
+  const { section, '*': splat } = useParams<{ section?: string; '*'?: string }>();
+  const { viewName, id } = parseAdminPath(splat, useSchemaStore.getState().schema?.objects);
 
   const isSchemaLoaded = useSchemaStore((s) => s.isLoaded);
   const schema = useSchemaStore((s) => s.schema);
+  const searchIndex = useSchemaStore((s) => s.searchIndex);
   const setSchema = useSchemaStore((s) => s.setSchema);
   const setAccountInfo = useAccountStore((s) => s.setAccountInfo);
   const edition = useAccountStore((s) => s.edition);
@@ -94,8 +73,8 @@ export default function AdminPanel() {
   const setSession = useAuthStore((s) => s.setSession);
   const accessToken = useAuthStore((s) => s.accessToken);
   const activeAccountId = useAuthStore((s) => s.activeAccountId);
-  const setActiveSection = useUIStore((s) => s.setActiveSection);
   const activeSection = useUIStore((s) => s.activeSection);
+  const setActiveSection = useUIStore((s) => s.setActiveSection);
   const adminLayout = useUIStore((s) => s.adminLayout);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
   const sidebarCollapsed = useUIStore((s) => s.sidebarCollapsed);
@@ -104,197 +83,81 @@ export default function AdminPanel() {
   const [initError, setInitError] = useState<string | null>(null);
   const [initializing, setInitializing] = useState(!isSchemaLoaded);
 
-  const searchIndex = useSchemaStore((s) => s.searchIndex);
-  const pageTitle = useMemo(() => {
-    if (!section) return t('dashboard.title', 'Dashboard');
-    if (!viewName) return section;
-    if (viewName.startsWith('Wizard/dns/')) return `${t('dnsWizard.tabTitle', 'Publish DNS')} · ${section}`;
-    if (viewName === 'Wizard/limits') return `${t('limitsSetup.tabTitle', 'Limits')} · ${section}`;
-    if (viewName === 'Wizard/directory') return `${t('dirSetup.tabTitle', 'Sign-in directory')} · ${section}`;
-    if (viewName === 'Wizard/certificates') return `${t('certSetup.tabTitle', 'Certificates')} · ${section}`;
-    if (viewName === 'Wizard/sending') return `${t('sendingSetup.tabTitle', 'Sending mail')} · ${section}`;
-    if (viewName.startsWith('Dashboard/')) {
-      const boardId = viewName.slice('Dashboard/'.length);
-      // INBUXA: the landing page is the command center; Cluster isn't in the schema.
-      if (boardId === 'overview') return t('cc.back', 'Command center');
-      if (boardId === 'cluster') return `${t('cc.cluster', 'Cluster')} · ${t('dashboard.title', 'Dashboard')}`;
-      const board = schema?.dashboards?.find((d) => d.id === boardId);
-      return `${board?.label ?? t('dashboard.title', 'Dashboard')} · ${t('dashboard.title', 'Dashboard')}`;
-    }
-    let label: string | undefined;
-    for (const entry of searchIndex) {
-      if (entry.type !== 'link' || entry.viewName !== viewName) continue;
-      if (entry.section === section) {
-        label = entry.text;
-        break;
-      }
-      label ??= entry.text;
-    }
-    const name = label ?? friendlyName(viewName);
-    const title = id === 'new' ? t('form.createTitle', 'Create {{name}}', { name }) : name;
-    return `${title} · ${section}`;
-  }, [section, viewName, id, searchIndex, schema, t]);
-
-  useDocumentTitle(pageTitle);
-
-  useEffect(() => {
-    const bypassToken = import.meta.env.VITE_ACCESS_TOKEN;
-    if (bypassToken && !accessToken) {
-      // INBUXA: with a refresh token as well, the dev bypass renews itself like a real
-      // sign-in instead of dying when the access token does.
-      const bypassRefresh = (import.meta.env.VITE_REFRESH_TOKEN as string | undefined) ?? '';
-      const expiresIn = Number(import.meta.env.VITE_ACCESS_TOKEN_EXPIRES_IN ?? 86400);
-      useAuthStore
-        .getState()
-        .setTokens(bypassToken, bypassRefresh, expiresIn, bypassRefresh ? `${getApiBaseUrl()}/auth/token` : '');
-    }
-  }, [accessToken]);
+  useDocumentTitle(
+    useMemo(
+      () => adminPageTitle(t, { section, viewName, id, searchIndex, dashboards: schema?.dashboards }),
+      [section, viewName, id, searchIndex, schema, t],
+    ),
+  );
+  useDevelopmentToken(accessToken);
 
   useEffect(() => {
     if (isSchemaLoaded) return;
-
     let cancelled = false;
 
-    async function init() {
+    (async () => {
       try {
         const session = await fetchSession();
-        const accounts: Record<string, { name: string; isPersonal: boolean }> = {};
-        for (const [accountId, info] of Object.entries(
-          session.accounts as Record<string, { name: string; isPersonal: boolean }>,
-        )) {
-          accounts[accountId] = { name: info.name, isPersonal: info.isPersonal };
-        }
-        const primaryAccounts = session.primaryAccounts as Record<string, string>;
-        const primaryAccountId =
-          primaryAccounts['urn:ietf:params:jmap:core'] ?? Object.values(primaryAccounts)[0] ?? Object.keys(accounts)[0];
-        const apiUrl = (session.apiUrl as string) || '/jmap';
-
-        const capabilities = session.capabilities as Record<string, Record<string, unknown>> | undefined;
-        const coreCapability = capabilities?.['urn:ietf:params:jmap:core'];
-        const maxObjectsInGet =
-          typeof coreCapability?.maxObjectsInGet === 'number' ? coreCapability.maxObjectsInGet : undefined;
-        const maxObjectsInSet =
-          typeof coreCapability?.maxObjectsInSet === 'number' ? coreCapability.maxObjectsInSet : undefined;
-
+        const info = readSessionInfo(session);
         if (cancelled) return;
-        setSession(accounts, primaryAccountId, apiUrl, maxObjectsInGet, maxObjectsInSet);
-        // inbuxa: whether "Explain this" is offered (ai-explain EX-1 to EX-4)
-        useExplainStore.getState().setAvailable(explainAvailable(session, primaryAccountId));
+        setSession(info.accounts, info.primaryAccountId, info.apiUrl, info.maxObjectsInGet, info.maxObjectsInSet);
+        useExplainStore.getState().setAvailable(explainAvailable(session, info.primaryAccountId));
         useAuthStore.getState().setUsername(typeof session.username === 'string' ? session.username : null);
-        // INBUXA: the theme lives with the account, shared with the webmail.
+        // The theme lives with the account, shared with the webmail.
         setAccountSettingsTarget(session);
         void loadAccountTheme().then((stored) => {
           if (stored && !cancelled) useUIStore.getState().applyAccountTheme(stored.palette, stored.mode);
         });
 
-        const [schemaData, accountData] = await Promise.all([fetchSchema(), fetchAccountInfo()]);
-
+        const [schemaData, account] = await Promise.all([fetchSchema(), fetchAccountInfo()]);
         if (cancelled) return;
-
         setSchema(schemaData);
-
-        setAccountInfo(accountData.permissions, accountData.edition, accountData.locale);
-        setLocale(accountData.locale);
-
+        setAccountInfo(account.permissions, account.edition, account.locale);
+        setLocale(account.locale);
         setInitializing(false);
       } catch (err) {
-        if (!cancelled) {
-          console.error('Initialization failed:', err);
-          setInitError(err instanceof Error ? err.message : t('errors.unexpectedError'));
-          setInitializing(false);
-        }
+        if (cancelled) return;
+        console.error('Initialization failed:', err);
+        setInitError(err instanceof Error ? err.message : t('errors.unexpectedError'));
+        setInitializing(false);
       }
-    }
+    })();
 
-    init();
     return () => {
       cancelled = true;
     };
   }, [isSchemaLoaded, setSession, setSchema, setAccountInfo, t]);
 
-  /**
-   * INBUXA: which shell draws the navigation. The modern one puts the layout's
-   * items in a bar under the top bar and drops the sidebar; a layout with too
-   * many top-level groups for a menu bar keeps the sidebar whatever the reader
-   * chose, so Settings never turns into nineteen dropdowns.
-   */
-  const currentLayout = useMemo(() => {
-    if (!schema) return null;
-    const canGet = (prefix: string) => permissions.includes(`${prefix}Get`);
-    const hasPerm = (perm: string) => permissions.includes(perm);
-    const name = (section ?? activeSection ?? '').toLowerCase();
-    return visibleLayouts(schema, edition, canGet, hasPerm).find((l) => l.name.toLowerCase() === name) ?? null;
-  }, [schema, edition, permissions, section, activeSection]);
+  const layouts = useMemo(() => {
+    if (!schema) return [];
+    const { canGet, hasPerm } = permissionChecks(permissions);
+    return visibleLayouts(schema, edition, canGet, hasPerm);
+  }, [schema, edition, permissions]);
 
+  // A layout with too many top-level groups for a menu bar keeps the sidebar
+  // whatever the reader chose, so Settings never turns into nineteen dropdowns.
+  const currentLayout = useMemo(() => {
+    const name = (section ?? activeSection ?? '').toLowerCase();
+    return layouts.find((l) => l.name.toLowerCase() === name) ?? null;
+  }, [layouts, section, activeSection]);
   const useSectionNav = adminLayout === 'modern' && currentLayout !== null && fitsSectionNav(currentLayout, edition);
 
-  const isBootstrapMode = useMemo(() => {
-    if (!schema) return false;
-    if (!canViewObject('x:Bootstrap')) return false;
-    const canGet = (prefix: string) => permissions.includes(`${prefix}Get`);
-    const hasPerm = (perm: string) => permissions.includes(perm);
-    return visibleLayouts(schema, edition, canGet, hasPerm).length === 0;
-  }, [schema, canViewObject, edition, permissions]);
+  // An administrator who may only run the first-boot setup sees no layout at all.
+  const isBootstrapMode = schema !== null && canViewObject('x:Bootstrap') && layouts.length === 0;
 
   useEffect(() => {
-    if (!schema) return;
-    if (isBootstrapMode) return;
-    const canGet = (prefix: string) => permissions.includes(`${prefix}Get`);
-    const hasPerm = (perm: string) => permissions.includes(perm);
-    const layouts = visibleLayouts(schema, edition, canGet, hasPerm);
-    const pickDefault = (): { layoutName: string; link: string | null } | null => {
-      for (const layout of layouts) {
-        const link = findFirstAccessibleLinkInLayout(schema, layout, edition, canGet, hasPerm);
-        if (link) return { layoutName: layout.name, link };
-      }
-      if (layouts[0]) {
-        return {
-          layoutName: layouts[0].name,
-          link: findFirstVisibleLinkInLayout(schema, layouts[0], edition, canGet, hasPerm),
-        };
-      }
-      return null;
-    };
-
-    const redirectTo = (layoutName: string, link: string | null) => {
-      setActiveSection(layoutName);
-      if (link) navigate(`/${layoutName}/${link}`, { replace: true });
-    };
-
-    if (section && viewName && !isLinkAccessible(schema, viewName, edition, canGet, hasPerm)) {
-      const fallback = pickDefault();
-      if (fallback && (fallback.layoutName !== section || fallback.link !== viewName)) {
-        redirectTo(fallback.layoutName, fallback.link);
-        return;
-      }
+    if (!schema || isBootstrapMode) return;
+    const next = landing(schema, edition, permissions, section, viewName);
+    if (!next) return;
+    setActiveSection(next.section);
+    if (next.kind === 'redirect') {
+      if (next.link) navigate(`/${next.section}/${next.link}`, { replace: true });
+    } else if (next.remember) {
+      rememberLastVisited(next.remember.section, next.remember.viewName);
     }
-
-    if (section && viewName) {
-      const ownLayout = layouts.find((l) => l.name.toLowerCase() === section.toLowerCase());
-      setActiveSection(ownLayout?.name ?? layouts[0]?.name ?? section);
-      if (ownLayout) rememberLastVisited(ownLayout.name, viewName);
-      return;
-    }
-
-    if (section) {
-      const ownLayout = layouts.find((l) => l.name.toLowerCase() === section.toLowerCase());
-      const ownLink = ownLayout ? sectionLandingLink(schema, ownLayout, edition, canGet, hasPerm) : null;
-      if (ownLayout && ownLink) {
-        redirectTo(ownLayout.name, ownLink);
-      } else {
-        const target = pickDefault();
-        if (target) redirectTo(target.layoutName, target.link);
-      }
-      return;
-    }
-
-    const target = pickDefault();
-    if (target) redirectTo(target.layoutName, target.link);
   }, [section, viewName, schema, setActiveSection, navigate, edition, permissions, isBootstrapMode]);
 
-  if (initializing) {
-    return <LoadingFallback fullScreen />;
-  }
+  if (initializing) return <LoadingFallback fullScreen />;
 
   if (initError) {
     return (
@@ -327,7 +190,6 @@ export default function AdminPanel() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      {/* inbuxa: keyboard users can jump past the menus (roadmap item 13) */}
       <a href="#main" className="skip-link">
         {t('a11y.skip', 'Skip to content')}
       </a>

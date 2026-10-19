@@ -16,6 +16,13 @@ export const OPEN_COMMAND_BAR = 'inbuxa:open-command-bar';
 /** Open the shortcut sheet (the account menu's Keyboard shortcuts). */
 export const OPEN_SHORTCUTS = 'inbuxa:open-shortcuts';
 
+/** Ctrl+K, or ⌘K on a Mac, with no other modifier: opens or closes the command bar. */
+export function isCommandBarKey(
+  e: Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'key'>,
+): boolean {
+  return (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k';
+}
+
 /** How long `g` waits for its second key. */
 export const GO_WINDOW_MS = 1500;
 

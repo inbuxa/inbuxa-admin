@@ -1,173 +1,283 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { lazy, Suspense, useEffect, type ComponentType, type ReactNode } from 'react';
-import { useSchemaStore } from '@/stores/schemaStore';
-import { useCacheStore } from '@/stores/cacheStore';
-import { useAccountStore } from '@/stores/accountStore';
-import { resolveObject } from '@/lib/schemaResolver';
-import { DynamicList } from '@/components/lists/DynamicList';
-import { DynamicForm } from '@/components/forms/DynamicForm';
-import { DynamicViewPage } from '@/components/views/DynamicViewPage';
+import { createElement, lazy, Suspense, useEffect, type ComponentType, type ReactNode } from 'react';
+
 import { LoadingFallback } from '@/components/common/LoadingFallback';
-import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
-import { SpamSettingsPage } from '@/features/spamLevel/SpamSettingsPage';
-import { WebhookTestCard } from '@/features/events/WebhookTestCard';
-import { WebhooksPage } from '@/features/events/WebhooksPage';
-import { ListenersPage } from '@/features/ports/ListenersPage';
-import { MetricsPage } from '@/features/metricsConnect/MetricsPage';
+import { DynamicForm } from '@/components/forms/DynamicForm';
+import { DynamicList } from '@/components/lists/DynamicList';
+import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { AlertsPage } from '@/features/alerts/AlertsPage';
-import { ReportsPage } from '@/features/reports/ReportsPage';
-import { RetentionPage } from '@/features/retention/RetentionPage';
-import { LimitsSummary } from '@/features/limits/LimitsSummary';
-import { SenderChecksPage } from '@/features/senderChecks/SenderChecksPage';
-import { DirectorySetupCard } from '@/features/directory/DirectorySetupCard';
-import { SendingSetupCard } from '@/features/sending/SendingSetupCard';
 import { CertificateSetupCard } from '@/features/certificates/CertificateSetupCard';
+import { DirectorySetupCard } from '@/features/directory/DirectorySetupCard';
+import { WebhooksPage } from '@/features/events/WebhooksPage';
+import { WebhookTestCard } from '@/features/events/WebhookTestCard';
+import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
 import { DmarcSummaryCard } from '@/features/incomingReports/DmarcSummaryCard';
 import { TlsSummaryCard } from '@/features/incomingReports/TlsSummaryCard';
+import { LimitsSummary } from '@/features/limits/LimitsSummary';
+import type { LimitObject } from '@/features/limits/rules';
+import { MetricsPage } from '@/features/metricsConnect/MetricsPage';
+import { ListenersPage } from '@/features/ports/ListenersPage';
+import { ReportsPage } from '@/features/reports/ReportsPage';
+import { RetentionPage } from '@/features/retention/RetentionPage';
+import { SenderChecksPage } from '@/features/senderChecks/SenderChecksPage';
+import { SendingSetupCard } from '@/features/sending/SendingSetupCard';
+import { SpamSettingsPage } from '@/features/spamLevel/SpamSettingsPage';
+import { useAccountStore } from '@/stores/accountStore';
+import { useCacheStore } from '@/stores/cacheStore';
+import { useSchemaStore } from '@/stores/schemaStore';
 import type { Schema } from '@/types/schema';
 
-function lazyFeature<M, P>(load: () => Promise<M>, select: (module: M) => ComponentType<P>) {
-  return lazy(() => load().then((module) => ({ default: select(module) })));
+import { pageRoute } from './pageRoute';
+
+/** A page loaded the first time it's opened. */
+function onDemand<M, P>(load: () => Promise<M>, pick: (module: M) => ComponentType<P>) {
+  return lazy(() => load().then((module) => ({ default: pick(module) })));
 }
 
-const DashboardView = lazyFeature(
+const DashboardView = onDemand(
   () => import('@/features/dashboard/components/DashboardView'),
   (m) => m.DashboardView,
 );
-const DeliveryTracePage = lazyFeature(
-  () => import('@/features/troubleshoot/DeliveryTracePage'),
-  (m) => m.DeliveryTracePage,
-);
-const LiveTracingPage = lazyFeature(
-  () => import('@/features/tracing/components/LiveTracingPage'),
-  (m) => m.LiveTracingPage,
-);
-const TraceDetailView = lazyFeature(
+const TraceDetailView = onDemand(
   () => import('@/features/tracing/components/TraceDetailView'),
   (m) => m.TraceDetailView,
 );
-const ConnectDnsPage = lazyFeature(
+const ConnectDnsPage = onDemand(
   () => import('@/features/dns/ConnectDnsPage'),
   (m) => m.ConnectDnsPage,
 );
-const ActionPage = lazyFeature(
+const ActionPage = onDemand(
   () => import('@/features/actions/ActionPage'),
   (m) => m.ActionPage,
 );
-const SecurityPage = lazyFeature(
-  () => import('@/features/security/SecurityPage'),
-  (m) => m.SecurityPage,
-);
-// inbuxa: Management › Compliance › Overview and Data Inventory
-// (personal-data catalog spec, §8).
-const ComplianceOverviewPage = lazyFeature(
-  () => import('@/features/compliance/ComplianceOverviewPage'),
-  (m) => m.ComplianceOverviewPage,
-);
-// INBUXA: DLP and mail flow rules (dlp-and-mail-flow-rules spec, §3)
-const DlpRulesPage = lazyFeature(
-  () => import('@/features/dlp/RulesPage'),
-  (m) => m.DlpRulesPage,
-);
-const MailFlowRulesPage = lazyFeature(
-  () => import('@/features/dlp/RulesPage'),
-  (m) => m.MailFlowRulesPage,
-);
-// INBUXA: journaling (journaling spec, §3)
-const JournalPage = lazyFeature(
-  () => import('@/features/journal/JournalPage'),
-  (m) => m.JournalPage,
-);
-const HeldMailPage = lazyFeature(
-  () => import('@/features/dlp/HeldMailPage'),
-  (m) => m.HeldMailPage,
-);
-const DataInventoryPage = lazyFeature(
-  () => import('@/features/compliance/DataInventoryPage'),
-  (m) => m.DataInventoryPage,
-);
-// inbuxa: Settings › Overview (settings-reorg spec).
-const CertificateSetupPage = lazyFeature(
-  () => import('@/features/certificates/CertificateSetupPage'),
-  (m) => m.CertificateSetupPage,
-);
-const SendingSetupPage = lazyFeature(
-  () => import('@/features/sending/SendingSetupPage'),
-  (m) => m.SendingSetupPage,
-);
-const SettingsOverviewPage = lazyFeature(
-  () => import('@/features/settings/SettingsOverviewPage'),
-  (m) => m.SettingsOverviewPage,
-);
-// inbuxa: guided setup, connect a sign-in directory (settings-reorg spec).
-const DirectorySetupPage = lazyFeature(
-  () => import('@/features/directory/DirectorySetupPage'),
-  (m) => m.DirectorySetupPage,
-);
-// inbuxa: guided setup, sending and receiving limits (settings-reorg spec).
-const LimitsSetupPage = lazyFeature(
-  () => import('@/features/limits/LimitsSetupPage'),
-  (m) => m.LimitsSetupPage,
-);
-// inbuxa: Settings › Spam filter › Local AI (ai-spam-classification spec).
-const LocalAiPage = lazyFeature(
-  () => import('@/features/ai/LocalAiPage'),
-  (m) => m.LocalAiPage,
-);
-// inbuxa: Management › Compliance › Audit Log (audit-hold-lock spec, AU-9).
-const AuditLogPage = lazyFeature(
-  () => import('@/features/audit/AuditLogPage'),
-  (m) => m.AuditLogPage,
-);
-// inbuxa: Management › Compliance › Locked accounts (audit-hold-lock spec, AL-1).
-const AccountLocksPage = lazyFeature(
-  () => import('@/features/lock/AccountLocksPage'),
-  (m) => m.AccountLocksPage,
-);
-// inbuxa: Management › Directory › Shared mailboxes (multi-account spec, MA-S4).
-const SharedMailboxesPage = lazyFeature(
-  () => import('@/features/lock/SharedMailboxesPage'),
-  (m) => m.SharedMailboxesPage,
-);
-// inbuxa: Reports › Scheduled (scheduled-reports spec).
-const ScheduledReportsPage = lazyFeature(
-  () => import('@/features/scheduledReports/ScheduledReportsPage'),
-  (m) => m.ScheduledReportsPage,
-);
-// inbuxa: Domains › Deliverability (deliverability spec, DL-17).
-const DeliverabilityPage = lazyFeature(
-  () => import('@/features/deliverability/DeliverabilityPage'),
-  (m) => m.DeliverabilityPage,
-);
-const LegalHoldsPage = lazyFeature(
-  () => import('@/features/hold/LegalHoldsPage'),
-  (m) => m.LegalHoldsPage,
-);
-const HeldNotice = lazyFeature(
+const HeldNotice = onDemand(
   () => import('@/features/hold/HeldNotice'),
   (m) => m.HeldNotice,
 );
-const AccountLockBanner = lazyFeature(
+const AccountLockBanner = onDemand(
   () => import('@/features/lock/AccountLockBanner'),
   (m) => m.AccountLockBanner,
 );
-// inbuxa: who may share mail (multi-account spec, MA-C)
-const SharingSwitches = lazyFeature(
+const SharingSwitches = onDemand(
   () => import('@/features/sharing/SharingSwitches'),
   (m) => m.SharingSwitches,
 );
-const TenantLegacyProtocols = lazyFeature(
+const TenantLegacyProtocols = onDemand(
   () => import('@/features/hardening/TenantLegacyProtocols'),
   (m) => m.TenantLegacyProtocols,
 );
+
+/** The console's own pages, by the name after `CustomComponent/`. */
+const CUSTOM_PAGES: Record<string, ComponentType> = {
+  LiveDelivery: onDemand(
+    () => import('@/features/troubleshoot/DeliveryTracePage'),
+    (m) => m.DeliveryTracePage,
+  ),
+  LiveTracing: onDemand(
+    () => import('@/features/tracing/components/LiveTracingPage'),
+    (m) => m.LiveTracingPage,
+  ),
+  // The security to-do list, which holds the legacy-protocols switch.
+  LegacyProtocols: onDemand(
+    () => import('@/features/security/SecurityPage'),
+    (m) => m.SecurityPage,
+  ),
+  SettingsOverview: onDemand(
+    () => import('@/features/settings/SettingsOverviewPage'),
+    (m) => m.SettingsOverviewPage,
+  ),
+  LocalAi: onDemand(
+    () => import('@/features/ai/LocalAiPage'),
+    (m) => m.LocalAiPage,
+  ),
+  AuditLog: onDemand(
+    () => import('@/features/audit/AuditLogPage'),
+    (m) => m.AuditLogPage,
+  ),
+  AccountLocks: onDemand(
+    () => import('@/features/lock/AccountLocksPage'),
+    (m) => m.AccountLocksPage,
+  ),
+  SharedMailboxes: onDemand(
+    () => import('@/features/lock/SharedMailboxesPage'),
+    (m) => m.SharedMailboxesPage,
+  ),
+  Deliverability: onDemand(
+    () => import('@/features/deliverability/DeliverabilityPage'),
+    (m) => m.DeliverabilityPage,
+  ),
+  ScheduledReports: onDemand(
+    () => import('@/features/scheduledReports/ScheduledReportsPage'),
+    (m) => m.ScheduledReportsPage,
+  ),
+  LegalHolds: onDemand(
+    () => import('@/features/hold/LegalHoldsPage'),
+    (m) => m.LegalHoldsPage,
+  ),
+  ComplianceOverview: onDemand(
+    () => import('@/features/compliance/ComplianceOverviewPage'),
+    (m) => m.ComplianceOverviewPage,
+  ),
+  DlpRules: onDemand(
+    () => import('@/features/dlp/RulesPage'),
+    (m) => m.DlpRulesPage,
+  ),
+  MailFlowRules: onDemand(
+    () => import('@/features/dlp/RulesPage'),
+    (m) => m.MailFlowRulesPage,
+  ),
+  Journal: onDemand(
+    () => import('@/features/journal/JournalPage'),
+    (m) => m.JournalPage,
+  ),
+  HeldMail: onDemand(
+    () => import('@/features/dlp/HeldMailPage'),
+    (m) => m.HeldMailPage,
+  ),
+  DataInventory: onDemand(
+    () => import('@/features/compliance/DataInventoryPage'),
+    (m) => m.DataInventoryPage,
+  ),
+};
+
+/** Guided jobs, by the name after `Wizard/`; always reached by choosing "Guide me", never by default. */
+const WIZARDS: Record<string, ComponentType> = {
+  limits: onDemand(
+    () => import('@/features/limits/LimitsSetupPage'),
+    (m) => m.LimitsSetupPage,
+  ),
+  directory: onDemand(
+    () => import('@/features/directory/DirectorySetupPage'),
+    (m) => m.DirectorySetupPage,
+  ),
+  sending: onDemand(
+    () => import('@/features/sending/SendingSetupPage'),
+    (m) => m.SendingSetupPage,
+  ),
+  certificates: onDemand(
+    () => import('@/features/certificates/CertificateSetupPage'),
+    (m) => m.CertificateSetupPage,
+  ),
+};
+
+const stacked = (...parts: ReactNode[]) => createElement('div', { className: 'space-y-4' }, ...parts);
+const settingsForm = (viewName: string) => <DynamicForm viewName={viewName} objectId="singleton" />;
+const reportsPage = (viewName: string) => <ReportsPage viewName={viewName} />;
+
+/** Settings pages that open with something above, or in place of, the plain form. */
+const SINGLETON_PAGES: Record<string, (viewName: string) => ReactNode> = {
+  'x:Authentication': (v) => stacked(<DirectorySetupCard className="mx-auto max-w-4xl" />, settingsForm(v)),
+  // Sender checks open with a choice of level.
+  'x:SenderAuth': (v) => <SenderChecksPage viewName={v} />,
+  // Every retention page opens with all the "how long"s as sentences.
+  'x:DataRetention': (v) => <RetentionPage viewName={v} />,
+  // Every report page opens with what goes out and comes in.
+  'x:ReportSettings': reportsPage,
+  'x:DmarcReportSettings': reportsPage,
+  'x:TlsReportSettings': reportsPage,
+  'x:DkimReportSettings': reportsPage,
+  'x:SpfReportSettings': reportsPage,
+  'x:DsnReportSettings': reportsPage,
+  // The metrics pages open with where the numbers go.
+  'x:Metrics': (v) => <MetricsPage viewName={v} />,
+  // Spam filter › General opens with how hard the filter is.
+  'x:SpamSettings': (v) => <SpamSettingsPage viewName={v} />,
+  'x:Sharing': (v) => stacked(<SharingSwitches />, settingsForm(v)),
+  'x:Security': (v) => stacked(<LegacyProtocolsBanner />, settingsForm(v)),
+  'x:MtaOutboundStrategy': (v) => stacked(<SendingSetupCard className="mx-auto max-w-4xl" />, settingsForm(v)),
+};
+
+const listUnder = (above: ReactNode) => (viewName: string) => stacked(above, <DynamicList viewName={viewName} />);
+const limitsList = (object: LimitObject) => () =>
+  stacked(<LimitsSummary object={object} />, <DynamicList viewName={object} />);
+
+/** Lists that open with a guide or a summary above them, or have a page of their own. */
+const LIST_PAGES: Record<string, (viewName: string) => ReactNode> = {
+  'x:Certificate': listUnder(<CertificateSetupCard />),
+  'x:AcmeProvider': listUnder(<CertificateSetupCard />),
+  // Received reports open with who sends as us and whether they pass.
+  'x:DmarcExternalReport': listUnder(<DmarcSummaryCard />),
+  'x:TlsExternalReport': listUnder(<TlsSummaryCard />),
+  'x:MtaRoute': listUnder(<SendingSetupCard />),
+  'x:Directory': listUnder(<DirectorySetupCard />),
+  'x:MtaInboundThrottle': limitsList('x:MtaInboundThrottle'),
+  'x:MtaOutboundThrottle': limitsList('x:MtaOutboundThrottle'),
+  'x:MtaQueueQuota': limitsList('x:MtaQueueQuota'),
+  'x:Alert': (v) => <AlertsPage viewName={v} />,
+  'x:NetworkListener': (v) => <ListenersPage viewName={v} />,
+  'x:WebHook': (v) => <WebhooksPage viewName={v} />,
+};
+
+const unknown = (text: string) => (
+  <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">{text}</div>
+);
+
+function recordPage(viewName: string, objectName: string, permissionPrefix: string, id: string): ReactNode {
+  if (objectName === 'x:Trace') return <TraceDetailView viewName={viewName} objectId={id} />;
+  const page = useAccountStore.getState().hasObjectPermission(permissionPrefix, 'Update') ? (
+    <DynamicForm
+      viewName={viewName}
+      objectId={id}
+      intro={objectName === 'x:WebHook' ? <WebhookTestCard webhookId={id} /> : undefined}
+    />
+  ) : (
+    <DynamicViewPage viewName={viewName} objectId={id} />
+  );
+  // A tenant administrator reads their tenant without changing it, yet may
+  // still turn its legacy-protocols switch, so it shows on the read-only page too.
+  if (objectName === 'x:Tenant') {
+    return stacked(<TenantLegacyProtocols tenantId={id} />, <SharingSwitches tenantId={id} />, page);
+  }
+  // A person's page says whether they're on hold or locked.
+  if (viewName === 'x:Account/User') {
+    return stacked(<HeldNotice accountId={id} />, <AccountLockBanner accountId={id} />, page);
+  }
+  return page;
+}
+
+function pageFor(
+  schema: Schema | null,
+  viewName: string | undefined,
+  id: string | undefined,
+  section: string | undefined,
+): ReactNode {
+  const route = pageRoute(schema, viewName, id);
+  const view = viewName ?? '';
+  switch (route.kind) {
+    case 'none':
+      return <LoadingFallback />;
+    case 'dashboard':
+      return <DashboardView dashboardId={route.dashboardId} section={section ?? ''} />;
+    case 'wizard': {
+      if (route.name === 'dns' && route.param) return <ConnectDnsPage domainId={route.param} />;
+      const Wizard = WIZARDS[route.name];
+      return Wizard ? <Wizard /> : unknown(`Unknown guide: ${route.name}`);
+    }
+    case 'custom': {
+      const Page = CUSTOM_PAGES[route.name];
+      return Page ? <Page /> : unknown(`Unknown component: ${route.name}`);
+    }
+    case 'schema-loading':
+      return <div className="flex items-center justify-center p-8 text-muted-foreground">Loading...</div>;
+    case 'unknown':
+      return <div className="flex items-center justify-center p-8 text-destructive">Unknown view: {view}</div>;
+    case 'action':
+      return <ActionPage viewName={view} />;
+    case 'singleton':
+      return (SINGLETON_PAGES[route.objectName] ?? settingsForm)(view);
+    case 'create':
+      return <DynamicForm viewName={view} objectId={null} />;
+    case 'record':
+      return recordPage(view, route.objectName, route.permissionPrefix, route.id);
+    case 'list':
+      return LIST_PAGES[view]?.(view) ?? <DynamicList viewName={view} />;
+  }
+}
 
 interface MainContentProps {
   viewName?: string;
@@ -175,6 +285,7 @@ interface MainContentProps {
   section?: string;
 }
 
+/** The page an address names, under the shell. Lists are fetched fresh on every page change. */
 export function MainContent({ viewName, id, section }: MainContentProps) {
   const schema = useSchemaStore((s) => s.schema);
   const invalidateAllObjectLists = useCacheStore((s) => s.invalidateAllObjectLists);
@@ -183,288 +294,5 @@ export function MainContent({ viewName, id, section }: MainContentProps) {
     invalidateAllObjectLists();
   }, [viewName, invalidateAllObjectLists]);
 
-  return <Suspense fallback={<LoadingFallback />}>{renderView(schema, viewName, id, section)}</Suspense>;
-}
-
-function renderView(schema: Schema | null, viewName?: string, id?: string, section?: string): ReactNode {
-  if (!viewName) {
-    return <LoadingFallback />;
-  }
-
-  if (viewName.startsWith('Dashboard/')) {
-    const dashboardId = viewName.slice('Dashboard/'.length);
-    return <DashboardView dashboardId={dashboardId} section={section ?? ''} />;
-  }
-
-  // INBUXA: guided jobs. Always reached by choosing "Guide me", never by default.
-  if (viewName.startsWith('Wizard/')) {
-    const [, wizard, param] = viewName.split('/');
-    if (wizard === 'dns' && param) {
-      return <ConnectDnsPage domainId={param} />;
-    }
-    // inbuxa: guided setup, sending and receiving limits (settings-reorg).
-    if (wizard === 'limits') {
-      return <LimitsSetupPage />;
-    }
-    // inbuxa: guided setup, connect a sign-in directory (settings-reorg).
-    if (wizard === 'directory') {
-      return <DirectorySetupPage />;
-    }
-    // inbuxa: guided setup, how this server sends mail (settings-reorg).
-    if (wizard === 'sending') {
-      return <SendingSetupPage />;
-    }
-    // inbuxa: guided setup, automatic certificates (settings-reorg).
-    if (wizard === 'certificates') {
-      return <CertificateSetupPage />;
-    }
-    return (
-      <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-        Unknown guide: {wizard}
-      </div>
-    );
-  }
-
-  if (viewName.startsWith('CustomComponent/')) {
-    const componentName = viewName.slice('CustomComponent/'.length);
-    if (componentName === 'Dashboard') {
-      const firstId = schema?.dashboards?.[0]?.id ?? 'overview';
-      return <DashboardView dashboardId={firstId} section={section ?? ''} />;
-    }
-    if (componentName === 'LiveDelivery') {
-      return <DeliveryTracePage />;
-    }
-    if (componentName === 'LiveTracing') {
-      return <LiveTracingPage />;
-    }
-    // INBUXA: Settings › Security › Hardening (legacy-protocols spec).
-    // inbuxa: the security to-do list, which holds the legacy-protocols switch
-    if (componentName === 'LegacyProtocols') {
-      return <SecurityPage />;
-    }
-    // inbuxa: Settings › Overview (settings-reorg).
-    if (componentName === 'SettingsOverview') {
-      return <SettingsOverviewPage />;
-    }
-    if (componentName === 'LocalAi') {
-      return <LocalAiPage />;
-    }
-    if (componentName === 'AuditLog') {
-      return <AuditLogPage />;
-    }
-    if (componentName === 'AccountLocks') {
-      return <AccountLocksPage />;
-    }
-    if (componentName === 'SharedMailboxes') {
-      return <SharedMailboxesPage />;
-    }
-    if (componentName === 'Deliverability') {
-      return <DeliverabilityPage />;
-    }
-    if (componentName === 'ScheduledReports') {
-      return <ScheduledReportsPage />;
-    }
-    if (componentName === 'LegalHolds') {
-      return <LegalHoldsPage />;
-    }
-    if (componentName === 'ComplianceOverview') {
-      return <ComplianceOverviewPage />;
-    }
-    if (componentName === 'DlpRules') {
-      return <DlpRulesPage />;
-    }
-    if (componentName === 'MailFlowRules') {
-      return <MailFlowRulesPage />;
-    }
-    if (componentName === 'Journal') {
-      return <JournalPage />;
-    }
-    if (componentName === 'HeldMail') {
-      return <HeldMailPage />;
-    }
-    if (componentName === 'DataInventory') {
-      return <DataInventoryPage />;
-    }
-    return (
-      <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-        Unknown component: {componentName}
-      </div>
-    );
-  }
-
-  if (!schema) {
-    return <div className="flex items-center justify-center p-8 text-muted-foreground">Loading...</div>;
-  }
-
-  const resolved = resolveObject(schema, viewName);
-  if (!resolved) {
-    return <div className="flex items-center justify-center p-8 text-destructive">Unknown view: {viewName}</div>;
-  }
-
-  if (resolved.objectName === 'x:Action') {
-    return <ActionPage viewName={viewName} />;
-  }
-
-  if (resolved.objectType.type === 'singleton') {
-    // INBUXA: the Security settings carry the legacy protocols banner (LP-18).
-    if (resolved.objectName === 'x:Authentication') {
-      return (
-        <div className="space-y-4">
-          <DirectorySetupCard className="mx-auto max-w-4xl" />
-          <DynamicForm viewName={viewName} objectId="singleton" />
-        </div>
-      );
-    }
-    // inbuxa: Sender checks open with a choice of level (settings-reorg).
-    if (resolved.objectName === 'x:SenderAuth') {
-      return <SenderChecksPage viewName={viewName} />;
-    }
-    // inbuxa: every retention page opens with all the "how long"s as sentences (settings-reorg).
-    if (resolved.objectName === 'x:DataRetention') {
-      return <RetentionPage viewName={viewName} />;
-    }
-    // inbuxa: every report page opens with what goes out and comes in (settings-reorg).
-    if (
-      [
-        'x:ReportSettings',
-        'x:DmarcReportSettings',
-        'x:TlsReportSettings',
-        'x:DkimReportSettings',
-        'x:SpfReportSettings',
-        'x:DsnReportSettings',
-      ].includes(resolved.objectName)
-    ) {
-      return <ReportsPage viewName={viewName} />;
-    }
-    // inbuxa: the metrics pages open with where the numbers go (settings-reorg).
-    if (resolved.objectName === 'x:Metrics') {
-      return <MetricsPage viewName={viewName} />;
-    }
-    // inbuxa: Spam filter › General opens with how hard the filter is (settings-reorg).
-    if (resolved.objectName === 'x:SpamSettings') {
-      return <SpamSettingsPage viewName={viewName} />;
-    }
-    // inbuxa: Sharing opens with who may share (MA-C)
-    if (resolved.objectName === 'x:Sharing') {
-      return (
-        <div className="space-y-4">
-          <SharingSwitches />
-          <DynamicForm viewName={viewName} objectId="singleton" />
-        </div>
-      );
-    }
-    if (resolved.objectName === 'x:Security') {
-      return (
-        <div className="space-y-4">
-          <LegacyProtocolsBanner />
-          <DynamicForm viewName={viewName} objectId="singleton" />
-        </div>
-      );
-    }
-    // inbuxa: the sending guide, offered where outbound delivery is set (settings-reorg).
-    if (resolved.objectName === 'x:MtaOutboundStrategy') {
-      return (
-        <div className="space-y-4">
-          <SendingSetupCard className="mx-auto max-w-4xl" />
-          <DynamicForm viewName={viewName} objectId="singleton" />
-        </div>
-      );
-    }
-    return <DynamicForm viewName={viewName} objectId="singleton" />;
-  }
-
-  if (id === 'new') {
-    return <DynamicForm viewName={viewName} objectId={null} />;
-  }
-
-  if (id) {
-    if (resolved.objectName === 'x:Trace') {
-      return <TraceDetailView viewName={viewName} objectId={id} />;
-    }
-    const canUpdate = useAccountStore.getState().hasObjectPermission(resolved.permissionPrefix, 'Update');
-    const page = canUpdate ? (
-      <DynamicForm
-        viewName={viewName}
-        objectId={id}
-        intro={resolved.objectName === 'x:WebHook' ? <WebhookTestCard webhookId={id} /> : undefined}
-      />
-    ) : (
-      <DynamicViewPage viewName={viewName} objectId={id} />
-    );
-    // INBUXA: a tenant's page carries its legacy protocols switch (LP-9). A
-    // tenant admin reads its tenant without changing it (MT-12), and may
-    // still turn the switch, so it shows on the read-only page too.
-    if (resolved.objectName === 'x:Tenant') {
-      return (
-        <div className="space-y-4">
-          <TenantLegacyProtocols tenantId={id} />
-          <SharingSwitches tenantId={id} />
-          {page}
-        </div>
-      );
-    }
-    // INBUXA: a person's page says whether it is locked (AL-1)
-    if (viewName === 'x:Account/User') {
-      return (
-        <div className="space-y-4">
-          <HeldNotice accountId={id} />
-          <AccountLockBanner accountId={id} />
-          {page}
-        </div>
-      );
-    }
-    return page;
-  }
-
-  if (viewName === 'x:Certificate' || viewName === 'x:AcmeProvider') {
-    return (
-      <div className="space-y-4">
-        <CertificateSetupCard />
-        <DynamicList viewName={viewName} />
-      </div>
-    );
-  }
-  // inbuxa: received reports open with who sends as us and whether they pass (admin UX roadmap, item 6).
-  if (viewName === 'x:DmarcExternalReport' || viewName === 'x:TlsExternalReport') {
-    return (
-      <div className="space-y-4">
-        {viewName === 'x:DmarcExternalReport' ? <DmarcSummaryCard /> : <TlsSummaryCard />}
-        <DynamicList viewName={viewName} />
-      </div>
-    );
-  }
-  if (viewName === 'x:MtaRoute') {
-    return (
-      <div className="space-y-4">
-        <SendingSetupCard />
-        <DynamicList viewName={viewName} />
-      </div>
-    );
-  }
-  if (viewName === 'x:Directory') {
-    return (
-      <div className="space-y-4">
-        <DirectorySetupCard />
-        <DynamicList viewName={viewName} />
-      </div>
-    );
-  }
-  if (viewName === 'x:MtaInboundThrottle' || viewName === 'x:MtaOutboundThrottle' || viewName === 'x:MtaQueueQuota') {
-    return (
-      <div className="space-y-4">
-        <LimitsSummary object={viewName} />
-        <DynamicList viewName={viewName} />
-      </div>
-    );
-  }
-  if (viewName === 'x:Alert') {
-    return <AlertsPage viewName={viewName} />;
-  }
-  if (viewName === 'x:NetworkListener') {
-    return <ListenersPage viewName={viewName} />;
-  }
-  if (viewName === 'x:WebHook') {
-    return <WebhooksPage viewName={viewName} />;
-  }
-  return <DynamicList viewName={viewName} />;
+  return <Suspense fallback={<LoadingFallback />}>{pageFor(schema, viewName, id, section)}</Suspense>;
 }
