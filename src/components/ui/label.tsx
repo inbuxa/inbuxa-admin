@@ -1,23 +1,28 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2023 shadcn
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: MIT
  */
+
+// Structure from shadcn/ui 4.21.1 (MIT), styled for inbuxa.
 
 import * as React from 'react';
 import * as LabelPrimitive from '@radix-ui/react-label';
-import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils';
 
-const labelVariants = cva('text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70');
-
-const Label = React.forwardRef<
-  React.ComponentRef<typeof LabelPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root> & VariantProps<typeof labelVariants>
->(({ className, ...props }, ref) => (
-  <LabelPrimitive.Root ref={ref} className={cn(labelVariants(), className)} {...props} />
-));
-Label.displayName = LabelPrimitive.Root.displayName;
+function Label({ className, ...props }: React.ComponentProps<typeof LabelPrimitive.Root>) {
+  return (
+    <LabelPrimitive.Root
+      data-slot="label"
+      className={cn(
+        'text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
 
 export { Label };

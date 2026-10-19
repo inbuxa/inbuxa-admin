@@ -77,3 +77,7 @@ every file inherited from it, and INBUXA's own notice is added to the files it
 changes. Those files are offered upstream under the AGPL-3.0-only or a
 proprietary license. INBUXA uses them under the AGPL-3.0 only. INBUXA isn't
 affiliated with or endorsed by Stalwart Labs.
+
+The base components in `src/components/ui` follow the structure of
+[shadcn/ui](https://ui.shadcn.com), used under the [MIT license](./LICENSES/MIT.txt).
+Each of those files says so in its header.
