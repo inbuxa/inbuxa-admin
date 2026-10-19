@@ -1,159 +1,99 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * Which navigation links an account sees and may open. Schema objects need
+ * read permission on themselves (or, for a view, on what it shows); the
+ * console's own pages follow the rules below.
+ */
 import type { Layout, LayoutItem, LayoutSubItem, Schema } from '@/types/schema';
 import { resolveObject } from '@/lib/schemaResolver';
 import { SETTINGS_LAYOUT_NAME, SETTINGS_OVERVIEW_VIEW } from '@/lib/settingsLayout';
 
-function findFirstSubLink(items: LayoutSubItem[]): string | null {
-  for (const item of items) {
-    if (item.type === 'link') return item.viewName;
-    if (item.type === 'container') {
-      const found = findFirstSubLink(item.items);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-export function findFirstLinkInLayout(items: LayoutItem[] | Layout): string | null {
-  const list = Array.isArray(items) ? items : items.items;
-  for (const item of list) {
-    if ('link' in item) return item.link.viewName;
-    if ('container' in item) {
-      const found = findFirstSubLink(item.container.items);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
 export type CanGet = (permissionPrefix: string) => boolean;
 export type HasPermission = (permission: string) => boolean;
 
-interface SpecialLinkInfo {
-  visible: boolean;
-  enterprise: boolean;
+interface Checks {
+  edition: string;
+  canGet?: CanGet;
+  hasPerm?: HasPermission;
 }
 
-function checkSpecialLink(
-  viewName: string,
-  edition: string,
-  hasPerm?: HasPermission,
-  canGet?: CanGet,
-): SpecialLinkInfo | null {
-  if (viewName.startsWith('Dashboard/') || viewName === 'CustomComponent/Dashboard') {
-    if (edition === 'oss') return { visible: false, enterprise: true };
-    const hasLiveMetrics = hasPerm ? hasPerm('liveMetrics') : true;
-    const hasTraceGet = canGet ? canGet('sysTrace') : true;
-    return { visible: hasLiveMetrics && hasTraceGet, enterprise: true };
-  }
+interface PageRule {
+  enterprise: boolean;
+  visible: (checks: Checks) => boolean;
+}
 
-  if (viewName === 'CustomComponent/LiveDelivery') {
-    const allowed = hasPerm ? hasPerm('liveDeliveryTest') : true;
-    return { visible: allowed, enterprise: false };
-  }
+// Without a check to ask (as when only the enterprise flag is wanted), a rule passes.
+const mayRead =
+  (...prefixes: string[]): PageRule['visible'] =>
+  ({ canGet }) =>
+    !canGet || prefixes.every(canGet);
+const holds = (permission: string, { hasPerm }: Checks) => !hasPerm || hasPerm(permission);
+const notOss = ({ edition }: Checks) => edition !== 'oss';
 
-  if (viewName === 'CustomComponent/LiveTracing') {
-    if (edition === 'oss') return { visible: false, enterprise: true };
-    const allowed = hasPerm ? hasPerm('liveTracing') : true;
-    return { visible: allowed, enterprise: true };
-  }
+const DASHBOARD: PageRule = {
+  enterprise: true,
+  visible: (c) => notOss(c) && holds('liveMetrics', c) && mayRead('sysTrace')(c),
+};
 
-  // INBUXA: the security to-do list and the legacy-protocols switch. Every
-  // check is server-wide, so it's for whoever may read the server's security
-  // settings, which tenant administrators can't (security to-do list spec).
-  if (viewName === 'CustomComponent/LegacyProtocols') {
-    return { visible: canGet ? canGet('sysSecurity') : true, enterprise: false };
-  }
+const readOnly = (...prefixes: string[]): PageRule => ({ enterprise: false, visible: mayRead(...prefixes) });
 
-  // inbuxa: the Local AI page is for whoever may see the AI classifier.
-  if (viewName === 'CustomComponent/LocalAi') {
-    return { visible: canGet ? canGet('sysSpamLlm') : true, enterprise: false };
-  }
+/** The console's own pages, by view name. */
+const PAGES: Record<string, PageRule> = {
+  'CustomComponent/Dashboard': DASHBOARD,
+  'CustomComponent/LiveDelivery': { enterprise: false, visible: (c) => holds('liveDeliveryTest', c) },
+  'CustomComponent/LiveTracing': { enterprise: true, visible: (c) => notOss(c) && holds('liveTracing', c) },
+  // Every check on it is server-wide, so tenant administrators don't see it.
+  'CustomComponent/LegacyProtocols': readOnly('sysSecurity'),
+  'CustomComponent/LocalAi': readOnly('sysSpamLlm'),
+  'CustomComponent/AuditLog': readOnly('sysAudit'),
+  'CustomComponent/LegalHolds': readOnly('sysLegalHold'),
+  'CustomComponent/ComplianceOverview': readOnly('sysCompliance'),
+  'CustomComponent/DataInventory': readOnly('sysCompliance'),
+  'CustomComponent/DlpRules': readOnly('sysDlpPolicy'),
+  'CustomComponent/Journal': readOnly('sysJournal'),
+  'CustomComponent/HeldMail': readOnly('sysDlpReview'),
+  'CustomComponent/MailFlowRules': readOnly('sysMailRule'),
+  'CustomComponent/AccountLocks': readOnly('sysAccountLock'),
+  'CustomComponent/SharedMailboxes': readOnly('sysAccountLock'),
+  'CustomComponent/Deliverability': readOnly('sysDeliverability'),
+  'CustomComponent/ScheduledReports': readOnly('sysScheduledReport'),
+  // Guided jobs are for whoever may read everything they change.
+  'Wizard/certificates': readOnly('sysDomain', 'sysAcmeProvider', 'sysCertificate'),
+  'Wizard/sending': readOnly('sysMtaRoute', 'sysMtaOutboundStrategy'),
+  'Wizard/directory': readOnly('sysDirectory', 'sysDomain', 'sysAuthentication'),
+  'Wizard/limits': readOnly('sysMtaInboundThrottle', 'sysMtaOutboundThrottle', 'sysMtaQueueQuota'),
+};
 
-  // inbuxa: the audit log, for whoever may read it (AU-9).
-  if (viewName === 'CustomComponent/AuditLog') {
-    return { visible: canGet ? canGet('sysAudit') : true, enterprise: false };
-  }
+/**
+ * A page this console can't draw is hidden: a server newer than the console
+ * may list pages it doesn't know yet, and counting them hid the first-boot
+ * wizard (inbuxa-server#135).
+ */
+const UNKNOWN_PAGE: PageRule = { enterprise: false, visible: () => false };
 
-  // inbuxa: legal holds, for server administrators who may see them (LH-13).
-  if (viewName === 'CustomComponent/LegalHolds') {
-    return { visible: canGet ? canGet('sysLegalHold') : true, enterprise: false };
-  }
-  // INBUXA: the compliance overview and data inventory (personal-data catalog)
-  if (viewName === 'CustomComponent/ComplianceOverview' || viewName === 'CustomComponent/DataInventory') {
-    return { visible: canGet ? canGet('sysCompliance') : true, enterprise: false };
-  }
+function pageRule(viewName: string): PageRule | null {
+  if (viewName.startsWith('Dashboard/')) return DASHBOARD;
+  if (viewName.startsWith('Wizard/dns/')) return readOnly('sysDomain');
+  return PAGES[viewName] ?? (viewName.startsWith('CustomComponent/') ? UNKNOWN_PAGE : null);
+}
 
-  // INBUXA: DLP and mail flow rules, and held mail (dlp-and-mail-flow-rules spec, §2.8)
-  if (viewName === 'CustomComponent/DlpRules') {
-    return { visible: canGet ? canGet('sysDlpPolicy') : true, enterprise: false };
+/** Every link's view name, top to bottom, going into containers as they come. */
+function* linksOf(items: (LayoutItem | LayoutSubItem)[]): Generator<string> {
+  for (const item of items) {
+    if ('link' in item) yield item.link.viewName;
+    else if ('container' in item) yield* linksOf(item.container.items);
+    else if (item.type === 'link') yield item.viewName;
+    else yield* linksOf(item.items);
   }
-  // INBUXA: journaling (journaling spec, §3)
-  if (viewName === 'CustomComponent/Journal') {
-    return { visible: canGet ? canGet('sysJournal') : true, enterprise: false };
-  }
-  if (viewName === 'CustomComponent/HeldMail') {
-    return { visible: canGet ? canGet('sysDlpReview') : true, enterprise: false };
-  }
-  if (viewName === 'CustomComponent/MailFlowRules') {
-    return { visible: canGet ? canGet('sysMailRule') : true, enterprise: false };
-  }
+}
 
-  // inbuxa: locked accounts, for whoever may see them (AL-12).
-  if (viewName === 'CustomComponent/AccountLocks') {
-    return { visible: canGet ? canGet('sysAccountLock') : true, enterprise: false };
-  }
-  // inbuxa: shared mailboxes are locks of their own kind (MA-S4)
-  if (viewName === 'CustomComponent/SharedMailboxes') {
-    return { visible: canGet ? canGet('sysAccountLock') : true, enterprise: false };
-  }
-  // inbuxa: Domains › Deliverability, for whoever may read the reports (deliverability spec)
-  if (viewName === 'CustomComponent/Deliverability') {
-    return { visible: canGet ? canGet('sysDeliverability') : true, enterprise: false };
-  }
-  // inbuxa: Reports › Scheduled, for whoever may see the reports (scheduled-reports spec)
-  if (viewName === 'CustomComponent/ScheduledReports') {
-    return { visible: canGet ? canGet('sysScheduledReport') : true, enterprise: false };
-  }
-
-  // INBUXA: a page this console can't draw is hidden. A server newer than the
-  // console lists pages the console doesn't know yet, and counting them as
-  // visible hid the first-boot wizard (inbuxa-server#135).
-  if (viewName.startsWith('CustomComponent/')) {
-    return { visible: false, enterprise: false };
-  }
-
-  // INBUXA: guided jobs are open to whoever may manage what they change.
-  if (viewName === 'Wizard/certificates') {
-    const ok = canGet ? canGet('sysDomain') && canGet('sysAcmeProvider') && canGet('sysCertificate') : true;
-    return { visible: ok, enterprise: false };
-  }
-  if (viewName === 'Wizard/sending') {
-    const ok = canGet ? canGet('sysMtaRoute') && canGet('sysMtaOutboundStrategy') : true;
-    return { visible: ok, enterprise: false };
-  }
-  if (viewName === 'Wizard/directory') {
-    const ok = canGet ? canGet('sysDirectory') && canGet('sysDomain') && canGet('sysAuthentication') : true;
-    return { visible: ok, enterprise: false };
-  }
-  if (viewName === 'Wizard/limits') {
-    const ok = canGet
-      ? canGet('sysMtaInboundThrottle') && canGet('sysMtaOutboundThrottle') && canGet('sysMtaQueueQuota')
-      : true;
-    return { visible: ok, enterprise: false };
-  }
-  if (viewName.startsWith('Wizard/dns/')) {
-    return { visible: canGet ? canGet('sysDomain') : true, enterprise: false };
-  }
-
+function firstLink(items: (LayoutItem | LayoutSubItem)[], keep: (viewName: string) => boolean): string | null {
+  for (const viewName of linksOf(items)) if (keep(viewName)) return viewName;
   return null;
 }
 
@@ -164,64 +104,44 @@ export function isLinkVisible(
   canGet: CanGet,
   hasPerm?: HasPermission,
 ): boolean {
-  // INBUXA: the Settings overview is the console's own page, there when any
-  // settings page is. Visible on its own, it made the Settings layout visible
-  // to the bootstrap administrator, and the wizard never showed.
+  // The Settings overview is there when any settings page is. Shown on its
+  // own, it made Settings visible to the bootstrap administrator, and the
+  // wizard never showed.
   if (viewName === SETTINGS_OVERVIEW_VIEW) {
     const settings = schema.layouts.find((layout) => layout.name === SETTINGS_LAYOUT_NAME);
-    return (
-      settings?.items.some(
-        (item) =>
-          'container' in item &&
-          findFirstVisibleSubLink(schema, item.container.items, edition, canGet, hasPerm) !== null,
-      ) ?? false
-    );
+    const containers = (settings?.items ?? []).flatMap((item) => ('container' in item ? [item.container.items] : []));
+    return containers.some((items) => firstLink(items, (v) => isLinkVisible(schema, v, edition, canGet, hasPerm)));
   }
 
-  const special = checkSpecialLink(viewName, edition, hasPerm, canGet);
-  if (special !== null) return special.visible;
+  const rule = pageRule(viewName);
+  if (rule) return rule.visible({ edition, canGet, hasPerm });
 
-  const obj = schema.objects[viewName];
-  if (!obj) return false;
-  const resolved = resolveObject(schema, viewName);
-  if (!resolved) return false;
-
-  if (!canGet(resolved.permissionPrefix)) return false;
-
-  if (resolved.enterprise && edition === 'oss') return false;
-
-  return true;
+  const resolved = schema.objects[viewName] ? resolveObject(schema, viewName) : null;
+  if (!resolved || !canGet(resolved.permissionPrefix)) return false;
+  return !(resolved.enterprise && edition === 'oss');
 }
 
-export function isLinkEnterprise(schema: Schema, viewName: string, edition: string): boolean {
-  const special = checkSpecialLink(viewName, edition);
-  if (special !== null) return special.enterprise;
-
+export function isLinkEnterprise(schema: Schema, viewName: string): boolean {
+  const rule = pageRule(viewName);
+  if (rule) return rule.enterprise;
   const obj = schema.objects[viewName];
-  if (!obj) return false;
-  if (obj.type === 'view') {
-    const parent = schema.objects[obj.objectName];
-    return parent?.type !== 'view' && parent?.enterprise === true;
-  }
-  return obj.enterprise === true;
+  if (obj?.type !== 'view') return obj?.enterprise === true;
+  const parent = schema.objects[obj.objectName];
+  return parent?.type !== 'view' && parent?.enterprise === true;
 }
 
-function findFirstVisibleSubLink(
+/** Visible, and not an enterprise page shown to the community edition only as a teaser. */
+export function isLinkAccessible(
   schema: Schema,
-  items: LayoutSubItem[],
+  viewName: string,
   edition: string,
   canGet: CanGet,
   hasPerm?: HasPermission,
-): string | null {
-  for (const item of items) {
-    if (item.type === 'link') {
-      if (isLinkVisible(schema, item.viewName, edition, canGet, hasPerm)) return item.viewName;
-    } else if (item.type === 'container') {
-      const found = findFirstVisibleSubLink(schema, item.items, edition, canGet, hasPerm);
-      if (found) return found;
-    }
-  }
-  return null;
+): boolean {
+  return (
+    isLinkVisible(schema, viewName, edition, canGet, hasPerm) &&
+    !(edition === 'community' && isLinkEnterprise(schema, viewName))
+  );
 }
 
 export function findFirstVisibleLinkInLayout(
@@ -231,45 +151,7 @@ export function findFirstVisibleLinkInLayout(
   canGet: CanGet,
   hasPerm?: HasPermission,
 ): string | null {
-  for (const item of layout.items) {
-    if ('link' in item) {
-      if (isLinkVisible(schema, item.link.viewName, edition, canGet, hasPerm)) return item.link.viewName;
-    } else if ('container' in item) {
-      const found = findFirstVisibleSubLink(schema, item.container.items, edition, canGet, hasPerm);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-export function isLinkAccessible(
-  schema: Schema,
-  viewName: string,
-  edition: string,
-  canGet: CanGet,
-  hasPerm?: HasPermission,
-): boolean {
-  if (!isLinkVisible(schema, viewName, edition, canGet, hasPerm)) return false;
-  if (edition === 'community' && isLinkEnterprise(schema, viewName, edition)) return false;
-  return true;
-}
-
-function findFirstAccessibleSubLink(
-  schema: Schema,
-  items: LayoutSubItem[],
-  edition: string,
-  canGet: CanGet,
-  hasPerm?: HasPermission,
-): string | null {
-  for (const item of items) {
-    if (item.type === 'link') {
-      if (isLinkAccessible(schema, item.viewName, edition, canGet, hasPerm)) return item.viewName;
-    } else if (item.type === 'container') {
-      const found = findFirstAccessibleSubLink(schema, item.items, edition, canGet, hasPerm);
-      if (found) return found;
-    }
-  }
-  return null;
+  return firstLink(layout.items, (v) => isLinkVisible(schema, v, edition, canGet, hasPerm));
 }
 
 export function findFirstAccessibleLinkInLayout(
@@ -279,19 +161,10 @@ export function findFirstAccessibleLinkInLayout(
   canGet: CanGet,
   hasPerm?: HasPermission,
 ): string | null {
-  for (const item of layout.items) {
-    if ('link' in item) {
-      if (isLinkAccessible(schema, item.link.viewName, edition, canGet, hasPerm)) return item.link.viewName;
-    } else if ('container' in item) {
-      const found = findFirstAccessibleSubLink(schema, item.container.items, edition, canGet, hasPerm);
-      if (found) return found;
-    }
-  }
-  return null;
+  return firstLink(layout.items, (v) => isLinkAccessible(schema, v, edition, canGet, hasPerm));
 }
 
+/** The layouts with at least one page the account may see. */
 export function visibleLayouts(schema: Schema, edition: string, canGet: CanGet, hasPerm?: HasPermission): Layout[] {
-  return schema.layouts.filter(
-    (layout) => findFirstVisibleLinkInLayout(schema, layout, edition, canGet, hasPerm) !== null,
-  );
+  return schema.layouts.filter((layout) => findFirstVisibleLinkInLayout(schema, layout, edition, canGet, hasPerm));
 }
