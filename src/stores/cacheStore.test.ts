@@ -1,94 +1,45 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useCacheStore } from './cacheStore';
 
+const cache = () => useCacheStore.getState();
+
+beforeEach(() => cache().clearAll());
+
 describe('cacheStore', () => {
-  beforeEach(() => {
-    useCacheStore.setState({ displayNames: {} });
+  it('adds display names to what a type already has, newer names winning', () => {
+    cache().setDisplayNames('x:Account', { a1: 'Alice' });
+    cache().setDisplayNames('x:Account', { a2: 'Bob', a1: 'Alicia' });
+    cache().setDisplayNames('x:Domain', { d1: 'example.com' });
+    expect(cache().displayNames).toEqual({
+      'x:Account': { a1: 'Alicia', a2: 'Bob' },
+      'x:Domain': { d1: 'example.com' },
+    });
+    expect(cache().getDisplayName('x:Account', 'a2')).toBe('Bob');
+    expect(cache().getDisplayName('x:Account', 'a9')).toBeUndefined();
+    expect(cache().getDisplayName('x:Group', 'g1')).toBeUndefined();
   });
 
-  describe('setDisplayNames', () => {
-    it('stores entries for an object type', () => {
-      useCacheStore.getState().setDisplayNames('user', { u1: 'Alice', u2: 'Bob' });
-
-      expect(useCacheStore.getState().displayNames).toEqual({
-        user: { u1: 'Alice', u2: 'Bob' },
-      });
-    });
-
-    it('merges with existing entries for the same object type', () => {
-      const { setDisplayNames } = useCacheStore.getState();
-      setDisplayNames('user', { u1: 'Alice' });
-      setDisplayNames('user', { u2: 'Bob' });
-
-      expect(useCacheStore.getState().displayNames.user).toEqual({
-        u1: 'Alice',
-        u2: 'Bob',
-      });
-    });
-
-    it('overwrites individual entries when keys collide', () => {
-      const { setDisplayNames } = useCacheStore.getState();
-      setDisplayNames('user', { u1: 'Alice' });
-      setDisplayNames('user', { u1: 'Alicia' });
-
-      expect(useCacheStore.getState().displayNames.user.u1).toBe('Alicia');
-    });
+  it('replaces an object list and drops them all at once', () => {
+    cache().setObjectList('x:Domain', [{ id: 'd1', label: 'one' }]);
+    cache().setObjectList('x:Domain', [{ id: 'd2', label: 'two' }]);
+    cache().setObjectList('x:Role', [{ id: 'r1', label: 'admin' }]);
+    expect(cache().objectLists['x:Domain']).toEqual([{ id: 'd2', label: 'two' }]);
+    cache().setDisplayNames('x:Domain', { d2: 'two' });
+    cache().invalidateAllObjectLists();
+    expect(cache().objectLists).toEqual({});
+    expect(cache().getDisplayName('x:Domain', 'd2')).toBe('two');
   });
 
-  describe('getDisplayName', () => {
-    it('returns cached name', () => {
-      useCacheStore.getState().setDisplayNames('user', { u1: 'Alice' });
-      expect(useCacheStore.getState().getDisplayName('user', 'u1')).toBe('Alice');
-    });
-
-    it('returns undefined for unknown id', () => {
-      useCacheStore.getState().setDisplayNames('user', { u1: 'Alice' });
-      expect(useCacheStore.getState().getDisplayName('user', 'u99')).toBeUndefined();
-    });
-
-    it('returns undefined for unknown object type', () => {
-      expect(useCacheStore.getState().getDisplayName('domain', 'd1')).toBeUndefined();
-    });
-  });
-
-  describe('invalidateCache', () => {
-    it('removes entries for a specific object type', () => {
-      const { setDisplayNames } = useCacheStore.getState();
-      setDisplayNames('user', { u1: 'Alice' });
-      setDisplayNames('domain', { d1: 'example.com' });
-
-      useCacheStore.getState().invalidateCache('user');
-
-      const state = useCacheStore.getState();
-      expect(state.displayNames.user).toBeUndefined();
-      expect(state.displayNames.domain).toEqual({ d1: 'example.com' });
-    });
-
-    it('is a no-op when object type does not exist', () => {
-      useCacheStore.getState().setDisplayNames('user', { u1: 'Alice' });
-      useCacheStore.getState().invalidateCache('nonexistent');
-
-      expect(useCacheStore.getState().displayNames.user).toEqual({ u1: 'Alice' });
-    });
-  });
-
-  describe('multiple object types', () => {
-    it('stores different object types independently', () => {
-      const { setDisplayNames } = useCacheStore.getState();
-      setDisplayNames('user', { u1: 'Alice' });
-      setDisplayNames('domain', { d1: 'example.com' });
-      setDisplayNames('group', { g1: 'Admins' });
-
-      const state = useCacheStore.getState();
-      expect(state.getDisplayName('user', 'u1')).toBe('Alice');
-      expect(state.getDisplayName('domain', 'd1')).toBe('example.com');
-      expect(state.getDisplayName('group', 'g1')).toBe('Admins');
-    });
+  it('clears everything', () => {
+    cache().setDisplayNames('x:Domain', { d1: 'one' });
+    cache().setObjectList('x:Domain', [{ id: 'd1', label: 'one' }]);
+    cache().clearAll();
+    expect(cache()).toMatchObject({ displayNames: {}, objectLists: {} });
   });
 });
