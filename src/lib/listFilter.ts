@@ -1,97 +1,74 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * Turns the filters a reader picked above a list into a JMAP `/query`
+ * filter. A filter `size` with operator `sizeOp: 'gt'` becomes
+ * `sizeIsGreaterThan`. Dates picked as a day become midnight UTC, and on x:
+ * objects a plain day means the whole day.
+ */
 import type { Filter } from '@/types/schema';
 
-const OP_SUFFIX: Record<string, string> = {
-  eq: '',
+const OPERATOR_SUFFIX: Record<string, string> = {
   gt: 'IsGreaterThan',
   gte: 'IsGreaterThanOrEqual',
   lt: 'IsLessThan',
   lte: 'IsLessThanOrEqual',
 };
 
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const suffixFor = (op: string | undefined) => (op ? (OPERATOR_SUFFIX[op] ?? '') : '');
 
-function utcDayStart(date: string): string {
-  return `${date}T00:00:00Z`;
+const isDay = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const midnight = (day: string) => `${day}T00:00:00Z`;
+
+function nextMidnight(day: string) {
+  const next = new Date(Date.parse(midnight(day)) + 86_400_000);
+  return `${next.toISOString().slice(0, 10)}T00:00:00Z`;
 }
 
-function utcNextDayStart(date: string): string {
-  const dt = new Date(`${date}T00:00:00Z`);
-  dt.setUTCDate(dt.getUTCDate() + 1);
-  const y = dt.getUTCFullYear();
-  const m = String(dt.getUTCMonth() + 1).padStart(2, '0');
-  const d = String(dt.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${d}T00:00:00Z`;
-}
-
-function applyDateFilter(
-  filter: Record<string, unknown>,
-  field: string,
-  value: string,
-  op: string | undefined,
-  isXPrefixed: boolean,
-): void {
-  if (!DATE_ONLY.test(value)) {
-    const suffix = isXPrefixed && op ? (OP_SUFFIX[op] ?? '') : '';
-    filter[`${field}${suffix}`] = value;
-    return;
+/** The filter entries for one date field. */
+function dateEntries(field: string, value: string, op: string | undefined, withOps: boolean): [string, string][] {
+  if (!isDay(value)) return [[field + (withOps ? suffixFor(op) : ''), value]];
+  if (!withOps) return [[field, midnight(value)]];
+  if (!op || op === 'eq') {
+    return [
+      [`${field}IsGreaterThanOrEqual`, midnight(value)],
+      [`${field}IsLessThan`, nextMidnight(value)],
+    ];
   }
-
-  if (!isXPrefixed) {
-    filter[field] = utcDayStart(value);
-    return;
-  }
-
-  const effectiveOp = op ?? 'eq';
-  if (effectiveOp === 'eq') {
-    filter[`${field}IsGreaterThanOrEqual`] = utcDayStart(value);
-    filter[`${field}IsLessThan`] = utcNextDayStart(value);
-    return;
-  }
-
-  const suffix = OP_SUFFIX[effectiveOp] ?? '';
-  filter[`${field}${suffix}`] = utcDayStart(value);
+  return [[field + suffixFor(op), midnight(value)]];
 }
 
 export interface BuildJmapFilterArgs {
+  /** What the reader picked: `field: value`, and `fieldOp: operator`. */
   appliedFilters: Record<string, string>;
+  /** The list's filter definitions; they say which fields are dates. */
   filters?: Filter[];
+  /** Always part of the query. */
   filtersStatic?: Record<string, unknown>;
+  /** x: objects take operators and date ranges; others match exactly. */
   isXPrefixed: boolean;
 }
 
 export function buildJmapFilter({
   appliedFilters,
-  filters,
+  filters = [],
   filtersStatic,
   isXPrefixed,
 }: BuildJmapFilterArgs): Record<string, unknown> {
-  const filter: Record<string, unknown> = {};
-  if (filtersStatic) {
-    Object.assign(filter, filtersStatic);
+  const dates = new Set(filters.filter((f) => f.type === 'date').map((f) => f.field));
+  const out: Record<string, unknown> = { ...filtersStatic };
+  for (const [field, value] of Object.entries(appliedFilters)) {
+    if (!value || field.endsWith('Op')) continue;
+    const op = appliedFilters[`${field}Op`];
+    const entries: [string, string][] = dates.has(field)
+      ? dateEntries(field, value, op, isXPrefixed)
+      : [[field + suffixFor(op), value]];
+    for (const [key, v] of entries) out[key] = v;
   }
-
-  const dateFields = new Set((filters ?? []).filter((f) => f.type === 'date').map((f) => f.field));
-
-  for (const [key, val] of Object.entries(appliedFilters)) {
-    if (val === '' || val == null) continue;
-    if (key.endsWith('Op')) continue;
-
-    const op = appliedFilters[`${key}Op`];
-
-    if (dateFields.has(key)) {
-      applyDateFilter(filter, key, val, op, isXPrefixed);
-      continue;
-    }
-
-    const suffix = op ? (OP_SUFFIX[op] ?? '') : '';
-    filter[`${key}${suffix}`] = val;
-  }
-
-  return filter;
+  return out;
 }

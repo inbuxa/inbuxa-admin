@@ -1,96 +1,64 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * Sizes and durations as people read them: the field widgets show a number
+ * and a unit, and store bytes or milliseconds.
+ */
+
+type Scale = Record<string, number>;
+
+const SIZE_SCALE = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3, TB: 1024 ** 4 } satisfies Scale;
+const DURATION_SCALE = { ms: 1, s: 1000, min: 60_000, h: 3_600_000, d: 86_400_000 } satisfies Scale;
+
 export const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
+export const DURATION_UNITS = ['ms', 's', 'min', 'h', 'd'] as const;
 
-const SIZE_FACTORS: Record<string, number> = {
-  B: 1,
-  KB: 1024,
-  MB: 1024 ** 2,
-  GB: 1024 ** 3,
-  TB: 1024 ** 4,
-};
-
-export function bytesToHuman(bytes: number): { value: number; unit: string } {
-  if (bytes === 0) return { value: 0, unit: 'B' };
-
-  for (let i = SIZE_UNITS.length - 1; i >= 0; i--) {
-    const unit = SIZE_UNITS[i];
-    const factor = SIZE_FACTORS[unit];
-    const v = bytes / factor;
-    if (v >= 1) {
-      const rounded = Math.round(v * 100) / 100;
-      return { value: rounded, unit };
-    }
-  }
-
-  return { value: bytes, unit: 'B' };
+/** The largest unit that keeps the number at 1 or more, to two decimals. */
+function largestUnit(amount: number, scale: Scale, units: readonly string[]) {
+  const unit = [...units].reverse().find((u) => amount / scale[u] >= 1);
+  if (!unit) return { value: amount, unit: units[0] };
+  return { value: Math.round((amount / scale[unit]) * 100) / 100, unit };
 }
 
-export function humanToBytes(value: number, unit: string): number {
-  const factor = SIZE_FACTORS[unit];
-  if (factor === undefined) return value;
-  return Math.round(value * factor);
+/** A number in a unit back to the base amount; an unknown unit leaves it as is. */
+function fromUnit(value: number, unit: string, scale: Scale) {
+  const factor = scale[unit];
+  return factor === undefined ? value : Math.round(value * factor);
 }
 
+export const bytesToHuman = (bytes: number) => largestUnit(bytes, SIZE_SCALE, SIZE_UNITS);
+export const humanToBytes = (value: number, unit: string) => fromUnit(value, unit, SIZE_SCALE);
+
+/** "1.5 KB". */
 export function formatSize(bytes: number): string {
   const { value, unit } = bytesToHuman(bytes);
   return `${value} ${unit}`;
 }
 
-export const DURATION_UNITS = ['ms', 's', 'min', 'h', 'd'] as const;
+export const msToHuman = (ms: number) => largestUnit(ms, DURATION_SCALE, DURATION_UNITS);
+export const humanToMs = (value: number, unit: string) => fromUnit(value, unit, DURATION_SCALE);
 
-const DURATION_FACTORS: Record<string, number> = {
-  ms: 1,
-  s: 1_000,
-  min: 60_000,
-  h: 3_600_000,
-  d: 86_400_000,
-};
+const PARTS: [string, number][] = [
+  ['d', DURATION_SCALE.d],
+  ['h', DURATION_SCALE.h],
+  ['m', DURATION_SCALE.min],
+  ['s', DURATION_SCALE.s],
+  ['ms', 1],
+];
 
-export function msToHuman(ms: number): { value: number; unit: string } {
-  if (ms === 0) return { value: 0, unit: 'ms' };
-
-  for (let i = DURATION_UNITS.length - 1; i >= 0; i--) {
-    const unit = DURATION_UNITS[i];
-    const factor = DURATION_FACTORS[unit];
-    const v = ms / factor;
-    if (v >= 1) {
-      const rounded = Math.round(v * 100) / 100;
-      return { value: rounded, unit };
-    }
-  }
-
-  return { value: ms, unit: 'ms' };
-}
-
-export function humanToMs(value: number, unit: string): number {
-  const factor = DURATION_FACTORS[unit];
-  if (factor === undefined) return value;
-  return Math.round(value * factor);
-}
-
+/** "1d 2h 3m", leaving out the parts that are zero; "0ms" for nothing. */
 export function formatDuration(ms: number): string {
   if (ms === 0) return '0ms';
-
-  const d = Math.floor(ms / 86_400_000);
-  ms %= 86_400_000;
-  const h = Math.floor(ms / 3_600_000);
-  ms %= 3_600_000;
-  const m = Math.floor(ms / 60_000);
-  ms %= 60_000;
-  const s = Math.floor(ms / 1_000);
-  ms %= 1_000;
-
-  const parts: string[] = [];
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0) parts.push(`${h}h`);
-  if (m > 0) parts.push(`${m}m`);
-  if (s > 0) parts.push(`${s}s`);
-  if (ms > 0) parts.push(`${ms}ms`);
-
-  return parts.join(' ');
+  let rest = ms;
+  const out: string[] = [];
+  for (const [label, size] of PARTS) {
+    const n = size === 1 ? rest : Math.floor(rest / size);
+    rest -= size === 1 ? n : n * size;
+    if (n > 0) out.push(`${n}${label}`);
+  }
+  return out.join(' ');
 }

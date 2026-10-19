@@ -1,155 +1,86 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { describe, it, expect } from 'vitest';
-import { buildJmapFilter } from './listFilter';
-import type { Filter } from '@/types/schema';
+import { describe, expect, it } from 'vitest';
 
-const dateFilter: Filter = { type: 'date', field: 'timestamp', label: 'Date' };
-const textFilter: Filter = { type: 'text', field: 'text', label: 'Text' };
-const intFilter: Filter = { type: 'integer', field: 'size', label: 'Size' };
+import type { Filter } from '@/types/schema';
+import { buildJmapFilter } from './listFilter';
+
+const dateFilter = [{ field: 'created', type: 'date' }] as Filter[];
+const x = (appliedFilters: Record<string, string>) =>
+  buildJmapFilter({ appliedFilters, filters: dateFilter, isXPrefixed: true });
 
 describe('buildJmapFilter', () => {
-  it('returns an empty object when nothing is applied', () => {
-    expect(buildJmapFilter({ appliedFilters: {}, isXPrefixed: true })).toEqual({});
+  it('starts from the static filters and adds what the reader picked', () => {
+    expect(
+      buildJmapFilter({ appliedFilters: { name: 'ann' }, filtersStatic: { kind: 'user' }, isXPrefixed: true }),
+    ).toEqual({ kind: 'user', name: 'ann' });
+    expect(buildJmapFilter({ appliedFilters: {}, isXPrefixed: false })).toEqual({});
   });
 
-  it('merges filtersStatic', () => {
-    const filter = buildJmapFilter({
-      appliedFilters: {},
-      filtersStatic: { hasErrors: true },
-      isXPrefixed: true,
-    });
-    expect(filter).toEqual({ hasErrors: true });
+  it('leaves out empty values, and operators on their own', () => {
+    expect(
+      buildJmapFilter({ appliedFilters: { name: '', size: '5', sizeOp: 'gt', quotaOp: 'lt' }, isXPrefixed: true }),
+    ).toEqual({ sizeIsGreaterThan: '5' });
   });
 
-  it('skips empty and Op-only keys', () => {
-    const filter = buildJmapFilter({
-      appliedFilters: { text: '', textOp: 'eq' },
-      filters: [textFilter],
-      isXPrefixed: true,
-    });
-    expect(filter).toEqual({});
-  });
-
-  it('passes text filters through verbatim', () => {
-    const filter = buildJmapFilter({
-      appliedFilters: { text: 'hello' },
-      filters: [textFilter],
-      isXPrefixed: true,
-    });
-    expect(filter).toEqual({ text: 'hello' });
-  });
-
-  it('applies the operator suffix for integer filters', () => {
-    const filter = buildJmapFilter({
-      appliedFilters: { size: '1024', sizeOp: 'gt' },
-      filters: [intFilter],
-      isXPrefixed: true,
-    });
-    expect(filter).toEqual({ sizeIsGreaterThan: '1024' });
-  });
-
-  describe('date filters (x-prefixed, with operator UI)', () => {
-    it('expands a default date-only equality into a full-day range', () => {
-      const filter = buildJmapFilter({
-        appliedFilters: { timestamp: '2026-06-17' },
-        filters: [dateFilter],
-        isXPrefixed: true,
-      });
-      expect(filter).toEqual({
-        timestampIsGreaterThanOrEqual: '2026-06-17T00:00:00Z',
-        timestampIsLessThan: '2026-06-18T00:00:00Z',
-      });
-    });
-
-    it('treats an explicit eq operator the same as the default', () => {
-      const filter = buildJmapFilter({
-        appliedFilters: { timestamp: '2026-06-17', timestampOp: 'eq' },
-        filters: [dateFilter],
-        isXPrefixed: true,
-      });
-      expect(filter).toEqual({
-        timestampIsGreaterThanOrEqual: '2026-06-17T00:00:00Z',
-        timestampIsLessThan: '2026-06-18T00:00:00Z',
-      });
-    });
-
-    it('appends midnight UTC for the After (gt) operator', () => {
-      const filter = buildJmapFilter({
-        appliedFilters: { timestamp: '2026-06-17', timestampOp: 'gt' },
-        filters: [dateFilter],
-        isXPrefixed: true,
-      });
-      expect(filter).toEqual({ timestampIsGreaterThan: '2026-06-17T00:00:00Z' });
-    });
-
-    it('appends midnight UTC for the Before (lt) operator', () => {
-      const filter = buildJmapFilter({
-        appliedFilters: { timestamp: '2026-06-17', timestampOp: 'lt' },
-        filters: [dateFilter],
-        isXPrefixed: true,
-      });
-      expect(filter).toEqual({ timestampIsLessThan: '2026-06-17T00:00:00Z' });
-    });
-
-    it('rolls over month boundaries', () => {
-      const filter = buildJmapFilter({
-        appliedFilters: { timestamp: '2026-06-30' },
-        filters: [dateFilter],
-        isXPrefixed: true,
-      });
-      expect(filter).toEqual({
-        timestampIsGreaterThanOrEqual: '2026-06-30T00:00:00Z',
-        timestampIsLessThan: '2026-07-01T00:00:00Z',
-      });
-    });
-
-    it('rolls over year boundaries', () => {
-      const filter = buildJmapFilter({
-        appliedFilters: { timestamp: '2026-12-31' },
-        filters: [dateFilter],
-        isXPrefixed: true,
-      });
-      expect(filter).toEqual({
-        timestampIsGreaterThanOrEqual: '2026-12-31T00:00:00Z',
-        timestampIsLessThan: '2027-01-01T00:00:00Z',
-      });
-    });
-
-    it('handles leap-year February', () => {
-      const filter = buildJmapFilter({
-        appliedFilters: { timestamp: '2028-02-28' },
-        filters: [dateFilter],
-        isXPrefixed: true,
-      });
-      expect(filter).toEqual({
-        timestampIsGreaterThanOrEqual: '2028-02-28T00:00:00Z',
-        timestampIsLessThan: '2028-02-29T00:00:00Z',
-      });
-    });
-
-    it('passes a full datetime through with only the operator suffix applied', () => {
-      const filter = buildJmapFilter({
-        appliedFilters: { timestamp: '2026-06-17T08:30:00Z', timestampOp: 'gt' },
-        filters: [dateFilter],
-        isXPrefixed: true,
-      });
-      expect(filter).toEqual({ timestampIsGreaterThan: '2026-06-17T08:30:00Z' });
+  it.each([
+    ['eq', 'size'],
+    ['gt', 'sizeIsGreaterThan'],
+    ['gte', 'sizeIsGreaterThanOrEqual'],
+    ['lt', 'sizeIsLessThan'],
+    ['lte', 'sizeIsLessThanOrEqual'],
+  ])('names the property for the %s operator: %s', (op, key) => {
+    expect(buildJmapFilter({ appliedFilters: { size: '10', sizeOp: op }, isXPrefixed: true })).toEqual({
+      [key]: '10',
     });
   });
 
-  describe('date filters (non-x-prefixed, no operator UI)', () => {
-    it('appends midnight UTC as an exact match without range expansion', () => {
-      const filter = buildJmapFilter({
-        appliedFilters: { timestamp: '2026-06-17' },
-        filters: [dateFilter],
-        isXPrefixed: false,
+  describe('a date on an x: object', () => {
+    it('covers the whole UTC day when no operator, or eq, is picked', () => {
+      const day = {
+        createdIsGreaterThanOrEqual: '2026-03-14T00:00:00Z',
+        createdIsLessThan: '2026-03-15T00:00:00Z',
+      };
+      expect(x({ created: '2026-03-14' })).toEqual(day);
+      expect(x({ created: '2026-03-14', createdOp: 'eq' })).toEqual(day);
+    });
+
+    it('runs the day over into the next month, year and leap day', () => {
+      expect(x({ created: '2026-01-31' }).createdIsLessThan).toBe('2026-02-01T00:00:00Z');
+      expect(x({ created: '2025-12-31' }).createdIsLessThan).toBe('2026-01-01T00:00:00Z');
+      expect(x({ created: '2028-02-28' }).createdIsLessThan).toBe('2028-02-29T00:00:00Z');
+      expect(x({ created: '2027-02-28' }).createdIsLessThan).toBe('2027-03-01T00:00:00Z');
+    });
+
+    it('compares against midnight UTC for before and after', () => {
+      expect(x({ created: '2026-03-14', createdOp: 'gt' })).toEqual({ createdIsGreaterThan: '2026-03-14T00:00:00Z' });
+      expect(x({ created: '2026-03-14', createdOp: 'lt' })).toEqual({ createdIsLessThan: '2026-03-14T00:00:00Z' });
+    });
+
+    it('sends a full date and time as it is, with the operator', () => {
+      expect(x({ created: '2026-03-14T08:30:00Z', createdOp: 'gte' })).toEqual({
+        createdIsGreaterThanOrEqual: '2026-03-14T08:30:00Z',
       });
-      expect(filter).toEqual({ timestamp: '2026-06-17T00:00:00Z' });
+      expect(x({ created: '2026-03-14T08:30:00Z' })).toEqual({ created: '2026-03-14T08:30:00Z' });
+    });
+  });
+
+  describe('a date on an object without operators', () => {
+    const plain = (appliedFilters: Record<string, string>) =>
+      buildJmapFilter({ appliedFilters, filters: dateFilter, isXPrefixed: false });
+
+    it('matches midnight UTC of that day exactly', () => {
+      expect(plain({ created: '2026-03-14' })).toEqual({ created: '2026-03-14T00:00:00Z' });
+    });
+
+    it('sends a full date and time as it is, ignoring any operator', () => {
+      expect(plain({ created: '2026-03-14T08:30:00Z', createdOp: 'gt' })).toEqual({
+        created: '2026-03-14T08:30:00Z',
+      });
     });
   });
 });

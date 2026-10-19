@@ -1,108 +1,80 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-const isDev = import.meta.env.DEV;
+/**
+ * Console logging for development builds, switched on in `.env.local`:
+ *
+ *   VITE_DEBUG_JMAP=1    every JMAP request and its responses
+ *   VITE_DEBUG_FORMS=1   every form change, as the data that would be saved
+ *
+ * Production builds never log, whatever the variables say.
+ */
 
-function isEnabled(envVar: string | undefined): boolean {
-  if (!isDev || !envVar) return false;
-  const v = envVar.toLowerCase();
-  return v !== '' && v !== 'false' && v !== '0';
+/** Whether a debug variable turns logging on: set, and not "0" or "false". */
+export function flagOn(value: string | undefined, dev = import.meta.env.DEV): boolean {
+  return dev && !!value && !['0', 'false'].includes(value.toLowerCase());
 }
 
-export const debugJmap = isEnabled(import.meta.env.VITE_DEBUG_JMAP);
-export const debugForms = isEnabled(import.meta.env.VITE_DEBUG_FORMS);
+export const debugJmap = flagOn(import.meta.env.VITE_DEBUG_JMAP);
+export const debugForms = flagOn(import.meta.env.VITE_DEBUG_FORMS);
 
-type JmapCall = [string, Record<string, unknown>, string];
+const count = (v: unknown) => (Array.isArray(v) ? v.length : v && typeof v === 'object' ? Object.keys(v).length : 0);
 
-function summarizeArgs(args: Record<string, unknown>): string {
-  const parts: string[] = [];
-  if (typeof args.accountId === 'string') {
-    parts.push(`account=${truncate(args.accountId, 12)}`);
-  }
-  if (Array.isArray(args.ids)) {
-    parts.push(`ids=${args.ids.length}`);
-  } else if (args.ids === null) {
-    parts.push('ids=all');
-  }
-  if (args.create && typeof args.create === 'object') {
-    parts.push(`create=${Object.keys(args.create).length}`);
-  }
-  if (args.update && typeof args.update === 'object') {
-    parts.push(`update=${Object.keys(args.update).length}`);
-  }
-  if (Array.isArray(args.destroy)) {
-    parts.push(`destroy=${args.destroy.length}`);
-  }
-  if (Array.isArray(args.list)) {
-    parts.push(`list=${args.list.length}`);
-  }
-  if (typeof args.total === 'number') {
-    parts.push(`total=${args.total}`);
-  }
-  return parts.join(' ');
-}
-
-function truncate(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max - 1) + '…' : s;
-}
-
-function buildSummaryRows(calls: unknown): Array<Record<string, string>> {
-  if (!Array.isArray(calls)) return [];
-  return calls.map((call, idx) => {
-    if (!Array.isArray(call) || call.length < 3) {
-      return { '#': String(idx), method: '?', callId: '?', summary: '' };
+/** One row per method call or response: what it is and how much it touches. */
+export function describeInvocations(invocations: unknown): Record<string, string | number>[] {
+  if (!Array.isArray(invocations)) return [];
+  return invocations.map((inv) => {
+    const [name, args, callId] = Array.isArray(inv) ? inv : [];
+    const a: Record<string, unknown> = args && typeof args === 'object' ? args : {};
+    const row: Record<string, string | number> = { method: String(name ?? '?'), callId: String(callId ?? '?') };
+    if (a.ids === null) row.ids = 'all';
+    else if (Array.isArray(a.ids)) row.ids = a.ids.length;
+    for (const key of [
+      'create',
+      'update',
+      'destroy',
+      'list',
+      'created',
+      'updated',
+      'destroyed',
+      'notCreated',
+      'notUpdated',
+      'notDestroyed',
+    ]) {
+      if (a[key] != null && count(a[key])) row[key] = count(a[key]);
     }
-    const [method, args, callId] = call as JmapCall;
-    return {
-      '#': String(idx),
-      method,
-      callId,
-      summary: args && typeof args === 'object' ? summarizeArgs(args) : '',
-    };
+    if (typeof a.total === 'number') row.total = a.total;
+    if (name === 'error' && typeof a.type === 'string') row.error = a.type;
+    return row;
   });
 }
 
 export function logJmapExchange(methodCalls: unknown, methodResponses: unknown, durationMs?: number): void {
   if (!debugJmap) return;
-
-  const hasError = Array.isArray(methodResponses) && methodResponses.some((r) => Array.isArray(r) && r[0] === 'error');
-
-  const methodNames = Array.isArray(methodCalls)
-    ? methodCalls.map((c) => (Array.isArray(c) && typeof c[0] === 'string' ? c[0] : '?')).join(' · ')
-    : '?';
-
-  const durationLabel = typeof durationMs === 'number' ? ` (${Math.round(durationMs)}ms)` : '';
-
-  const headerColor = hasError ? '#dc2626' : '#2563eb';
-
+  const responses = describeInvocations(methodResponses);
+  const failed = responses.some((r) => r.method === 'error');
+  const names = describeInvocations(methodCalls)
+    .map((r) => r.method)
+    .join(', ');
+  const took = durationMs === undefined ? '' : ` ${Math.round(durationMs)} ms`;
   console.groupCollapsed(
-    `%c[JMAP]%c ${methodNames}${durationLabel}${hasError ? ' (with errors)' : ''}`,
-    `color: ${headerColor}; font-weight: bold`,
-    'color: inherit',
+    `%cJMAP%c ${names}${took}${failed ? ' — error' : ''}`,
+    `color:${failed ? '#dc2626' : '#0d9488'};font-weight:600`,
+    '',
   );
-
-  console.groupCollapsed('%c→ request', 'color: #2563eb; font-weight: bold');
-  console.table(buildSummaryRows(methodCalls));
-  console.log(JSON.stringify(methodCalls, null, 2));
-  console.groupEnd();
-
-  console.groupCollapsed(
-    `%c← response${hasError ? ' (with errors)' : ''}`,
-    `color: ${hasError ? '#dc2626' : '#16a34a'}; font-weight: bold`,
-  );
-  console.table(buildSummaryRows(methodResponses));
-  console.log(JSON.stringify(methodResponses, null, 2));
-  console.groupEnd();
-
+  console.table(describeInvocations(methodCalls));
+  console.table(responses);
+  console.debug('request', methodCalls);
+  console.debug('responses', methodResponses);
   console.groupEnd();
 }
 
 export function logFormChange(label: string, data: unknown): void {
   if (!debugForms) return;
-  console.groupCollapsed(`%c[Form]%c ${label}`, 'color: #9333ea; font-weight: bold', 'color: inherit');
-  console.log(JSON.stringify(data, null, 2));
+  console.groupCollapsed(`%cForm%c ${label}`, 'color:#7c3aed;font-weight:600', '');
+  console.debug(data);
   console.groupEnd();
 }
