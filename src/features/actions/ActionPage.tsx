@@ -1,180 +1,105 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Zap, Loader2, ChevronRight, CircleCheck, CircleAlert } from 'lucide-react';
-import i18n from '@/i18n';
+import { useSearchParams } from 'react-router-dom';
+import { ChevronRight, CircleAlert, CircleCheck, Loader2, Zap } from 'lucide-react';
+import { FieldWidget } from '@/components/forms/FieldWidget';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useSchemaStore } from '@/stores/schemaStore';
-import { useAccountStore } from '@/stores/accountStore';
-import { resolveObject, resolveSchema, resolveVariantForm } from '@/lib/schemaResolver';
-import { SECRET_MASK } from '@/lib/jmapUtils';
-import { jmapSet, getAccountId } from '@/services/jmap/client';
-import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DynamicView } from '@/components/views/DynamicView';
-import type { Schema, ObjectVariant } from '@/types/schema';
-import type { JmapSetResponse } from '@/types/jmap';
 import { ExplainButton } from '@/features/ai/explain/ExplainButton';
 import { spamVerdictSubject } from '@/features/ai/explain/explain';
+import { resolveObject, resolveSchema, resolveVariantForm } from '@/lib/schemaResolver';
+import { getAccountId, jmapSet } from '@/services/jmap/client';
+import { useAccountStore } from '@/stores/accountStore';
+import { useSchemaStore } from '@/stores/schemaStore';
+import type { ObjectVariant, Schema } from '@/types/schema';
+import {
+  actionPayload,
+  CREATE_ID,
+  groupActions,
+  inputSections,
+  missingInputs,
+  readActionResult,
+  splitLabel,
+} from './actions';
 
-type ActionState =
+type Stage =
   | { kind: 'pick' }
-  // inbuxa: an action without options, chosen from the command palette, waits to be confirmed.
+  /** An action without options, opened from the command palette, waits for Run. */
   | { kind: 'confirm'; variant: ObjectVariant }
-  | { kind: 'form'; variant: ObjectVariant; formData: Record<string, unknown> }
-  | { kind: 'submitting'; variant: ObjectVariant }
-  | {
-      kind: 'result';
-      variant: ObjectVariant;
-      props: Record<string, unknown> | null;
-      inputData: Record<string, unknown>;
-    }
-  | { kind: 'error'; variant: ObjectVariant; error: string };
+  | { kind: 'form'; variant: ObjectVariant; values: Record<string, unknown> }
+  | { kind: 'running'; variant: ObjectVariant }
+  | { kind: 'done'; variant: ObjectVariant; values: Record<string, unknown>; returned: Record<string, unknown> | null }
+  | { kind: 'failed'; error: string };
 
-interface ActionPageProps {
-  viewName: string;
-}
+/** An action's options, starting from the schema's defaults. */
+const defaultsFor = (schema: Schema, variant: ObjectVariant) => ({
+  ...(variant.schemaName ? schema.fields[variant.schemaName]?.defaults : undefined),
+});
 
-export function ActionPage({ viewName }: ActionPageProps) {
+export function ActionPage({ viewName }: { viewName: string }) {
   const { t } = useTranslation();
   const schema = useSchemaStore((s) => s.schema);
   const hasObjectPermission = useAccountStore((s) => s.hasObjectPermission);
   const hasPermission = useAccountStore((s) => s.hasPermission);
-  const [state, setState] = useState<ActionState>({ kind: 'pick' });
+  const [stage, setStage] = useState<Stage>({ kind: 'pick' });
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const resolved = useMemo(() => {
-    if (!schema) return null;
-    return resolveObject(schema, viewName);
-  }, [schema, viewName]);
+  const object = useMemo(() => (schema ? resolveObject(schema, viewName) : null), [schema, viewName]);
+  const variants = useMemo(() => {
+    const resolved = schema && object ? resolveSchema(schema, object.objectName) : null;
+    return resolved?.type === 'multiple' ? resolved.variants : null;
+  }, [schema, object]);
+  const canRun = object ? hasObjectPermission(object.permissionPrefix, 'Create') : false;
+  const allowed = (name: string) => hasPermission(`action${name}`);
 
-  const sch = useMemo(() => {
-    if (!schema || !resolved) return null;
-    return resolveSchema(schema, resolved.objectName);
-  }, [schema, resolved]);
-
-  const canCreate = resolved ? hasObjectPermission(resolved.permissionPrefix, 'Create') : false;
-
-  const groups = useMemo(() => {
-    const variants = sch?.type === 'multiple' ? sch.variants : [];
-    const map = new Map<string, ObjectVariant[]>();
-    const otherLabel = t('actions.otherGroup', 'Other');
-    for (const v of variants) {
-      if (!hasPermission(`action${v.name}`)) continue;
-      const colonIdx = v.label.indexOf(':');
-      const group = colonIdx > 0 ? v.label.slice(0, colonIdx).trim() : otherLabel;
-      let list = map.get(group);
-      if (!list) {
-        list = [];
-        map.set(group, list);
-      }
-      list.push(v);
+  const run = async (variant: ObjectVariant, values: Record<string, unknown>) => {
+    if (!schema || !object) return;
+    setStage({ kind: 'running', variant });
+    const fields = variant.schemaName ? (schema.fields[variant.schemaName] ?? null) : null;
+    try {
+      const responses = await jmapSet(object.objectName, getAccountId(object.objectName), {
+        create: { [CREATE_ID]: actionPayload(variant.name, fields, values) },
+      });
+      const result = readActionResult(responses.at(-1)?.[1]);
+      setStage(
+        result.kind === 'done'
+          ? { kind: 'done', variant, values, returned: result.returned }
+          : { kind: 'failed', error: result.reason ?? t('actions.actionFailed', 'Action failed.') },
+      );
+    } catch (e) {
+      setStage({ kind: 'failed', error: e instanceof Error ? e.message : t('actions.actionFailed', 'Action failed.') });
     }
-    return map;
-  }, [sch, hasPermission, t]);
+  };
 
-  const list = schema?.lists[viewName] ?? schema?.lists[resolved?.objectName ?? ''];
-  const title = list?.title ?? t('actions.title', 'Actions');
-  const subtitle = list?.subtitle ?? resolved?.objectType?.description;
+  /** A click on an action runs it at once when it has no options, else opens them. */
+  const open = (variant: ObjectVariant) => {
+    if (!schema) return;
+    if (variant.schemaName) setStage({ kind: 'form', variant, values: defaultsFor(schema, variant) });
+    else void run(variant, {});
+  };
 
-  const handlePickVariant = useCallback(
-    (variant: ObjectVariant) => {
-      if (!schema || !resolved) return;
-      if (!variant.schemaName) {
-        executeAction(schema, resolved.objectName, variant.name, {}, setState);
-      } else {
-        const fieldsDef = schema.fields[variant.schemaName!];
-        const defaults = fieldsDef?.defaults ? { ...fieldsDef.defaults } : {};
-        setState({ kind: 'form', variant, formData: defaults });
-      }
-    },
-    [schema, resolved],
-  );
-
-  const handleSubmitForm = useCallback(
-    async (variant: ObjectVariant, formData: Record<string, unknown>) => {
-      if (!schema || !resolved) return;
-      setState({ kind: 'submitting', variant });
-
-      const fields = variant.schemaName ? schema.fields[variant.schemaName] : null;
-      const payload: Record<string, unknown> = { '@type': variant.name };
-
-      if (fields) {
-        for (const [name, def] of Object.entries(fields.properties)) {
-          if (def.update === 'serverSet') continue;
-          if (name in formData) {
-            const isSecret =
-              def.type.type === 'string' && (def.type.format === 'secret' || def.type.format === 'secretText');
-            if (isSecret && formData[name] === SECRET_MASK) continue;
-            payload[name] = formData[name];
-          }
-        }
-      }
-
-      try {
-        const accountId = getAccountId(resolved.objectName);
-        const responses = await jmapSet(resolved.objectName, accountId, {
-          create: { 'action-0': payload },
-        });
-        const setResponse = responses[responses.length - 1];
-        const setResult = setResponse[1] as unknown as JmapSetResponse;
-
-        if (setResult.created && setResult.created['action-0']) {
-          const created = setResult.created['action-0'];
-          const noisyKeys = new Set(['id', 'blobId']);
-          const extraKeys = Object.keys(created).filter((k) => !noisyKeys.has(k));
-          if (extraKeys.length > 0) {
-            const extra: Record<string, unknown> = {};
-            for (const k of extraKeys) extra[k] = created[k];
-            setState({ kind: 'result', variant, props: extra, inputData: formData });
-          } else {
-            setState({ kind: 'result', variant, props: null, inputData: formData });
-          }
-        } else if (setResult.notCreated && setResult.notCreated['action-0']) {
-          const err = setResult.notCreated['action-0'];
-          setState({
-            kind: 'error',
-            variant,
-            error: (err as { description?: string }).description ?? t('actions.actionFailed', 'Action failed.'),
-          });
-        } else {
-          setState({ kind: 'result', variant, props: null, inputData: formData });
-        }
-      } catch (e) {
-        setState({
-          kind: 'error',
-          variant,
-          error: e instanceof Error ? e.message : t('actions.actionFailed', 'Action failed.'),
-        });
-      }
-    },
-    [schema, resolved, t],
-  );
-
-  // inbuxa: `?action=<name>` from the command palette opens that action. One
-  // with options shows its form; one without asks first, since here a click
-  // on it runs it at once. Read while rendering, so it also works when the
-  // palette is used on this page; the effect then takes it out of the address.
+  // `?action=<name>` from the command palette opens that action, asking
+  // first for one without options. It's read while rendering so it also
+  // works when the palette is used on this page; the effect then takes it
+  // out of the address.
   const requested = searchParams.get('action');
-  const [openedFromPalette, setOpenedFromPalette] = useState<string | null>(null);
-  if (requested !== openedFromPalette) {
-    setOpenedFromPalette(requested);
-    const variant = requested && sch?.type === 'multiple' ? sch.variants.find((v) => v.name === requested) : undefined;
-    if (schema && variant && canCreate && hasPermission(`action${variant.name}`)) {
-      if (variant.schemaName) {
-        const defaults = schema.fields[variant.schemaName]?.defaults;
-        setState({ kind: 'form', variant, formData: defaults ? { ...defaults } : {} });
-      } else {
-        setState({ kind: 'confirm', variant });
-      }
+  const [handled, setHandled] = useState<string | null>(null);
+  if (requested !== handled) {
+    setHandled(requested);
+    const variant = requested ? variants?.find((v) => v.name === requested) : undefined;
+    if (schema && variant && canRun && allowed(variant.name)) {
+      setStage(
+        variant.schemaName
+          ? { kind: 'form', variant, values: defaultsFor(schema, variant) }
+          : { kind: 'confirm', variant },
+      );
     }
   }
   useEffect(() => {
@@ -189,16 +114,55 @@ export function ActionPage({ viewName }: ActionPageProps) {
     );
   }, [requested, setSearchParams]);
 
-  if (!schema || !resolved || !sch) return null;
+  if (!schema || !object || !variants) return null;
+  const toList = () => setStage({ kind: 'pick' });
 
-  if (state.kind === 'confirm') {
-    return (
-      <div className="mx-auto max-w-xl space-y-4 pt-8">
-        <Card>
+  switch (stage.kind) {
+    case 'pick': {
+      const list = schema.lists[viewName] ?? schema.lists[object.objectName];
+      const subtitle = list?.subtitle ?? object.objectType.description;
+      const other = t('actions.otherGroup', 'Other');
+      return (
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-xl font-semibold">{list?.title ?? t('actions.title', 'Actions')}</h1>
+            {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+          </div>
+          <div className="space-y-6">
+            {[...groupActions(variants, allowed, other)].map(([group, members]) => (
+              <div key={group}>
+                <h3 className="text-sm font-medium text-muted-foreground mb-2">{group}</h3>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {members.map((variant) => (
+                    <Button
+                      key={variant.name}
+                      variant="outline"
+                      className="justify-between h-auto py-3 px-4"
+                      disabled={!canRun}
+                      onClick={() => open(variant)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <span>{splitLabel(variant.label, other).name}</span>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    case 'confirm':
+      return (
+        <Narrow>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
-              {state.variant.label}
+              {stage.variant.label}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -206,236 +170,105 @@ export function ActionPage({ viewName }: ActionPageProps) {
               {t('actions.confirmRun', 'This runs on the server as soon as you choose Run. It has no options.')}
             </p>
             <div className="flex gap-2">
-              <Button onClick={() => handlePickVariant(state.variant)}>{t('actions.run', 'Run')}</Button>
-              <Button variant="outline" onClick={() => setState({ kind: 'pick' })}>
+              <Button onClick={() => open(stage.variant)}>{t('actions.run', 'Run')}</Button>
+              <Button variant="outline" onClick={toList}>
                 {t('actions.backToActions', 'Back to actions')}
               </Button>
             </div>
           </CardContent>
-        </Card>
-      </div>
-    );
-  }
+        </Narrow>
+      );
 
-  if (state.kind === 'pick') {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold">{title}</h1>
-          {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+    case 'form':
+      return (
+        <OptionsForm
+          schema={schema}
+          variant={stage.variant}
+          initial={stage.values}
+          onRun={(values) => void run(stage.variant, values)}
+          onBack={toList}
+        />
+      );
+
+    case 'running':
+      return (
+        <div className="flex flex-col items-center justify-center gap-3 py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-muted-foreground">
+            {t('actions.executing', 'Executing {{label}}...', { label: stage.variant.label })}
+          </p>
         </div>
-        <div className="space-y-6">
-          {Array.from(groups.entries()).map(([group, groupVariants]) => (
-            <div key={group}>
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">{group}</h3>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {groupVariants.map((v) => {
-                  const colonIdx = v.label.indexOf(':');
-                  const actionName = colonIdx > 0 ? v.label.slice(colonIdx + 1).trim() : v.label;
-                  return (
-                    <Button
-                      key={v.name}
-                      variant="outline"
-                      className="justify-between h-auto py-3 px-4"
-                      disabled={!canCreate}
-                      onClick={() => handlePickVariant(v)}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-muted-foreground shrink-0" />
-                        <span>{actionName}</span>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </Button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+      );
 
-  if (state.kind === 'form') {
-    return (
-      <ActionFormView
-        schema={schema}
-        variant={state.variant}
-        formData={state.formData}
-        onSubmit={(data) => handleSubmitForm(state.variant, data)}
-        onBack={() => setState({ kind: 'pick' })}
-      />
-    );
-  }
+    case 'done':
+      return (
+        <ActionDone
+          schema={schema}
+          variant={stage.variant}
+          values={stage.values}
+          returned={stage.returned}
+          onAnother={toList}
+        />
+      );
 
-  if (state.kind === 'submitting') {
-    return (
-      <div className="flex flex-col items-center justify-center gap-3 py-16">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="text-muted-foreground">
-          {t('actions.executing', 'Executing {{label}}...', { label: state.variant.label })}
-        </p>
-      </div>
-    );
-  }
-
-  if (state.kind === 'result') {
-    return (
-      <ActionResultView
-        schema={schema}
-        variant={state.variant}
-        props={state.props}
-        inputData={state.inputData}
-        onNewAction={() => setState({ kind: 'pick' })}
-      />
-    );
-  }
-
-  if (state.kind === 'error') {
-    return (
-      <div className="mx-auto max-w-xl space-y-4 pt-8">
-        <Card>
+    case 'failed':
+      return (
+        <Narrow>
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center gap-3">
               <CircleAlert className="h-5 w-5 text-destructive shrink-0" />
               <div>
                 <p className="font-medium">{t('actions.failedTitle', 'Action failed')}</p>
-                <p className="text-sm text-muted-foreground mt-1">{state.error}</p>
+                <p className="text-sm text-muted-foreground mt-1">{stage.error}</p>
               </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setState({ kind: 'pick' })}>
+              <Button variant="outline" onClick={toList}>
                 {t('actions.backToActions', 'Back to actions')}
               </Button>
             </div>
           </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  return null;
-}
-
-async function executeAction(
-  schema: Schema,
-  objectName: string,
-  variantName: string,
-  formData: Record<string, unknown>,
-  setState: React.Dispatch<React.SetStateAction<ActionState>>,
-) {
-  const variant = { name: variantName, label: variantName } as ObjectVariant;
-  setState({ kind: 'submitting', variant });
-
-  try {
-    const accountId = getAccountId(objectName);
-    const payload: Record<string, unknown> = { '@type': variantName, ...formData };
-    const responses = await jmapSet(objectName, accountId, {
-      create: { 'action-0': payload },
-    });
-    const setResponse = responses[responses.length - 1];
-    const setResult = setResponse[1] as unknown as JmapSetResponse;
-
-    const sch = resolveSchema(schema, objectName);
-    const realVariant =
-      sch?.type === 'multiple' ? (sch.variants.find((v) => v.name === variantName) ?? variant) : variant;
-
-    if (setResult.created && setResult.created['action-0']) {
-      const created = setResult.created['action-0'];
-      const noisyKeys = new Set(['id', 'blobId']);
-      const extraKeys = Object.keys(created).filter((k) => !noisyKeys.has(k));
-      if (extraKeys.length > 0) {
-        const extra: Record<string, unknown> = {};
-        for (const k of extraKeys) extra[k] = created[k];
-        setState({ kind: 'result', variant: realVariant, props: extra, inputData: formData });
-      } else {
-        setState({ kind: 'result', variant: realVariant, props: null, inputData: formData });
-      }
-    } else if (setResult.notCreated && setResult.notCreated['action-0']) {
-      const err = setResult.notCreated['action-0'];
-      setState({
-        kind: 'error',
-        variant: realVariant,
-        error: (err as { description?: string }).description ?? i18n.t('actions.actionFailed', 'Action failed.'),
-      });
-    } else {
-      setState({ kind: 'result', variant: realVariant, props: null, inputData: formData });
-    }
-  } catch (e) {
-    setState({
-      kind: 'error',
-      variant,
-      error: e instanceof Error ? e.message : i18n.t('actions.actionFailed', 'Action failed.'),
-    });
+        </Narrow>
+      );
   }
 }
 
-function ActionFormView({
-  schema,
-  variant,
-  formData: initialData,
-  onSubmit,
-  onBack,
-}: {
+function Narrow({ children }: { children: ReactNode }) {
+  return (
+    <div className="mx-auto max-w-xl space-y-4 pt-8">
+      <Card>{children}</Card>
+    </div>
+  );
+}
+
+interface OptionsFormProps {
   schema: Schema;
   variant: ObjectVariant;
-  formData: Record<string, unknown>;
-  onSubmit: (data: Record<string, unknown>) => void;
+  initial: Record<string, unknown>;
+  onRun: (values: Record<string, unknown>) => void;
   onBack: () => void;
-}) {
+}
+
+/** An action's options, from its variant's form, with only the fields an admin sets. */
+function OptionsForm({ schema, variant, initial, onRun, onBack }: OptionsFormProps) {
   const { t } = useTranslation();
-  const [formData, setFormData] = useState<Record<string, unknown>>(initialData);
+  const [values, setValues] = useState(initial);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  if (!variant.schemaName) return null;
-  const fields = schema.fields[variant.schemaName];
+  const fields = variant.schemaName ? schema.fields[variant.schemaName] : undefined;
   const form = resolveVariantForm(schema, '', '', variant.schemaName);
   if (!fields || !form) return null;
+  const sections = inputSections(fields, form);
 
-  const mutableSections = form.sections
-    .map((section) => ({
-      ...section,
-      fields: section.fields.filter((ff) => {
-        const def = fields.properties[ff.name];
-        return def && def.update === 'mutable';
-      }),
-    }))
-    .filter((s) => s.fields.length > 0);
-
-  const handleChange = (fieldName: string, value: unknown) => {
-    setFormData((prev) => ({ ...prev, [fieldName]: value }));
-    setErrors((prev) => {
-      const copy = { ...prev };
-      delete copy[fieldName];
-      return copy;
-    });
+  const change = (name: string, value: unknown) => {
+    setValues((prev) => ({ ...prev, [name]: value }));
+    setErrors(({ [name]: _cleared, ...rest }) => (void _cleared, rest));
   };
 
-  const handleSubmit = () => {
-    const newErrors: Record<string, string> = {};
-    for (const section of mutableSections) {
-      for (const ff of section.fields) {
-        const def = fields.properties[ff.name];
-        if (!def) continue;
-        const isRequired =
-          (def.type.type === 'string' ||
-            def.type.type === 'number' ||
-            def.type.type === 'enum' ||
-            def.type.type === 'objectId') &&
-          !('nullable' in def.type && def.type.nullable);
-        if (isRequired) {
-          const val = formData[ff.name];
-          if (val === undefined || val === null || val === '') {
-            newErrors[ff.name] = t('form.required', 'This field is required.');
-          }
-        }
-      }
-    }
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-    onSubmit(formData);
+  const submit = () => {
+    const missing = missingInputs(sections, fields, values, t('form.required', 'This field is required.'));
+    if (Object.keys(missing).length > 0) setErrors(missing);
+    else onRun(values);
   };
 
   return (
@@ -447,8 +280,8 @@ function ActionFormView({
         <h1 className="text-xl font-semibold">{variant.label}</h1>
       </div>
 
-      {mutableSections.map((section, si) => (
-        <Card key={si}>
+      {sections.map((section, i) => (
+        <Card key={i}>
           {section.title && (
             <CardHeader className="pb-3">
               <CardTitle className="text-base">{section.title}</CardTitle>
@@ -456,22 +289,18 @@ function ActionFormView({
           )}
           <CardContent className={section.title ? 'pt-0' : ''}>
             <div className="space-y-4">
-              {section.fields.map((ff) => {
-                const def = fields.properties[ff.name];
-                if (!def) return null;
-                return (
-                  <FieldWidget
-                    key={ff.name}
-                    formField={ff}
-                    field={def}
-                    value={formData[ff.name]}
-                    onChange={(v) => handleChange(ff.name, v)}
-                    readOnly={false}
-                    schema={schema}
-                    error={errors[ff.name]}
-                  />
-                );
-              })}
+              {section.fields.map((ff) => (
+                <FieldWidget
+                  key={ff.name}
+                  formField={ff}
+                  field={fields.properties[ff.name]}
+                  value={values[ff.name]}
+                  onChange={(v) => change(ff.name, v)}
+                  readOnly={false}
+                  schema={schema}
+                  error={errors[ff.name]}
+                />
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -481,7 +310,7 @@ function ActionFormView({
         <Button variant="outline" onClick={onBack}>
           {t('common.cancel', 'Cancel')}
         </Button>
-        <Button onClick={handleSubmit}>
+        <Button onClick={submit}>
           <Zap className="mr-2 h-4 w-4" />
           {t('actions.execute', 'Execute')}
         </Button>
@@ -490,24 +319,20 @@ function ActionFormView({
   );
 }
 
-function ActionResultView({
-  schema,
-  variant,
-  props,
-  inputData,
-  onNewAction,
-}: {
+interface ActionDoneProps {
   schema: Schema;
   variant: ObjectVariant;
-  props: Record<string, unknown> | null;
-  inputData: Record<string, unknown>;
-  onNewAction: () => void;
-}) {
-  const { t } = useTranslation();
-  const mergedData = useMemo(() => ({ ...inputData, ...(props ?? {}) }), [inputData, props]);
-  const hasData = variant.schemaName && Object.keys(mergedData).length > 0;
+  values: Record<string, unknown>;
+  returned: Record<string, unknown> | null;
+  onAnother: () => void;
+}
 
-  const visibleFields = useMemo(() => new Set(Object.keys(mergedData)), [mergedData]);
+/** The action ran: its options and what the server sent back, shown through the variant's own view. */
+function ActionDone({ schema, variant, values, returned, onAnother }: ActionDoneProps) {
+  const { t } = useTranslation();
+  const data = useMemo(() => ({ ...values, ...returned }), [values, returned]);
+  const shown = useMemo(() => new Set(Object.keys(data)), [data]);
+  const hasData = !!variant.schemaName && shown.size > 0;
 
   return (
     <div className="space-y-6 pt-4">
@@ -526,16 +351,16 @@ function ActionResultView({
           schema={schema}
           objectName={variant.schemaName}
           viewName={variant.schemaName}
-          data={mergedData}
-          visibleFields={visibleFields}
+          data={data}
+          visibleFields={shown}
         />
       )}
 
-      {/* inbuxa: "Explain this" for a spam verdict (ai-explain EX-17) */}
-      {variant.name === 'ClassifySpam' && props && (
+      {/* "Explain this" for a spam verdict (ai-explain EX-17). */}
+      {variant.name === 'ClassifySpam' && returned && (
         <ExplainButton
-          subject={() => spamVerdictSubject(props)}
-          title={t('explain.spamVerdictTitle', 'Spam verdict: {{result}}', { result: String(props.result ?? '') })}
+          subject={() => spamVerdictSubject(returned)}
+          title={t('explain.spamVerdictTitle', 'Spam verdict: {{result}}', { result: String(returned.result ?? '') })}
         />
       )}
 
@@ -547,7 +372,7 @@ function ActionResultView({
         </Card>
       )}
 
-      <Button onClick={onNewAction}>
+      <Button onClick={onAnother}>
         <Zap className="mr-2 h-4 w-4" />
         {t('actions.executeAnother', 'Execute another action')}
       </Button>
