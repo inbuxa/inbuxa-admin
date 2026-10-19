@@ -1,73 +1,49 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const originalHead = document.head.innerHTML;
-
-async function loadWithMeta(meta: string) {
-  document.head.innerHTML = meta;
+/** The client id a fresh page with this <head> would use. */
+async function clientIdFor(head: string) {
+  document.head.innerHTML = head;
   vi.resetModules();
-  const { getOAuthClientId } = await import('./oauthClientId');
-  return getOAuthClientId;
+  return (await import('./oauthClientId')).getOAuthClientId;
 }
 
 afterEach(() => {
-  document.head.innerHTML = originalHead;
-  vi.resetModules();
+  document.head.innerHTML = '';
 });
 
 describe('getOAuthClientId', () => {
-  it('prefers the client id injected by the server', async () => {
-    const getOAuthClientId = await loadWithMeta('<meta name="oauth-client-id" content="pocket-id-client" />');
-    expect(getOAuthClientId()).toBe('pocket-id-client');
+  it('is inbuxa-webui when the server serves the console', async () => {
+    expect((await clientIdFor(''))()).toBe('inbuxa-webui');
+    expect((await clientIdFor('<meta name="oauth-client-id" content="  " />'))()).toBe('inbuxa-webui');
   });
 
-  it('trims surrounding whitespace from the injected client id', async () => {
-    const getOAuthClientId = await loadWithMeta('<meta name="oauth-client-id" content="  pocket-id-client  " />');
-    expect(getOAuthClientId()).toBe('pocket-id-client');
-  });
-
-  it('falls back to the built-in default when the placeholder is empty', async () => {
-    const getOAuthClientId = await loadWithMeta('<meta name="oauth-client-id" content="" />');
-    expect(getOAuthClientId()).toBe('inbuxa-webui');
-  });
-
-  it('falls back to the built-in default when the placeholder is only whitespace', async () => {
-    const getOAuthClientId = await loadWithMeta('<meta name="oauth-client-id" content="   " />');
-    expect(getOAuthClientId()).toBe('inbuxa-webui');
-  });
-
-  it('falls back to the built-in default when the placeholder is absent', async () => {
-    const getOAuthClientId = await loadWithMeta('');
-    expect(getOAuthClientId()).toBe('inbuxa-webui');
-  });
-
-  it('is inbuxa-admin when hosted apart from the server', async () => {
-    const getOAuthClientId = await loadWithMeta(
-      '<meta name="oauth-client-id" content="" /><meta name="api-base-url" content="https://mail.example.org" />',
+  it("is inbuxa-admin when the console is hosted apart, knowing the server's address", async () => {
+    expect((await clientIdFor('<meta name="api-base-url" content="https://mail.example.org" />'))()).toBe(
+      'inbuxa-admin',
     );
-    expect(getOAuthClientId()).toBe('inbuxa-admin');
   });
 
-  it('still prefers an injected client id when hosted apart from the server', async () => {
-    const getOAuthClientId = await loadWithMeta(
-      '<meta name="oauth-client-id" content="custom" /><meta name="api-base-url" content="https://mail.example.org" />',
-    );
-    expect(getOAuthClientId()).toBe('custom');
+  it('takes a client id the page names, trimmed, either way', async () => {
+    expect((await clientIdFor('<meta name="oauth-client-id" content=" sso-console " />'))()).toBe('sso-console');
+    expect(
+      (
+        await clientIdFor(
+          '<meta name="oauth-client-id" content="sso-console" /><meta name="api-base-url" content="https://mail.example.org" />',
+        )
+      )(),
+    ).toBe('sso-console');
   });
 
-  it('reads the document only once', async () => {
-    const getOAuthClientId = await loadWithMeta('<meta name="oauth-client-id" content="pocket-id-client" />');
-    expect(getOAuthClientId()).toBe('pocket-id-client');
-
-    document.head.innerHTML = '<meta name="oauth-client-id" content="changed-later" />';
-    expect(getOAuthClientId()).toBe('pocket-id-client');
+  it('reads the page once', async () => {
+    const get = await clientIdFor('<meta name="oauth-client-id" content="first" />');
+    expect(get()).toBe('first');
+    document.head.innerHTML = '<meta name="oauth-client-id" content="second" />';
+    expect(get()).toBe('first');
   });
 });
