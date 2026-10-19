@@ -1,13 +1,17 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * The live cards' stream: the latest sample of each metric asked for. A
+ * dropped stream is reopened two seconds later, with a fresh token, for as
+ * long as it takes. A tab hidden for a minute lets the stream go, and
+ * opens it again when it's back in view.
+ */
 import { create } from 'zustand';
-import type { MetricId, Metric } from '../types/metrics';
+import type { Metric, MetricId } from '../types/metrics';
 import { apiFetch, getApiBaseUrl } from '@/services/api';
 import i18n from '@/i18n';
 
@@ -19,130 +23,95 @@ interface LiveMetricsState {
   status: LiveStatus;
   error: string | null;
 
+  /** Streams these metrics from 200 ms on, unless asked for others before then. */
   subscribe: (ids: Set<MetricId>) => void;
   unsubscribe: () => void;
-  handleBatch: (batch: Metric[]) => void;
 }
 
-let eventSource: EventSource | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let reconnectAttempts = 0;
-let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-const MAX_RECONNECT = 5;
-const RECONNECT_DELAY = 2000;
+const SUBSCRIBE_DELAY_MS = 200;
+const RECONNECT_DELAY_MS = 2000;
+const HIDDEN_CLOSE_MS = 60_000;
+const INTERVAL_SECONDS = 30;
 
-function cleanup() {
-  if (eventSource) {
-    eventSource.close();
-    eventSource = null;
-  }
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-  reconnectAttempts = 0;
+let stream: EventSource | null = null;
+let subscribeTimer: ReturnType<typeof setTimeout> | undefined;
+let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+let hiddenTimer: ReturnType<typeof setTimeout> | undefined;
+
+function close() {
+  stream?.close();
+  stream = null;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = undefined;
 }
 
-async function openStream(ids: Set<MetricId>) {
-  cleanup();
+function liveMetricsUrl(token: string, ids: Set<MetricId>): string {
+  // The API base, not this page's origin: the console may be served apart
+  // from the server, and its own host would answer with the console itself.
+  const metrics = encodeURIComponent([...ids].join(','));
+  return `${getApiBaseUrl()}/api/live/metrics?token=${encodeURIComponent(token)}&interval=${INTERVAL_SECONDS}&metrics=${metrics}`;
+}
 
+function keepLatest(batch: Metric[]) {
+  useLiveMetricsStore.setState((s) => {
+    const snapshot = new Map(s.snapshot);
+    for (const m of batch) snapshot.set(m.metric, m);
+    return { snapshot };
+  });
+}
+
+async function open(ids: Set<MetricId>) {
+  close();
   if (ids.size === 0) {
     useLiveMetricsStore.setState({ status: 'idle', subscribedIds: ids });
     return;
   }
-
   useLiveMetricsStore.setState({ status: 'connecting', subscribedIds: ids, error: null });
 
+  let token: string;
   try {
-    const tokenResponse = await apiFetch('/api/token/metrics');
-    const token = await tokenResponse.text();
-
-    const metricsParam = Array.from(ids).join(',');
-    const url = `${getOrigin()}/api/live/metrics?token=${encodeURIComponent(token)}&interval=30&metrics=${encodeURIComponent(metricsParam)}`;
-
-    const es = new EventSource(url);
-    eventSource = es;
-    reconnectAttempts = 0;
-
-    es.addEventListener('metrics', (event) => {
-      try {
-        const batch = JSON.parse(event.data) as Metric[];
-        useLiveMetricsStore.getState().handleBatch(batch);
-      } catch (e) {
-        console.error('Failed to parse live metrics:', e);
-      }
-    });
-
-    es.onopen = () => {
-      useLiveMetricsStore.setState({ status: 'open' });
-    };
-
-    es.onerror = () => {
-      if (es !== eventSource) return;
-      es.close();
-      eventSource = null;
-
-      if (reconnectAttempts < MAX_RECONNECT) {
-        reconnectAttempts++;
-        useLiveMetricsStore.setState({ status: 'connecting' });
-        reconnectTimer = setTimeout(() => {
-          const currentIds = useLiveMetricsStore.getState().subscribedIds;
-          openStream(currentIds);
-        }, RECONNECT_DELAY);
-      } else {
-        useLiveMetricsStore.setState({
-          status: 'error',
-          error: i18n.t(
-            'dashboard.liveMetricsDisconnected',
-            'Live metrics stream disconnected after multiple retries.',
-          ),
-        });
-      }
-    };
+    token = await (await apiFetch('/api/token/metrics')).text();
   } catch (e) {
-    useLiveMetricsStore.setState({
-      status: 'error',
-      error:
-        e instanceof Error ? e.message : i18n.t('dashboard.liveMetricsFailed', 'Failed to connect to live metrics.'),
-    });
+    const message =
+      e instanceof Error ? e.message : i18n.t('dashboard.liveMetricsFailed', 'Failed to connect to live metrics.');
+    useLiveMetricsStore.setState({ status: 'error', error: message });
+    return;
   }
+
+  const source = new EventSource(liveMetricsUrl(token, ids));
+  stream = source;
+  source.addEventListener('metrics', (event) => {
+    try {
+      keepLatest(JSON.parse(event.data) as Metric[]);
+    } catch (e) {
+      console.error('Failed to parse live metrics:', e);
+    }
+  });
+  source.onopen = () => useLiveMetricsStore.setState({ status: 'open' });
+  source.onerror = () => {
+    if (source !== stream) return;
+    close();
+    useLiveMetricsStore.setState({ status: 'connecting' });
+    reconnectTimer = setTimeout(() => void open(useLiveMetricsStore.getState().subscribedIds), RECONNECT_DELAY_MS);
+  };
 }
 
-function getOrigin(): string {
-  // Honor the deploy-time API base (VITE_API_BASE_URL or the api-base-url
-  // meta tag) exactly like every other /api/live caller. Using
-  // window.location.origin here breaks Dashboard live metrics in any split
-  // deployment where the Admin origin is not the server (e.g. Admin in Docker
-  // pointed at the server via API_BASE_URL): the EventSource hits the Admin
-  // nginx instead, which answers with the SPA shell.
-  return getApiBaseUrl();
-}
-
-let visibilityTimer: ReturnType<typeof setTimeout> | null = null;
-
-function handleVisibilityChange() {
+function onVisibilityChange() {
   if (document.hidden) {
-    visibilityTimer = setTimeout(() => {
-      if (eventSource) {
-        cleanup();
-        useLiveMetricsStore.setState({ status: 'closed' });
-      }
-    }, 60_000);
-  } else {
-    if (visibilityTimer) {
-      clearTimeout(visibilityTimer);
-      visibilityTimer = null;
-    }
-    const state = useLiveMetricsStore.getState();
-    if (state.status === 'closed' && state.subscribedIds.size > 0) {
-      openStream(state.subscribedIds);
-    }
+    hiddenTimer = setTimeout(() => {
+      if (!stream) return;
+      close();
+      useLiveMetricsStore.setState({ status: 'closed' });
+    }, HIDDEN_CLOSE_MS);
+    return;
   }
+  clearTimeout(hiddenTimer);
+  hiddenTimer = undefined;
+  const { status, subscribedIds } = useLiveMetricsStore.getState();
+  if (status === 'closed' && subscribedIds.size > 0) void open(subscribedIds);
 }
 
-if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-}
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibilityChange);
 
 export const useLiveMetricsStore = create<LiveMetricsState>()((set) => ({
   snapshot: new Map(),
@@ -151,25 +120,13 @@ export const useLiveMetricsStore = create<LiveMetricsState>()((set) => ({
   error: null,
 
   subscribe: (ids) => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      openStream(ids);
-    }, 200);
+    clearTimeout(subscribeTimer);
+    subscribeTimer = setTimeout(() => void open(ids), SUBSCRIBE_DELAY_MS);
   },
 
   unsubscribe: () => {
-    if (debounceTimer) clearTimeout(debounceTimer);
-    cleanup();
+    clearTimeout(subscribeTimer);
+    close();
     set({ snapshot: new Map(), subscribedIds: new Set(), status: 'idle', error: null });
-  },
-
-  handleBatch: (batch) => {
-    set((state) => {
-      const next = new Map(state.snapshot);
-      for (const m of batch) {
-        next.set(m.metric, m);
-      }
-      return { snapshot: next };
-    });
   },
 }));

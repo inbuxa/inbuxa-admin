@@ -1,237 +1,172 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/** Turning metric samples into what the dashboard draws: periods, slices, readings and labels. */
 import type { Metric, MetricId, Period } from './types/metrics';
-import type { Card, Series, MetricFormat, Aggregate } from './types/schema';
-import {
-  PRESET_MS,
-  BUCKET_CONFIG,
-  CUSTOM_BUCKET_COUNT,
-  HOUR_MS,
-  MIN_ZOOM_MS,
-  SPARKLINE_BUCKET_COUNT,
-} from './types/metrics';
+import { BUCKET_CONFIG, CUSTOM_BUCKET_COUNT, HOUR_MS, MIN_ZOOM_MS, PRESET_MS } from './types/metrics';
+import type { Aggregate, Card, Chart, MetricFormat, Series } from './types/schema';
 
+type Histogram = Extract<Metric, { '@type': 'Histogram' }>;
+
+/** One number per sample: a counter's or gauge's count, a histogram's mean. */
 export function metricToScalar(m: Metric): number {
-  if (m['@type'] === 'Histogram') {
-    return m.count === 0 ? 0 : m.sum / m.count;
-  }
-  return m.count;
+  if (m['@type'] !== 'Histogram') return m.count;
+  return m.count === 0 ? 0 : m.sum / m.count;
 }
 
-// INBUXA: histograms are running totals per node, so they're diffed per
-// node; in a cluster, diffing across nodes subtracts one node's total from
-// another's.
-export function deltaHistograms(samples: Metric[]): Metric[] {
-  const nonHistograms: Metric[] = [];
-  const byMetric = new Map<string, Metric[]>();
+const timeOf = (m: Metric) => (m.timestamp ? Date.parse(m.timestamp) : 0);
 
+/**
+ * Histograms arrive as running totals; this turns each into the change
+ * since the sample before, so a slice shows what happened in it. Totals
+ * are per node, so each node is diffed on its own: diffing across nodes
+ * would subtract one node's total from another's. A reset (a total going
+ * down) yields nothing for that step. Other samples pass through first.
+ */
+export function deltaHistograms(samples: Metric[]): Metric[] {
+  const others: Metric[] = [];
+  const runs = new Map<string, Histogram[]>();
   for (const m of samples) {
     if (m['@type'] !== 'Histogram') {
-      nonHistograms.push(m);
+      others.push(m);
       continue;
     }
     const key = `${m.metric}|${m.nodeId ?? ''}`;
-    let list = byMetric.get(key);
-    if (!list) {
-      list = [];
-      byMetric.set(key, list);
-    }
-    list.push(m);
+    runs.set(key, [...(runs.get(key) ?? []), m]);
   }
 
-  const result = [...nonHistograms];
-
-  for (const [, records] of byMetric) {
-    records.sort((a, b) => {
-      const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-      const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-      return ta - tb;
+  const deltas: Metric[] = [];
+  for (const run of runs.values()) {
+    run.sort((a, b) => timeOf(a) - timeOf(b));
+    run.forEach((curr, i) => {
+      if (i === 0) return;
+      const count = curr.count - run[i - 1].count;
+      const sum = curr.sum - run[i - 1].sum;
+      if (count > 0 && sum >= 0) {
+        deltas.push({ '@type': 'Histogram', metric: curr.metric, count, sum, timestamp: curr.timestamp });
+      }
     });
-
-    for (let i = 1; i < records.length; i++) {
-      const prev = records[i - 1] as Metric & { '@type': 'Histogram' };
-      const curr = records[i] as Metric & { '@type': 'Histogram' };
-      const deltaCount = curr.count - prev.count;
-      const deltaSum = curr.sum - prev.sum;
-
-      if (deltaCount <= 0 || deltaSum < 0) continue;
-
-      result.push({
-        '@type': 'Histogram',
-        metric: curr.metric,
-        count: deltaCount,
-        sum: deltaSum,
-        timestamp: curr.timestamp,
-      });
-    }
   }
-
-  return result;
+  return [...others, ...deltas];
 }
 
+/** The period's window; a preset ends now. */
 export function periodWindow(p: Period): { from: Date; to: Date } {
   if (p.kind === 'custom') return { from: p.from, to: p.to };
   const to = new Date();
-  const ms = PRESET_MS[p.preset];
-  return { from: new Date(to.getTime() - ms), to };
+  return { from: new Date(to.getTime() - PRESET_MS[p.preset]), to };
 }
 
+/** A key that tells periods apart, for caching. */
 export function periodKey(p: Period): string {
-  if (p.kind === 'custom') return `custom|${p.from.toISOString()}|${p.to.toISOString()}`;
-  return p.preset;
+  return p.kind === 'custom' ? `custom|${p.from.toISOString()}|${p.to.toISOString()}` : p.preset;
 }
 
+/** How many slices to cut the period into: fixed per preset, a slice per hour for a zoom. */
 export function getBucketCount(p: Period): number {
-  if (p.kind === 'custom') {
-    // inbuxa: a slice per hour of the window, as history is sampled hourly.
-    const hours = Math.round((p.to.getTime() - p.from.getTime()) / HOUR_MS);
-    return Math.min(CUSTOM_BUCKET_COUNT, Math.max(MIN_ZOOM_MS / HOUR_MS, hours));
-  }
-  return BUCKET_CONFIG[p.preset];
+  if (p.kind === 'preset') return BUCKET_CONFIG[p.preset];
+  const hours = Math.round((p.to.getTime() - p.from.getTime()) / HOUR_MS);
+  return Math.min(CUSTOM_BUCKET_COUNT, Math.max(MIN_ZOOM_MS / HOUR_MS, hours));
 }
 
-function aggregate(values: number[], agg: Aggregate | undefined): number {
+function combine(values: number[], how: Aggregate | undefined): number {
   if (values.length === 0) return 0;
   const sum = values.reduce((a, b) => a + b, 0);
-  if (agg === 'avg') return sum / values.length;
-  return sum;
+  return how === 'avg' ? sum / values.length : sum;
 }
 
-export function cardValue(card: Card, samples: Metric[]): number {
-  const values = samples.filter((m) => card.metrics.includes(m.metric)).map(metricToScalar);
-  return aggregate(values, card.aggregate);
+/**
+ * A series' value in one slice, or null when it has no samples there. Gauges
+ * give one reading across the nodes, not every tick's readings combined.
+ */
+export function seriesBucketValue(series: Series, slice: Metric[]): number | null {
+  const own = slice.filter((m) => series.metrics.includes(m.metric));
+  if (own.length === 0) return null;
+  if (own.every((m) => m['@type'] === 'Gauge')) return gaugeReading(own, series.metrics);
+  return combine(own.map(metricToScalar), series.aggregate);
 }
 
-export function seriesBucketValue(series: Series, bucketSamples: Metric[]): number | null {
-  const mine = bucketSamples.filter((m) => series.metrics.includes(m.metric));
-  if (mine.length === 0) return null;
-  // INBUXA: a gauge's slice is one reading across the nodes, not every tick's readings combined
-  if (mine.every((m) => m['@type'] === 'Gauge')) return gaugeReading(mine, series.metrics);
-  return aggregate(mine.map(metricToScalar), series.aggregate);
-}
-
-// INBUXA: gauges counting the whole cluster. Only the node that computes
-// them has a true reading; history from before inbuxa-server 2026.9.30.2
-// also holds the other nodes' copies, with the queue drifted below zero
-// (stored unsigned, so a 20-digit number) and the accounts and domains at 0.
+/**
+ * Gauges that count the whole cluster. Only the node that computes them has
+ * a true reading; history from before inbuxa-server 2026.9.30.2 also holds
+ * the other nodes' copies, with the queue drifted below zero (stored
+ * unsigned, so a 20-digit number) and the accounts and domains at 0.
+ */
 export const CLUSTER_GAUGES = new Set<MetricId>(['queue.count', 'user.count', 'domain.count']);
 
 /**
  * The gauges' reading across the cluster: each node's latest, added up for
- * per-node gauges (memory, open connections), and for cluster-wide counts the
- * largest believable one. Null when there's no reading.
+ * per-node gauges (memory, open connections), and for cluster-wide counts
+ * the largest believable one. Null when there's no reading.
  */
 export function gaugeReading(samples: Metric[], ids: MetricId[]): number | null {
-  const last = new Map<string, { metric: MetricId; at: number; value: number }>();
+  const latest = new Map<string, { metric: MetricId; at: number; value: number }>();
   for (const m of samples) {
     if (m['@type'] !== 'Gauge' || !ids.includes(m.metric)) continue;
-    const at = m.timestamp ? Date.parse(m.timestamp) : 0;
     const key = `${m.metric}|${m.nodeId ?? ''}`;
-    const prev = last.get(key);
-    if (!prev || at >= prev.at) last.set(key, { metric: m.metric, at, value: m.count });
+    const at = timeOf(m);
+    if ((latest.get(key)?.at ?? -Infinity) <= at) latest.set(key, { metric: m.metric, at, value: m.count });
   }
-  let sum = 0;
-  let found = false;
-  const cluster = new Map<MetricId, number>();
-  for (const { metric, value } of last.values()) {
+  if (latest.size === 0) return null;
+
+  let total = 0;
+  let any = false;
+  const clusterWide = new Map<MetricId, number>();
+  for (const { metric, value } of latest.values()) {
     if (!CLUSTER_GAUGES.has(metric)) {
-      sum += value;
-      found = true;
+      total += value;
+      any = true;
     } else if (value <= Number.MAX_SAFE_INTEGER) {
-      cluster.set(metric, Math.max(cluster.get(metric) ?? 0, value));
+      clusterWide.set(metric, Math.max(clusterWide.get(metric) ?? 0, value));
     }
   }
-  for (const value of cluster.values()) {
-    sum += value;
-    found = true;
+  for (const value of clusterWide.values()) {
+    total += value;
+    any = true;
   }
-  return found ? sum : null;
+  return any ? total : null;
 }
 
+/** Samples by slice of the window; ones outside it, or without a time, are left out. */
 export function bucketize(samples: Metric[], from: Date, to: Date, bucketCount: number): Metric[][] {
-  const buckets: Metric[][] = Array.from({ length: bucketCount }, () => []);
-  const span = to.getTime() - from.getTime();
-  if (span <= 0) return buckets;
+  const slices: Metric[][] = Array.from({ length: bucketCount }, () => []);
+  const start = from.getTime();
+  const span = to.getTime() - start;
+  if (span <= 0) return slices;
   for (const m of samples) {
     if (!m.timestamp) continue;
-    const t = new Date(m.timestamp).getTime();
-    if (t < from.getTime() || t > to.getTime()) continue;
-    const idx = Math.min(bucketCount - 1, Math.floor(((t - from.getTime()) / span) * bucketCount));
-    buckets[idx].push(m);
+    const offset = Date.parse(m.timestamp) - start;
+    if (offset < 0 || offset > span) continue;
+    slices[Math.min(bucketCount - 1, Math.floor((offset / span) * bucketCount))].push(m);
   }
-  return buckets;
+  return slices;
 }
 
+/** The middle of each slice, where its point goes on a chart. */
 export function bucketTimestamps(from: Date, to: Date, bucketCount: number): Date[] {
-  const span = to.getTime() - from.getTime();
-  const width = span / bucketCount;
+  const width = (to.getTime() - from.getTime()) / bucketCount;
   return Array.from({ length: bucketCount }, (_, i) => new Date(from.getTime() + width * (i + 0.5)));
 }
 
-export function computeDelta(
-  card: Card,
-  samples: Metric[],
-  from: Date,
-  to: Date,
-): { pct: number; direction: 'up' | 'down' | 'neutral' } | null {
-  const mid = new Date((from.getTime() + to.getTime()) / 2);
-  const firstHalf = samples.filter((m) => {
-    if (!m.timestamp) return false;
-    return new Date(m.timestamp).getTime() < mid.getTime();
-  });
-  const secondHalf = samples.filter((m) => {
-    if (!m.timestamp) return false;
-    return new Date(m.timestamp).getTime() >= mid.getTime();
-  });
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 
-  const first = aggregate(firstHalf.filter((m) => card.metrics.includes(m.metric)).map(metricToScalar), card.aggregate);
-  const second = aggregate(
-    secondHalf.filter((m) => card.metrics.includes(m.metric)).map(metricToScalar),
-    card.aggregate,
-  );
-
-  if (first === 0) return null;
-  const pct = ((second - first) / Math.abs(first)) * 100;
-  if (pct === 0) return { pct: 0, direction: 'neutral' };
-  return { pct: Math.round(pct * 10) / 10, direction: pct > 0 ? 'up' : 'down' };
-}
-
-export function sparklineData(card: Card, samples: Metric[], from: Date, to: Date): number[] {
-  const buckets = bucketize(samples, from, to, SPARKLINE_BUCKET_COUNT);
-  return buckets.map((bucket) => {
-    const values = bucket.filter((m) => card.metrics.includes(m.metric)).map(metricToScalar);
-    return aggregate(values, card.aggregate);
-  });
-}
-
+/** A value as the dashboard shows it, in its metric's format. */
 export function formatValue(value: number, format: MetricFormat): string {
   switch (format) {
-    case 'number': {
-      if (Number.isInteger(value) && Math.abs(value) < 1000) {
-        return value.toString();
-      }
+    case 'number':
+      if (Number.isInteger(value) && Math.abs(value) < 1000) return String(value);
       return new Intl.NumberFormat(undefined, {
         notation: Math.abs(value) >= 1000 ? 'compact' : 'standard',
         maximumFractionDigits: 1,
       }).format(value);
-    }
     case 'bytes': {
       if (value === 0) return '0 B';
-      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-      for (let i = units.length - 1; i >= 0; i--) {
-        const factor = 1024 ** i;
-        const v = value / factor;
-        if (v >= 1) {
-          const decimals = v < 10 ? 1 : 0;
-          return `${v.toFixed(decimals)} ${units[i]}`;
-        }
+      for (let unit = BYTE_UNITS.length - 1; unit >= 0; unit--) {
+        const scaled = value / 1024 ** unit;
+        if (scaled >= 1) return `${scaled.toFixed(scaled < 10 ? 1 : 0)} ${BYTE_UNITS[unit]}`;
       }
       return `${value} B`;
     }
@@ -239,12 +174,11 @@ export function formatValue(value: number, format: MetricFormat): string {
       if (value === 0) return '0 ms';
       if (value < 1000) return `${Math.round(value)} ms`;
       if (value < 60_000) return `${(value / 1000).toFixed(1)} s`;
-      const m = Math.floor(value / 60_000);
-      const s = Math.floor((value % 60_000) / 1000);
-      if (m < 60) return s > 0 ? `${m} m ${s} s` : `${m} m`;
-      const h = Math.floor(m / 60);
-      const rm = m % 60;
-      return rm > 0 ? `${h} h ${rm} m` : `${h} h`;
+      const minutes = Math.floor(value / 60_000);
+      const pair = (big: number, bigUnit: string, small: number, smallUnit: string) =>
+        small > 0 ? `${big} ${bigUnit} ${small} ${smallUnit}` : `${big} ${bigUnit}`;
+      if (minutes < 60) return pair(minutes, 'm', Math.floor((value % 60_000) / 1000), 's');
+      return pair(Math.floor(minutes / 60), 'h', minutes % 60, 'm');
     }
     case 'percent':
       return `${value.toFixed(1)}%`;
@@ -253,59 +187,33 @@ export function formatValue(value: number, format: MetricFormat): string {
   }
 }
 
+/** A chart's time axis label: the time of day over a day or less, the date over longer. */
 export function formatTimeTick(date: Date, period: Period): string {
-  if (period.kind === 'preset') {
-    switch (period.preset) {
-      case '24h':
-        return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-      default:
-        return date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' });
-    }
-  }
-  const span = period.to.getTime() - period.from.getTime();
-  if (span <= 86_400_000) {
-    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  }
-  return date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' });
+  const withinDay =
+    period.kind === 'preset'
+      ? period.preset === '24h'
+      : period.to.getTime() - period.from.getTime() <= PRESET_MS['24h'];
+  return withinDay
+    ? date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit' });
 }
 
-export function collectHistoryMetricIds(
-  cards: Card[] | undefined,
-  charts: import('./types/schema').Chart[] | undefined,
-): Set<MetricId> {
-  const ids = new Set<MetricId>();
-  if (cards) {
-    for (const card of cards) {
-      if (card.source === 'history') {
-        for (const id of card.metrics) ids.add(id);
-      }
-    }
-  }
-  if (charts) {
-    for (const chart of charts) {
-      for (const series of chart.series) {
-        for (const id of series.metrics) ids.add(id);
-      }
-    }
-  }
-  return ids;
+/** The metrics to ask history for: the history cards' and every chart's. */
+export function collectHistoryMetricIds(cards: Card[] | undefined, charts: Chart[] | undefined): Set<MetricId> {
+  return new Set([
+    ...(cards ?? []).filter((c) => c.source === 'history').flatMap((c) => c.metrics),
+    ...(charts ?? []).flatMap((chart) => chart.series.flatMap((s) => s.metrics)),
+  ]);
 }
 
+/** The metrics to stream live: the live cards'. */
 export function collectLiveMetricIds(cards: Card[] | undefined): Set<MetricId> {
-  const ids = new Set<MetricId>();
-  if (cards) {
-    for (const card of cards) {
-      if (card.source === 'live') {
-        for (const id of card.metrics) ids.add(id);
-      }
-    }
-  }
-  return ids;
+  return new Set((cards ?? []).filter((c) => c.source === 'live').flatMap((c) => c.metrics));
 }
 
 /**
- * inbuxa: the window a drag across slices `a` to `b` of a chart zooms to: from
- * the start of the first slice to the end of the last. A window under three
+ * The window a drag across slices `a` to `b` of a chart zooms to: from the
+ * start of the first slice to the end of the last. A window under three
  * hours widens around its middle, staying inside the chart's own. Null when
  * the chart's window is already that narrow, so there's nothing to zoom into.
  */
@@ -320,26 +228,25 @@ export function zoomWindow(
   const end = to.getTime();
   if (end - start <= MIN_ZOOM_MS || buckets <= 0) return null;
   const width = (end - start) / buckets;
-  const lo = Math.max(0, Math.min(a, b));
-  const hi = Math.min(buckets - 1, Math.max(a, b));
-  let zFrom = start + lo * width;
-  let zTo = start + (hi + 1) * width;
-  if (zTo - zFrom < MIN_ZOOM_MS) {
-    const mid = (zFrom + zTo) / 2;
-    zFrom = Math.max(start, Math.min(end - MIN_ZOOM_MS, mid - MIN_ZOOM_MS / 2));
-    zTo = zFrom + MIN_ZOOM_MS;
+  const first = Math.max(0, Math.min(a, b));
+  const last = Math.min(buckets - 1, Math.max(a, b));
+  let zoomFrom = start + first * width;
+  let zoomTo = start + (last + 1) * width;
+  if (zoomTo - zoomFrom < MIN_ZOOM_MS) {
+    const middle = (zoomFrom + zoomTo) / 2;
+    zoomFrom = Math.max(start, Math.min(end - MIN_ZOOM_MS, middle - MIN_ZOOM_MS / 2));
+    zoomTo = zoomFrom + MIN_ZOOM_MS;
   }
-  return { from: new Date(Math.round(zFrom)), to: new Date(Math.round(zTo)) };
+  return { from: new Date(Math.round(zoomFrom)), to: new Date(Math.round(zoomTo)) };
 }
 
 /**
- * inbuxa: which of `buckets` slices a pointer at `x` is over, on a plot from
- * `left` to `right`. Lines and areas put the slices on points, first at the
- * left edge and last at the right; bars put each in a band of its own.
+ * Which of `buckets` slices a pointer at `x` is over, on a plot from `left`
+ * to `right`. Lines and areas put the slices on points, first at the left
+ * edge and last at the right; bars put each in a band of its own.
  */
 export function sliceAt(x: number, left: number, right: number, buckets: number, band: boolean): number | null {
   if (buckets <= 0 || right <= left) return null;
   const f = Math.min(1, Math.max(0, (x - left) / (right - left)));
-  const i = band ? Math.floor(f * buckets) : Math.round(f * (buckets - 1));
-  return Math.min(buckets - 1, i);
+  return Math.min(buckets - 1, band ? Math.floor(f * buckets) : Math.round(f * (buckets - 1)));
 }

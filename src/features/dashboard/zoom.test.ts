@@ -116,4 +116,26 @@ describe('zooming the dashboard period', () => {
     const stored = JSON.parse(saved.get('dashboard.period') ?? '{}');
     expect(stored.state.period).toEqual({ kind: 'preset', preset: '7d' });
   });
+
+  it('does nothing on reset when not zoomed', () => {
+    useDashboardStore.getState().resetZoom();
+    expect(useDashboardStore.getState().period).toEqual({ kind: 'preset', preset: '7d' });
+  });
+
+  it('ends the zoom when any period is set', () => {
+    useDashboardStore.getState().zoomTo(at(10), at(16));
+    useDashboardStore.getState().setPeriod({ kind: 'custom', from: at(0), to: at(48) });
+    expect(useDashboardStore.getState().zoomedFrom).toBeNull();
+    expect(useDashboardStore.getState().period).toEqual({ kind: 'custom', from: at(0), to: at(48) });
+  });
+
+  it('saves the auto-refresh choice, and counts refreshes without saving them', () => {
+    useDashboardStore.getState().setAutoRefresh(15);
+    const before = useDashboardStore.getState().tick;
+    useDashboardStore.getState().bump();
+    expect(useDashboardStore.getState().tick).toBe(before + 1);
+    const stored = JSON.parse(saved.get('dashboard.period') ?? '{}');
+    expect(Object.keys(stored.state).sort()).toEqual(['autoRefresh', 'period']);
+    expect(stored.state.autoRefresh).toBe(15);
+  });
 });
