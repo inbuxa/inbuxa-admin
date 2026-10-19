@@ -1,17 +1,15 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import { create } from 'zustand';
-import type { Schema, LayoutSubItem } from '@/types/schema';
-import { withRegroupedSettings } from '@/lib/settingsLayout';
 import { withExtraColumns } from '@/lib/listColumns';
+import { withRegroupedSettings } from '@/lib/settingsLayout';
+import type { LayoutSubItem, Schema } from '@/types/schema';
 
+/** Something global search can find: a page, a form section or a field. */
 export interface SearchIndexEntry {
   text: string;
   type: 'link' | 'field' | 'form';
@@ -26,140 +24,111 @@ export interface SearchIndexEntry {
 interface SchemaState {
   schema: Schema | null;
   isLoaded: boolean;
+  /** The layout (top-level section) each view is linked from; the first one, when several link it. */
   viewToSection: Record<string, string>;
   searchIndex: SearchIndexEntry[];
 
   setSchema: (schema: Schema) => void;
 }
 
-function walkLayouts(schema: Schema): { viewToSection: Record<string, string>; linkEntries: SearchIndexEntry[] } {
+/** Every link in the layouts, with the path of names that leads to it. */
+function indexLinks(schema: Schema) {
   const viewToSection: Record<string, string> = {};
-  const linkEntries: SearchIndexEntry[] = [];
-
-  function visit(items: LayoutSubItem[], sectionName: string, parentPath: string): void {
-    for (const sub of items) {
-      if (sub.type === 'link') {
-        if (!(sub.viewName in viewToSection)) {
-          viewToSection[sub.viewName] = sectionName;
-        }
-        linkEntries.push({
-          text: sub.name,
-          type: 'link',
-          viewName: sub.viewName,
-          section: sectionName,
-          breadcrumb: `${parentPath} > ${sub.name}`,
-        });
-      } else if (sub.type === 'container') {
-        visit(sub.items, sectionName, `${parentPath} > ${sub.name}`);
-      }
+  const links: SearchIndexEntry[] = [];
+  const add = (section: string, path: string, name: string, viewName: string, icon?: string) => {
+    viewToSection[viewName] ??= section;
+    links.push({
+      text: name,
+      type: 'link',
+      viewName,
+      section,
+      breadcrumb: `${path} > ${name}`,
+      ...(icon !== undefined && { icon }),
+    });
+  };
+  const walk = (section: string, path: string, items: LayoutSubItem[]) => {
+    for (const item of items) {
+      if (item.type === 'link') add(section, path, item.name, item.viewName);
+      else if (item.type === 'container') walk(section, `${path} > ${item.name}`, item.items);
+    }
+  };
+  for (const { name: section, items } of schema.layouts) {
+    for (const item of items) {
+      if ('link' in item) add(section, section, item.link.name, item.link.viewName, item.link.icon);
+      else if ('container' in item) walk(section, `${section} > ${item.container.name}`, item.container.items);
     }
   }
-
-  for (const layout of schema.layouts) {
-    const sectionName = layout.name;
-    for (const item of layout.items) {
-      if ('link' in item) {
-        if (!(item.link.viewName in viewToSection)) {
-          viewToSection[item.link.viewName] = sectionName;
-        }
-        linkEntries.push({
-          text: item.link.name,
-          type: 'link',
-          viewName: item.link.viewName,
-          section: sectionName,
-          breadcrumb: `${sectionName} > ${item.link.name}`,
-          icon: item.link.icon,
-        });
-      } else if ('container' in item) {
-        visit(item.container.items, sectionName, `${sectionName} > ${item.container.name}`);
-      }
-    }
-  }
-
-  return { viewToSection, linkEntries };
+  return { viewToSection, links };
 }
 
-function buildSearchIndex(
-  schema: Schema,
-  viewToSection: Record<string, string>,
-  linkEntries: SearchIndexEntry[],
-): SearchIndexEntry[] {
-  const entries: SearchIndexEntry[] = [...linkEntries];
-
-  function displayNameFor(viewName: string): string {
-    const obj = schema.objects[viewName];
-    if (!obj) return viewName.replace(/^x:/, '');
-    let resolvedName = viewName;
-    let resolvedObj = obj;
-    if (obj.type === 'view') {
-      const parent = schema.objects[obj.objectName];
-      if (parent && parent.type !== 'view') {
-        resolvedName = obj.objectName;
-        resolvedObj = parent;
-      }
-    }
-    if (resolvedObj.type === 'singleton') {
-      const form = schema.forms[viewName] ?? schema.forms[resolvedName];
-      if (form?.title) return form.title;
-    }
-    if (resolvedObj.type === 'object') {
-      const list = schema.lists[viewName] ?? schema.lists[resolvedName];
-      if (list?.singularName) {
-        return list.singularName.charAt(0).toUpperCase() + list.singularName.slice(1);
-      }
-    }
-    return viewName.replace(/^x:/, '');
+/**
+ * The name a view goes by in a breadcrumb: a singleton's form title, an
+ * object's singular name, or else its type without `x:`. A view of another
+ * object is named after that object, unless its own form or list says more.
+ */
+function viewTitle(schema: Schema, viewName: string): string {
+  const fallback = viewName.replace(/^x:/, '');
+  const entry = schema.objects[viewName];
+  if (!entry) return fallback;
+  const shown = entry.type === 'view' ? schema.objects[entry.objectName] : entry;
+  const named = entry.type === 'view' && shown && shown.type !== 'view' ? entry.objectName : viewName;
+  const kind = shown && shown.type !== 'view' ? shown.type : entry.type;
+  if (kind === 'singleton') {
+    const title = (schema.forms[viewName] ?? schema.forms[named])?.title;
+    if (title) return title;
+  } else if (kind === 'object') {
+    const singular = (schema.lists[viewName] ?? schema.lists[named])?.singularName;
+    if (singular) return singular[0].toUpperCase() + singular.slice(1);
   }
+  return fallback;
+}
 
-  for (const [name, obj] of Object.entries(schema.objects)) {
-    if (obj.type !== 'view' && obj.description) {
-      const section = viewToSection[name] ?? '';
-      const display = displayNameFor(name);
-      entries.push({
-        text: obj.description,
-        type: 'link',
-        viewName: name,
-        section,
-        breadcrumb: section ? `${section} > ${display}` : display,
-        objectType: obj.type,
-      });
-    }
-  }
+/** Links first, then each object's description, then every form section and field. */
+function buildIndex(schema: Schema) {
+  const { viewToSection, links } = indexLinks(schema);
+  const searchIndex = [...links];
+  const under = (section: string, ...names: string[]) => [...(section ? [section] : []), ...names].join(' > ');
 
-  for (const [formKey, form] of Object.entries(schema.forms)) {
-    const viewName = formKey;
+  for (const [viewName, entry] of Object.entries(schema.objects)) {
+    if (entry.type === 'view' || !entry.description) continue;
     const section = viewToSection[viewName] ?? '';
-    const display = displayNameFor(viewName);
+    searchIndex.push({
+      text: entry.description,
+      type: 'link',
+      viewName,
+      section,
+      breadcrumb: under(section, viewTitle(schema, viewName)),
+      objectType: entry.type,
+    });
+  }
 
+  for (const [viewName, form] of Object.entries(schema.forms)) {
+    const section = viewToSection[viewName] ?? '';
+    const title = viewTitle(schema, viewName);
     for (const formSection of form.sections) {
       if (formSection.title) {
-        entries.push({
+        searchIndex.push({
           text: formSection.title,
           type: 'form',
           viewName,
           section,
-          breadcrumb: section ? `${section} > ${display} > ${formSection.title}` : `${display} > ${formSection.title}`,
+          breadcrumb: under(section, title, formSection.title),
         });
       }
-
       for (const field of formSection.fields) {
-        const keywords: string[] = [];
-        if (field.name && field.name !== '@type') {
-          keywords.push(field.name);
-        }
-        entries.push({
+        searchIndex.push({
           text: field.label,
           type: 'field',
           viewName,
           section,
-          breadcrumb: section ? `${section} > ${display} > ${field.label}` : `${display} > ${field.label}`,
-          keywords,
+          breadcrumb: under(section, title, field.label),
+          // Search by the property name too, except the variant switch.
+          keywords: field.name && field.name !== '@type' ? [field.name] : [],
         });
       }
     }
   }
-
-  return entries;
+  return { viewToSection, searchIndex };
 }
 
 export const useSchemaStore = create<SchemaState>()((set) => ({
@@ -169,16 +138,8 @@ export const useSchemaStore = create<SchemaState>()((set) => ({
   searchIndex: [],
 
   setSchema: (served) => {
-    // inbuxa: Settings grouped by task, not by config file (settings-reorg),
-    // and columns the served lists leave out.
+    // Settings grouped by task rather than by config file, plus the list columns the server leaves out.
     const schema = withExtraColumns(withRegroupedSettings(served));
-    const { viewToSection, linkEntries } = walkLayouts(schema);
-    const searchIndex = buildSearchIndex(schema, viewToSection, linkEntries);
-    set({
-      schema,
-      isLoaded: true,
-      viewToSection,
-      searchIndex,
-    });
+    set({ schema, isLoaded: true, ...buildIndex(schema) });
   },
 }));

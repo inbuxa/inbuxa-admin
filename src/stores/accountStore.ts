@@ -1,16 +1,14 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import { create } from 'zustand';
 
 type Edition = 'enterprise' | 'community' | 'oss';
 
+/** The signed-in admin, from the server's account endpoint. */
 interface AccountState {
   permissions: string[];
   edition: Edition;
@@ -18,6 +16,7 @@ interface AccountState {
 
   setAccountInfo: (permissions: string[], edition: Edition, locale: string) => void;
   hasPermission: (perm: string) => boolean;
+  /** An object permission is its type's prefix and the action, e.g. `sysDomainUpdate`. */
   hasObjectPermission: (prefix: string, action: 'Get' | 'Query' | 'Create' | 'Update' | 'Destroy') => boolean;
 }
 
@@ -26,18 +25,11 @@ export const useAccountStore = create<AccountState>()((set, get) => ({
   edition: 'community',
   locale: 'en',
 
-  setAccountInfo: (permissions, _edition, locale) => {
-    // INBUXA has one edition, with every feature. Whatever the server reports,
-    // nothing is hidden or disabled as Enterprise-only. Features the server
-    // hasn't rebuilt yet answer that for themselves.
-    set({ permissions, edition: 'enterprise', locale });
-  },
+  // inbuxa has one edition with every feature, whatever the server reports,
+  // so nothing is hidden or disabled as Enterprise-only.
+  setAccountInfo: (permissions, _reported, locale) => set({ permissions, edition: 'enterprise', locale }),
 
-  hasPermission: (perm) => {
-    return get().permissions.includes(perm);
-  },
+  hasPermission: (perm) => get().permissions.includes(perm),
 
-  hasObjectPermission: (prefix, action) => {
-    return get().permissions.includes(`${prefix}${action}`);
-  },
+  hasObjectPermission: (prefix, action) => get().hasPermission(prefix + action),
 }));

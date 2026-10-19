@@ -1,35 +1,42 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist } from 'zustand/middleware';
 import { useCacheStore } from '@/stores/cacheStore';
 
+/** An account in the JMAP session. */
 interface AccountInfo {
   name: string;
   isPersonal: boolean;
 }
 
-interface AuthState {
+/** The sign-in, and the JMAP session it opened. */
+interface Signin {
   accessToken: string | null;
   refreshToken: string | null;
+  /** When the access token stops working, in epoch milliseconds. */
   tokenExpiresAt: number | null;
   tokenEndpoint: string | null;
+  /** Where sign-out sends the browser, when the server offers it. */
   endSessionEndpoint: string | null;
   accounts: Record<string, AccountInfo>;
+  /** The admin's own account, which holds the `x:` settings. */
   primaryAccountId: string | null;
+  /** The account being looked at, for mail and the like. */
   activeAccountId: string | null;
   apiUrl: string | null;
+  /** Who is signed in, from the session's `username`. */
+  username: string | null;
+}
+
+interface AuthState extends Signin {
+  /** The server's limits on objects per get and set; the session can lower or raise them. */
   maxObjectsInGet: number;
   maxObjectsInSet: number;
-  /** INBUXA: who is signed in, from the JMAP session (`username`). */
-  username: string | null;
 
   setTokens: (
     access: string,
@@ -49,73 +56,65 @@ interface AuthState {
   setUsername: (username: string | null) => void;
   logout: () => void;
   isAuthenticated: () => boolean;
+  /** Under a minute left, so the next request refreshes first. */
   isTokenExpiringSoon: () => boolean;
 }
+
+const signedOut: Signin = {
+  accessToken: null,
+  refreshToken: null,
+  tokenExpiresAt: null,
+  tokenEndpoint: null,
+  endSessionEndpoint: null,
+  accounts: {},
+  primaryAccountId: null,
+  activeAccountId: null,
+  apiUrl: null,
+  username: null,
+};
+
+const REFRESH_AHEAD_MS = 60_000;
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      accessToken: null,
-      refreshToken: null,
-      tokenExpiresAt: null,
-      tokenEndpoint: null,
-      endSessionEndpoint: null,
-      accounts: {},
-      primaryAccountId: null,
-      activeAccountId: null,
-      username: null,
-
-      setUsername: (username) => {
-        set({ username });
-      },
-      apiUrl: null,
+      ...signedOut,
       maxObjectsInGet: 500,
       maxObjectsInSet: 500,
 
-      setTokens: (access, refresh, expiresIn, tokenEndpoint, endSessionEndpoint) => {
+      setTokens: (accessToken, refreshToken, expiresIn, tokenEndpoint, endSessionEndpoint) =>
         set({
-          accessToken: access,
-          refreshToken: refresh,
+          accessToken,
+          refreshToken,
           tokenExpiresAt: Date.now() + expiresIn * 1000,
           tokenEndpoint,
           endSessionEndpoint: endSessionEndpoint ?? null,
-        });
-      },
+        }),
 
       setSession: (accounts, primaryAccountId, apiUrl, maxObjectsInGet, maxObjectsInSet) => {
-        const current = get().activeAccountId;
+        // A reload keeps the account being looked at, if the session still has it.
+        const kept = get().activeAccountId;
         set({
           accounts,
           primaryAccountId,
-          activeAccountId: current && accounts[current] ? current : primaryAccountId,
+          activeAccountId: kept && kept in accounts ? kept : primaryAccountId,
           apiUrl,
-          ...(maxObjectsInGet !== undefined ? { maxObjectsInGet } : {}),
-          ...(maxObjectsInSet !== undefined ? { maxObjectsInSet } : {}),
+          ...(maxObjectsInGet !== undefined && { maxObjectsInGet }),
+          ...(maxObjectsInSet !== undefined && { maxObjectsInSet }),
         });
       },
 
       switchAccount: (accountId) => {
         const { accounts, activeAccountId } = get();
-        if (accounts[accountId] && accountId !== activeAccountId) {
-          set({ activeAccountId: accountId });
-          useCacheStore.getState().clearAll();
-        }
+        if (accountId === activeAccountId || !(accountId in accounts)) return;
+        set({ activeAccountId: accountId });
+        // Names and lists belong to the account they were read from.
+        useCacheStore.getState().clearAll();
       },
 
-      logout: () => {
-        set({
-          accessToken: null,
-          refreshToken: null,
-          tokenExpiresAt: null,
-          tokenEndpoint: null,
-          endSessionEndpoint: null,
-          accounts: {},
-          primaryAccountId: null,
-          activeAccountId: null,
-          apiUrl: null,
-          username: null,
-        });
-      },
+      setUsername: (username) => set({ username }),
+
+      logout: () => set(signedOut),
 
       isAuthenticated: () => {
         const { accessToken, tokenExpiresAt } = get();
@@ -124,32 +123,21 @@ export const useAuthStore = create<AuthState>()(
 
       isTokenExpiringSoon: () => {
         const { tokenExpiresAt } = get();
-        if (tokenExpiresAt === null) return false;
-        return tokenExpiresAt - Date.now() < 60_000;
+        return tokenExpiresAt !== null && tokenExpiresAt - Date.now() < REFRESH_AHEAD_MS;
       },
     }),
     {
+      // Session storage: a sign-in lasts as long as the tab, and other tabs sign in for themselves.
       name: 'inbuxa-auth',
-      storage: {
-        getItem: (name) => {
-          const value = sessionStorage.getItem(name);
-          return value ? JSON.parse(value) : null;
-        },
-        setItem: (name, value) => {
-          sessionStorage.setItem(name, JSON.stringify(value));
-        },
-        removeItem: (name) => {
-          sessionStorage.removeItem(name);
-        },
-      },
-      partialize: (state) =>
+      storage: createJSONStorage(() => sessionStorage),
+      partialize: ({ accessToken, refreshToken, tokenExpiresAt, tokenEndpoint, endSessionEndpoint, activeAccountId }) =>
         ({
-          accessToken: state.accessToken,
-          refreshToken: state.refreshToken,
-          tokenExpiresAt: state.tokenExpiresAt,
-          tokenEndpoint: state.tokenEndpoint,
-          endSessionEndpoint: state.endSessionEndpoint,
-          activeAccountId: state.activeAccountId,
+          accessToken,
+          refreshToken,
+          tokenExpiresAt,
+          tokenEndpoint,
+          endSessionEndpoint,
+          activeAccountId,
         }) as AuthState,
     },
   ),

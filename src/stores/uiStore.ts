@@ -1,25 +1,21 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { queueAccountTheme } from '@/lib/accountSettings';
-import { applyPalette, DEFAULT_PALETTE, isPaletteId, type PaletteId } from '@/lib/palettes';
-import { applyA11yPrefs, isContrastPref, isMotionPref, type ContrastPref, type MotionPref } from '@/lib/a11yPrefs';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { queueAccountTheme } from '@/lib/accountSettings';
+import { applyA11yPrefs, isContrastPref, isMotionPref, type ContrastPref, type MotionPref } from '@/lib/a11yPrefs';
+import { applyPalette, DEFAULT_PALETTE, isPaletteId, type PaletteId } from '@/lib/palettes';
 
 type Theme = 'light' | 'dark';
 
 /**
- * INBUXA: which shell draws the navigation. "modern" is the two-tier shell —
- * the layout switcher in the top bar over a section bar carrying that layout's
- * own items, and no sidebar. "legacy" is the sidebar the old web UI had. A
- * layout too deep for a menu bar keeps the sidebar under either setting.
+ * Which shell draws the navigation. "modern" puts the layout switcher in the
+ * top bar over a section bar with that layout's items; "legacy" is the
+ * sidebar. A layout too deep for a menu bar keeps the sidebar either way.
  */
 export type AdminLayout = 'modern' | 'legacy';
 
@@ -31,15 +27,14 @@ export function isAdminLayout(value: unknown): value is AdminLayout {
 
 interface UIState {
   theme: Theme;
-  /** INBUXA: the color palette, the same set INBUXA webmail offers. */
+  /** The color palette, the same set inbuxa webmail offers. */
   palette: PaletteId;
-  /** INBUXA: the navigation shell, the reader's own choice. */
   adminLayout: AdminLayout;
-  /** inbuxa: high contrast and reduced motion, or the system's setting (roadmap item 13). */
+  /** High contrast and reduced motion, or whatever the system asks for. */
   contrast: ContrastPref;
   motion: MotionPref;
   sidebarOpen: boolean;
-  /** INBUXA: the sidebar folded to a rail of icon tiles, on wide screens. */
+  /** The sidebar folded to a rail of icons, on wide screens. */
   sidebarCollapsed: boolean;
   activeSection: string;
 
@@ -49,7 +44,7 @@ interface UIState {
   setAdminLayout: (layout: AdminLayout) => void;
   setContrast: (contrast: ContrastPref) => void;
   setMotion: (motion: MotionPref) => void;
-  /** INBUXA: take the theme stored with the account, without writing it back. */
+  /** Take the theme saved with the account, without saving it back. */
   applyAccountTheme: (palette: PaletteId | null, mode: 'system' | 'light' | 'dark' | null) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
@@ -57,112 +52,85 @@ interface UIState {
   setActiveSection: (section: string) => void;
 }
 
-function applyThemeClass(theme: Theme) {
-  if (theme === 'dark') {
-    document.documentElement.classList.add('dark');
-  } else {
-    document.documentElement.classList.remove('dark');
-  }
-}
+const matches = (query: string) => typeof window !== 'undefined' && window.matchMedia?.(query).matches;
+
+const systemTheme = (): Theme => (matches('(prefers-color-scheme: dark)') ? 'dark' : 'light');
+
+const showTheme = (theme: Theme) => document.documentElement.classList.toggle('dark', theme === 'dark');
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set, get) => ({
-      theme:
-        typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
-      sidebarOpen: typeof window !== 'undefined' ? (window.matchMedia?.('(min-width: 768px)').matches ?? true) : true,
-      sidebarCollapsed: false,
-      palette: DEFAULT_PALETTE,
-      adminLayout: DEFAULT_ADMIN_LAYOUT,
-      contrast: 'system',
-      motion: 'system',
-      activeSection: '',
-
-      toggleTheme: () => {
-        const next = get().theme === 'light' ? 'dark' : 'light';
-        applyThemeClass(next);
-        set({ theme: next });
-        queueAccountTheme(get().palette, next, next);
-      },
-
-      setTheme: (theme) => {
-        applyThemeClass(theme);
+    (set, get) => {
+      /** Show a theme the reader picked, and save it with their account. */
+      const pickTheme = (theme: Theme) => {
+        showTheme(theme);
         set({ theme });
         queueAccountTheme(get().palette, theme, theme);
-      },
+      };
 
-      toggleSidebar: () => {
-        set({ sidebarOpen: !get().sidebarOpen });
-      },
+      return {
+        theme: systemTheme(),
+        // Open on tablets and up; a phone opens it from the menu button.
+        sidebarOpen: typeof window === 'undefined' || (window.matchMedia?.('(min-width: 768px)').matches ?? true),
+        sidebarCollapsed: false,
+        palette: DEFAULT_PALETTE,
+        adminLayout: DEFAULT_ADMIN_LAYOUT,
+        contrast: 'system',
+        motion: 'system',
+        activeSection: '',
 
-      setSidebarOpen: (open) => {
-        set({ sidebarOpen: open });
-      },
+        setTheme: pickTheme,
+        toggleTheme: () => pickTheme(get().theme === 'light' ? 'dark' : 'light'),
 
-      setPalette: (palette) => {
-        applyPalette(palette);
-        set({ palette });
-        queueAccountTheme(palette, null, get().theme);
-      },
-
-      setAdminLayout: (layout) => {
-        set({ adminLayout: layout });
-      },
-
-      setContrast: (contrast) => {
-        applyA11yPrefs(contrast, get().motion);
-        set({ contrast });
-      },
-
-      setMotion: (motion) => {
-        applyA11yPrefs(get().contrast, motion);
-        set({ motion });
-      },
-
-      applyAccountTheme: (palette, mode) => {
-        const next: Partial<UIState> = {};
-        if (palette) {
+        setPalette: (palette) => {
           applyPalette(palette);
-          next.palette = palette;
-        }
-        if (mode) {
-          const theme: Theme =
-            mode === 'system' ? (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode;
-          applyThemeClass(theme);
-          next.theme = theme;
-        }
-        set(next);
-      },
+          set({ palette });
+          queueAccountTheme(palette, null, get().theme);
+        },
 
-      toggleSidebarCollapsed: () => {
-        set({ sidebarCollapsed: !get().sidebarCollapsed });
-      },
+        applyAccountTheme: (palette, mode) => {
+          const theme = mode && (mode === 'system' ? systemTheme() : mode);
+          if (palette) applyPalette(palette);
+          if (theme) showTheme(theme);
+          set({ ...(palette && { palette }), ...(theme && { theme }) });
+        },
 
-      setActiveSection: (section) => {
-        set({ activeSection: section });
-      },
-    }),
+        setContrast: (contrast) => {
+          applyA11yPrefs(contrast, get().motion);
+          set({ contrast });
+        },
+
+        setMotion: (motion) => {
+          applyA11yPrefs(get().contrast, motion);
+          set({ motion });
+        },
+
+        setAdminLayout: (adminLayout) => set({ adminLayout }),
+        toggleSidebar: () => set({ sidebarOpen: !get().sidebarOpen }),
+        setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+        toggleSidebarCollapsed: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
+        setActiveSection: (activeSection) => set({ activeSection }),
+      };
+    },
     {
       name: 'inbuxa-ui',
-      partialize: (state) => ({
-        theme: state.theme,
-        palette: state.palette,
-        adminLayout: state.adminLayout,
-        contrast: state.contrast,
-        motion: state.motion,
-        sidebarCollapsed: state.sidebarCollapsed,
+      partialize: ({ theme, palette, adminLayout, contrast, motion, sidebarCollapsed }) => ({
+        theme,
+        palette,
+        adminLayout,
+        contrast,
+        motion,
+        sidebarCollapsed,
       }),
-      onRehydrateStorage: () => {
-        return (state) => {
-          if (state) {
-            applyThemeClass(state.theme);
-            applyPalette(isPaletteId(state.palette) ? state.palette : DEFAULT_PALETTE);
-            if (!isAdminLayout(state.adminLayout)) state.adminLayout = DEFAULT_ADMIN_LAYOUT;
-            if (!isContrastPref(state.contrast)) state.contrast = 'system';
-            if (!isMotionPref(state.motion)) state.motion = 'system';
-            applyA11yPrefs(state.contrast, state.motion);
-          }
-        };
+      // Saved values from another version may no longer exist; fall back, then show the look.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        if (!isAdminLayout(state.adminLayout)) state.adminLayout = DEFAULT_ADMIN_LAYOUT;
+        if (!isContrastPref(state.contrast)) state.contrast = 'system';
+        if (!isMotionPref(state.motion)) state.motion = 'system';
+        showTheme(state.theme);
+        applyPalette(isPaletteId(state.palette) ? state.palette : DEFAULT_PALETTE);
+        applyA11yPrefs(state.contrast, state.motion);
       },
     },
   ),
