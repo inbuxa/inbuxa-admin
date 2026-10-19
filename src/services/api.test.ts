@@ -135,3 +135,81 @@ describe('apiFetch', () => {
     expect(endSession).not.toHaveBeenCalled();
   });
 });
+
+describe('refreshAccessToken, answered', () => {
+  it.each([400, 401, 403])('ends the session when the server refuses with a %i', async (status) => {
+    const { refreshAccessToken, useAuthStore, useConnectionStore } = await load();
+    useAuthStore.getState().setTokens('acc', 'ref', 3600, 'https://mail.test/token');
+    fetchMock.mockResolvedValueOnce(json({ error: 'invalid_grant' }, status));
+
+    await expect(refreshAccessToken()).rejects.toThrow(`Token refresh failed: ${status}`);
+    expect(endSession).toHaveBeenCalledTimes(1);
+    expect(useConnectionStore.getState().unreachable).toBe(false);
+  });
+
+  it('keeps the new tokens, and the old refresh token when none comes back', async () => {
+    const { refreshAccessToken, useAuthStore } = await load();
+    useAuthStore.getState().setTokens('acc', 'ref', 3600, 'https://mail.test/token');
+    fetchMock.mockResolvedValueOnce(json({ access_token: 'acc2', refresh_token: 'ref2', expires_in: 600 }));
+    await refreshAccessToken();
+    expect(useAuthStore.getState()).toMatchObject({ accessToken: 'acc2', refreshToken: 'ref2' });
+
+    fetchMock.mockResolvedValueOnce(json({ access_token: 'acc3', expires_in: 600 }));
+    await refreshAccessToken();
+    expect(useAuthStore.getState()).toMatchObject({ accessToken: 'acc3', refreshToken: 'ref2' });
+    const body = new URLSearchParams(String(fetchMock.mock.calls[1][1]?.body));
+    expect(Object.fromEntries(body)).toMatchObject({ grant_type: 'refresh_token', refresh_token: 'ref2' });
+  });
+
+  it('shares one refresh between callers that ask at once', async () => {
+    const { refreshAccessToken, useAuthStore } = await load();
+    useAuthStore.getState().setTokens('acc', 'ref', 3600, 'https://mail.test/token');
+    fetchMock.mockResolvedValueOnce(json({ access_token: 'acc2', expires_in: 600 }));
+    await Promise.all([refreshAccessToken(), refreshAccessToken(), refreshAccessToken()]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('apiFetch, answered', () => {
+  it('refreshes once on a 401 and sends the request again with the new token', async () => {
+    const { apiFetch, useAuthStore } = await load();
+    useAuthStore.getState().setTokens('old', 'ref', 3600, 'https://mail.test/token');
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockResolvedValueOnce(json({ access_token: 'new', expires_in: 600 }))
+      .mockResolvedValueOnce(json({ ok: true }));
+
+    expect((await apiFetch('/jmap/session')).status).toBe(200);
+    expect(fetchMock.mock.calls[2][0]).toBe(`${window.location.origin}/jmap/session`);
+    expect(new Headers(fetchMock.mock.calls[2][1]?.headers).get('Authorization')).toBe('Bearer new');
+  });
+
+  it('ends the session on a 401 with nothing to refresh with', async () => {
+    const { apiFetch, ApiError } = await load();
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }));
+    await expect(apiFetch('/jmap/session')).rejects.toBeInstanceOf(ApiError);
+    expect(endSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("throws an ApiError carrying the server's JSON, or null", async () => {
+    const { apiFetch, useAuthStore } = await load();
+    useAuthStore.getState().setTokens('acc', 'ref', 3600, 'https://mail.test/token');
+    fetchMock.mockResolvedValueOnce(json({ detail: 'nope' }, 422));
+    await expect(apiFetch('/x')).rejects.toMatchObject({ status: 422, body: { detail: 'nope' } });
+    fetchMock.mockResolvedValueOnce(new Response('<html>', { status: 502, statusText: 'Bad Gateway' }));
+    await expect(apiFetch('/x')).rejects.toMatchObject({ status: 502, statusText: 'Bad Gateway', body: null });
+  });
+});
+
+describe('getApiBaseUrl', () => {
+  afterEach(() => {
+    document.head.innerHTML = '';
+  });
+
+  it("is the page's api-base-url without a trailing slash, else the console's origin", async () => {
+    const { getApiBaseUrl } = await load();
+    expect(getApiBaseUrl()).toBe(window.location.origin);
+    document.head.innerHTML = '<meta name="api-base-url" content=" https://mail.example.org// " />';
+    expect(getApiBaseUrl()).toBe('https://mail.example.org');
+  });
+});
