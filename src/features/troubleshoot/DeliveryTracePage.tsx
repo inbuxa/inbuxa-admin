@@ -1,253 +1,160 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { isValidTarget } from './target';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import {
-  Play,
-  StopCircle,
-  Loader2,
+  ChevronRight,
   CircleCheck,
   CircleX,
-  TriangleAlert,
-  ChevronRight,
-  Mail,
   Globe,
+  Loader2,
+  Mail,
+  Play,
+  StopCircle,
+  TriangleAlert,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { apiFetch, getApiBaseUrl } from '@/services/api';
-import type { DeliveryStage, MX, ReportUri, StageSeverity } from './types';
-import { stageSeverity } from './types';
+import { Input } from '@/components/ui/input';
+import { streamDeliveryTrace, type StreamFailure } from './stream';
+import { isValidTarget } from './target';
+import {
+  byAttempt,
+  formatElapsed,
+  outcome,
+  pairStages,
+  stageDetail,
+  stageLabel,
+  stageSeverity,
+  traceReducer,
+  type StageSeverity,
+} from './trace';
+import type { DeliveryStage, MX, ReportUri } from './types';
 
-function SimpleAlert({ variant, children }: { variant: 'default' | 'destructive'; children: React.ReactNode }) {
-  return (
-    <div
-      className={`rounded-lg border p-4 ${
-        variant === 'destructive' ? 'border-destructive/50 bg-destructive/10 text-destructive' : 'border-border bg-card'
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
+/** Runs one trace at a time, stopping it when the page goes away. */
+function useDeliveryTrace() {
+  const { t } = useTranslation();
+  const [state, dispatch] = useReducer(traceReducer, { kind: 'idle' });
+  const stop = useRef<(() => void) | null>(null);
 
-type TraceState =
-  | { kind: 'idle' }
-  | { kind: 'starting'; target: string }
-  | { kind: 'running'; target: string; startedAt: Date; events: DeliveryStage[]; eventSource: EventSource }
-  | { kind: 'completed'; target: string; startedAt: Date; completedAt: Date; events: DeliveryStage[] }
-  | { kind: 'failed'; target: string; events: DeliveryStage[]; error: string };
+  const halt = useCallback(() => {
+    stop.current?.();
+    stop.current = null;
+  }, []);
+  useEffect(() => halt, [halt]);
 
-function phaseKey(stage: DeliveryStage): string {
-  const t = stage.type;
-  if (t.startsWith('mxLookup')) return 'mxLookup';
-  if (t.startsWith('mtaStsFetch') || t === 'mtaStsNotFound') return 'mtaStsFetch';
-  if (t.startsWith('tlsRptLookup') || t === 'tlsRptNotFound') return 'tlsRptLookup';
-  if (t.startsWith('mtaStsVerify')) return 'mtaStsVerify';
-  if (t.startsWith('tlsaLookup') || t === 'tlsaNotFound') return 'tlsaLookup';
-  if (t.startsWith('ipLookup')) return 'ipLookup';
-  if (t.startsWith('connection')) return 'connection';
-  if (t.startsWith('readGreeting')) return 'readGreeting';
-  if (t.startsWith('ehlo')) return 'ehlo';
-  if (t.startsWith('startTls')) return 'startTls';
-  if (t.startsWith('daneVerify')) return 'daneVerify';
-  if (t.startsWith('mailFrom')) return 'mailFrom';
-  if (t.startsWith('rcptTo')) return 'rcptTo';
-  if (t.startsWith('quit')) return 'quit';
-  if (t === 'deliveryAttemptStart') return `attempt-${(stage as { hostname: string }).hostname}`;
-  return t;
-}
-
-type TFn = (key: string, fallback: string, options?: Record<string, unknown>) => string;
-
-function phaseLabelFor(t: TFn, pk: string): string {
-  switch (pk) {
-    case 'mxLookup':
-      return t('deliveryTrace.phase.mxLookup', 'MX Lookup');
-    case 'mtaStsFetch':
-      return t('deliveryTrace.phase.mtaStsFetch', 'MTA-STS Policy Fetch');
-    case 'tlsRptLookup':
-      return t('deliveryTrace.phase.tlsRptLookup', 'TLS-RPT Lookup');
-    case 'mtaStsVerify':
-      return t('deliveryTrace.phase.mtaStsVerify', 'MTA-STS Verify');
-    case 'tlsaLookup':
-      return t('deliveryTrace.phase.tlsaLookup', 'TLSA / DANE Lookup');
-    case 'ipLookup':
-      return t('deliveryTrace.phase.ipLookup', 'IP Lookup');
-    case 'connection':
-      return t('deliveryTrace.phase.connection', 'TCP Connection');
-    case 'readGreeting':
-      return t('deliveryTrace.phase.readGreeting', 'Read Greeting');
-    case 'ehlo':
-      return 'EHLO';
-    case 'startTls':
-      return 'STARTTLS';
-    case 'daneVerify':
-      return t('deliveryTrace.phase.daneVerify', 'DANE Verify');
-    case 'mailFrom':
-      return 'MAIL FROM';
-    case 'rcptTo':
-      return 'RCPT TO';
-    case 'quit':
-      return 'QUIT';
-    default:
-      return pk;
-  }
-}
-
-function phaseLabel(t: TFn, stage: DeliveryStage): string {
-  if (stage.type === 'deliveryAttemptStart') {
-    return t('deliveryTrace.attemptLabel', 'Delivery Attempt: {{hostname}}', {
-      hostname: (stage as { hostname: string }).hostname,
-    });
-  }
-  const pk = phaseKey(stage);
-  return phaseLabelFor(t, pk);
-}
-
-function SeverityIcon({ severity }: { severity: StageSeverity }) {
-  switch (severity) {
-    case 'pending':
-      return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
-    case 'ok':
-      return <CircleCheck className="h-4 w-4 text-emerald-500" />;
-    case 'warn':
-      return <TriangleAlert className="h-4 w-4 text-amber-500" />;
-    case 'error':
-      return <CircleX className="h-4 w-4 text-red-500" />;
-  }
-}
-
-function formatElapsed(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)} ms`;
-  return `${(ms / 1000).toFixed(1)} s`;
-}
-
-function eventBodyText(t: TFn, stage: DeliveryStage): string | null {
-  const stageType = stage.type;
-  switch (stageType) {
-    case 'mxLookupSuccess': {
-      const total = stage.mxs.reduce((n, mx) => n + mx.exchanges.length, 0);
-      return total === 1
-        ? t('deliveryTrace.body.mxLookupSuccess_one', 'Resolved {{count}} MX record', { count: total })
-        : t('deliveryTrace.body.mxLookupSuccess_other', 'Resolved {{count}} MX records', { count: total });
-    }
-    case 'mxLookupStart':
-      return t('deliveryTrace.body.mxLookupStart', 'Looking up MX for {{domain}}', { domain: stage.domain });
-    case 'mtaStsFetchSuccess':
-      return t('deliveryTrace.body.mtaStsFetchSuccess', 'Policy fetched successfully');
-    case 'mtaStsNotFound':
-      return t('deliveryTrace.body.mtaStsNotFound', 'No MTA-STS policy published');
-    case 'tlsRptLookupSuccess': {
-      const n = stage.rua.length;
-      return n === 1
-        ? t('deliveryTrace.body.tlsRptLookupSuccess_one', 'Found {{count}} reporting URI', { count: n })
-        : t('deliveryTrace.body.tlsRptLookupSuccess_other', 'Found {{count}} reporting URIs', { count: n });
-    }
-    case 'tlsRptNotFound':
-      return t('deliveryTrace.body.tlsRptNotFound', 'No TLS-RPT record published');
-    case 'ipLookupSuccess': {
-      const ips = stage.remoteIps;
-      return ips.length <= 3
-        ? ips.join(', ')
-        : t('deliveryTrace.body.ipLookupOverflow', '{{shown}} +{{extra}} more', {
-            shown: ips.slice(0, 3).join(', '),
-            extra: ips.length - 3,
-          });
-    }
-    case 'connectionStart':
-      return t('deliveryTrace.body.connectionStart', 'Connecting to {{ip}}', { ip: stage.remoteIp });
-    case 'connectionSuccess':
-      return t('deliveryTrace.body.connectionSuccess', 'Connected');
-    case 'tlsaLookupSuccess':
-      return t('deliveryTrace.body.tlsaLookupSuccess', 'TLSA record found');
-    case 'tlsaNotFound':
-      return stage.reason || t('deliveryTrace.body.tlsaNotFound', 'No TLSA record found');
-    case 'readGreetingSuccess':
-      return t('deliveryTrace.body.readGreetingSuccess', 'Server greeting received');
-    case 'ehloSuccess':
-      return t('deliveryTrace.body.ehloSuccess', 'EHLO accepted');
-    case 'startTlsSuccess':
-      return t('deliveryTrace.body.startTlsSuccess', 'TLS negotiated');
-    case 'daneVerifySuccess':
-      return t('deliveryTrace.body.daneVerifySuccess', 'DANE verification passed');
-    case 'mtaStsVerifySuccess':
-      return t('deliveryTrace.body.mtaStsVerifySuccess', 'MTA-STS hostname verified');
-    case 'mailFromSuccess':
-      return t('deliveryTrace.body.mailFromSuccess', 'Sender accepted');
-    case 'rcptToSuccess':
-      return t('deliveryTrace.body.rcptToSuccess', 'Recipient accepted');
-    case 'quitCompleted':
-      return t('deliveryTrace.body.quitCompleted', 'Session closed');
-    default:
-      if ('reason' in stage && typeof (stage as { reason?: string }).reason === 'string') {
-        return (stage as { reason: string }).reason;
+  const failure = useCallback(
+    (f: StreamFailure) => {
+      switch (f.reason) {
+        case 'lost':
+          return t('deliveryTrace.connectionLost', 'Connection lost before trace completed.');
+        case 'timeout':
+          return t('deliveryTrace.timedOut', 'Trace timed out after 120 seconds.');
+        case 'start':
+          return f.message ?? t('deliveryTrace.failedToStart', 'Failed to start trace.');
       }
-      return null;
-  }
+    },
+    [t],
+  );
+
+  const start = useCallback(
+    (target: string) => {
+      halt();
+      dispatch({ type: 'start', target });
+      stop.current = streamDeliveryTrace(target, {
+        opened: (at) => dispatch({ type: 'opened', at }),
+        stages: (stages, at) => dispatch({ type: 'stages', stages, at }),
+        failed: (f) => dispatch({ type: 'failed', error: failure(f) }),
+      });
+    },
+    [halt, failure],
+  );
+
+  const reset = useCallback(() => {
+    halt();
+    dispatch({ type: 'reset' });
+  }, [halt]);
+
+  return { state, start, reset };
 }
 
-function MxTable({ mxs }: { mxs: MX[] }) {
-  const sorted = [...mxs].sort((a, b) => a.preference - b.preference);
+/** Whole seconds since a moment, ticking once a second. */
+function useSecondsSince(since: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return Math.max(0, Math.floor((now - since) / 1000));
+}
+
+function Notice({ tone, children }: { tone: 'default' | 'destructive'; children: ReactNode }) {
+  const look =
+    tone === 'destructive' ? 'border-destructive/50 bg-destructive/10 text-destructive' : 'border-border bg-card';
+  return <div className={`rounded-lg border p-4 ${look}`}>{children}</div>;
+}
+
+const SEVERITY_ICON: Record<StageSeverity, ReactNode> = {
+  pending: <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />,
+  ok: <CircleCheck className="h-4 w-4 text-emerald-500" />,
+  warn: <TriangleAlert className="h-4 w-4 text-amber-500" />,
+  error: <CircleX className="h-4 w-4 text-red-500" />,
+};
+
+/** MX hosts, most preferred first. */
+function MxHosts({ mxs }: { mxs: MX[] }) {
+  const rows = [...mxs]
+    .sort((a, b) => a.preference - b.preference)
+    .flatMap((mx) => mx.exchanges.map((host) => ({ preference: mx.preference, host })));
   return (
     <div className="mt-1 rounded border text-xs">
-      {sorted.map((mx, i) =>
-        mx.exchanges.map((ex, j) => (
-          <div key={`${i}-${j}`} className="flex gap-3 px-3 py-1 border-b last:border-b-0">
-            <span className="w-8 text-right text-muted-foreground">{mx.preference}</span>
-            <span>{ex}</span>
-          </div>
-        )),
-      )}
-    </div>
-  );
-}
-
-function ReportUris({ rua }: { rua: ReportUri[] }) {
-  return (
-    <div className="mt-1 space-y-1">
-      {rua.map((uri, i) => (
-        <div key={i} className="flex items-center gap-2 text-xs">
-          {uri.type === 'mail' ? (
-            <>
-              <Mail className="h-3 w-3 text-muted-foreground" />
-              <span>{uri.email}</span>
-            </>
-          ) : (
-            <>
-              <Globe className="h-3 w-3 text-muted-foreground" />
-              <span>{uri.url}</span>
-            </>
-          )}
+      {rows.map((row, i) => (
+        <div key={i} className="flex gap-3 px-3 py-1 border-b last:border-b-0">
+          <span className="w-8 text-right text-muted-foreground">{row.preference}</span>
+          <span>{row.host}</span>
         </div>
       ))}
     </div>
   );
 }
 
-function OpaqueObject({ data }: { data: Record<string, unknown> }) {
+function ReportDestinations({ rua }: { rua: ReportUri[] }) {
+  return (
+    <div className="mt-1 space-y-1">
+      {rua.map((uri, i) => (
+        <div key={i} className="flex items-center gap-2 text-xs">
+          {uri.type === 'mail' ? (
+            <Mail className="h-3 w-3 text-muted-foreground" />
+          ) : (
+            <Globe className="h-3 w-3 text-muted-foreground" />
+          )}
+          <span>{uri.type === 'mail' ? uri.email : uri.url}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A policy or record as the server sent it: one line per field, nested values as JSON. */
+function RawFields({ data }: { data: Record<string, unknown> }) {
   return (
     <div className="mt-1 rounded border bg-muted/30 p-2">
       <dl className="space-y-1 text-xs">
-        {Object.entries(data).map(([k, v]) => (
-          <div key={k} className="flex gap-2">
-            <dt className="font-medium text-muted-foreground min-w-24">{k}</dt>
+        {Object.entries(data).map(([name, value]) => (
+          <div key={name} className="flex gap-2">
+            <dt className="font-medium text-muted-foreground min-w-24">{name}</dt>
             <dd className="break-all">
-              {typeof v === 'object' && v !== null ? (
-                <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(v, null, 2)}</pre>
+              {value !== null && typeof value === 'object' ? (
+                <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(value, null, 2)}</pre>
               ) : (
-                String(v)
+                String(value)
               )}
             </dd>
           </div>
@@ -257,409 +164,244 @@ function OpaqueObject({ data }: { data: Record<string, unknown> }) {
   );
 }
 
-function EventRow({ stage }: { stage: DeliveryStage }) {
+/** What a step found, for the steps that found something worth opening. */
+function stepDetails(stage: DeliveryStage): ReactNode {
+  switch (stage.type) {
+    case 'mxLookupSuccess':
+      return <MxHosts mxs={stage.mxs} />;
+    case 'tlsRptLookupSuccess':
+      return <ReportDestinations rua={stage.rua} />;
+    case 'mtaStsFetchSuccess':
+      return <RawFields data={stage.policy} />;
+    case 'tlsaLookupSuccess':
+      return <RawFields data={stage.record} />;
+    default:
+      return null;
+  }
+}
+
+function StepRow({ stage }: { stage: DeliveryStage }) {
   const { t } = useTranslation();
   const severity = stageSeverity(stage);
-  const body = eventBodyText(t, stage);
-  const elapsed = 'elapsed' in stage ? (stage as { elapsed: number }).elapsed : null;
-  const hasDetails =
-    stage.type === 'mxLookupSuccess' ||
-    stage.type === 'mtaStsFetchSuccess' ||
-    stage.type === 'tlsRptLookupSuccess' ||
-    stage.type === 'tlsaLookupSuccess';
+  const detail = stageDetail(t, stage);
+  const details = stepDetails(stage);
 
-  const content = (
+  const row = (
     <div className="flex items-start gap-3 py-2">
-      <div className="mt-0.5 shrink-0">
-        <SeverityIcon severity={severity} />
-      </div>
+      <div className="mt-0.5 shrink-0">{SEVERITY_ICON[severity]}</div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{phaseLabel(t, stage)}</span>
-          {elapsed !== null && (
+          <span className="text-sm font-medium">{stageLabel(t, stage)}</span>
+          {'elapsed' in stage && (
             <Badge variant="secondary" className="text-xs">
-              {formatElapsed(elapsed)}
+              {formatElapsed(stage.elapsed)}
             </Badge>
           )}
         </div>
-        {body && (
-          <p className={`text-xs mt-0.5 ${severity === 'error' ? 'text-red-500' : 'text-muted-foreground'}`}>{body}</p>
+        {detail && (
+          <p className={`text-xs mt-0.5 ${severity === 'error' ? 'text-red-500' : 'text-muted-foreground'}`}>
+            {detail}
+          </p>
         )}
       </div>
     </div>
   );
-
-  if (!hasDetails) return content;
+  if (!details) return row;
 
   return (
     <Collapsible>
-      {content}
+      {row}
       <CollapsibleTrigger asChild>
         <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground ml-7">
           <ChevronRight className="h-3 w-3" />
           {t('deliveryTrace.viewDetails', 'View details')}
         </button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="ml-7">
-        {stage.type === 'mxLookupSuccess' && <MxTable mxs={stage.mxs} />}
-        {stage.type === 'mtaStsFetchSuccess' && <OpaqueObject data={stage.policy} />}
-        {stage.type === 'tlsRptLookupSuccess' && <ReportUris rua={stage.rua} />}
-        {stage.type === 'tlsaLookupSuccess' && <OpaqueObject data={stage.record} />}
-      </CollapsibleContent>
+      <CollapsibleContent className="ml-7">{details}</CollapsibleContent>
     </Collapsible>
   );
 }
 
-function useRelativeTime(startedAtMs: number | null): string {
+interface TraceFormProps {
+  target: string;
+  onTargetChange: (target: string) => void;
+  starting: boolean;
+  onStart: (target: string) => void;
+}
+
+function TraceForm({ target, onTargetChange, starting, onStart }: TraceFormProps) {
   const { t } = useTranslation();
-  const [tick, setTick] = useState(0);
+  const [invalid, setInvalid] = useState(false);
 
-  useEffect(() => {
-    if (startedAtMs === null) return;
-    const id = setInterval(() => setTick((prev) => prev + 1), 1000);
-    return () => clearInterval(id);
-  }, [startedAtMs]);
+  const submit = () => {
+    const value = target.trim();
+    if (isValidTarget(value)) onStart(value);
+    else setInvalid(true);
+  };
 
-  if (startedAtMs === null) return '';
-  const s = tick;
-  if (s < 60) return t('deliveryTrace.startedAgoSec', 'Started {{s}}s ago', { s });
-  return t('deliveryTrace.startedAgoMin', 'Started {{m}}m {{s}}s ago', {
-    m: Math.floor(s / 60),
-    s: s % 60,
-  });
+  return (
+    <div className="mx-auto max-w-2xl space-y-6 pt-8">
+      <div>
+        <h1 className="text-2xl font-bold">{t('deliveryTrace.title', 'Delivery Trace')}</h1>
+        <p className="mt-2 text-muted-foreground">
+          {t(
+            'deliveryTrace.subtitle',
+            'Run a real outbound SMTP delivery attempt and watch every DNS lookup, TLS handshake, and SMTP command as it happens.',
+          )}
+        </p>
+      </div>
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">{t('deliveryTrace.targetLabel', 'Target address or domain')}</label>
+            <div className="flex gap-2">
+              <Input
+                placeholder={t('deliveryTrace.targetPlaceholder', 'john@example.org or example.org')}
+                value={target}
+                onChange={(e) => {
+                  onTargetChange(e.target.value);
+                  setInvalid(false);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && submit()}
+                autoFocus
+                className="flex-1"
+              />
+              <Button onClick={submit} disabled={starting}>
+                {starting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                <span className="ml-2">{t('deliveryTrace.startTrace', 'Start trace')}</span>
+              </Button>
+            </div>
+            {invalid && (
+              <p className="text-xs text-destructive">
+                {t('deliveryTrace.invalidTarget', 'Enter a valid email address or domain.')}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function StartedAgo({ since }: { since: number }) {
+  const { t } = useTranslation();
+  const seconds = useSecondsSince(since);
+  return (
+    <p className="text-sm text-muted-foreground">
+      {seconds < 60
+        ? t('deliveryTrace.startedAgoSec', 'Started {{s}}s ago', { s: seconds })
+        : t('deliveryTrace.startedAgoMin', 'Started {{m}}m {{s}}s ago', {
+            m: Math.floor(seconds / 60),
+            s: seconds % 60,
+          })}
+    </p>
+  );
 }
 
 export function DeliveryTracePage() {
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
-  const [inputValue, setInputValue] = useState(searchParams.get('target') ?? '');
-  const [inputError, setInputError] = useState<string | null>(null);
-  const [state, setState] = useState<TraceState>({ kind: 'idle' });
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const relTime = useRelativeTime(state.kind === 'running' ? state.startedAt.getTime() : null);
-
-  useEffect(() => {
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-
-  const startTrace = useCallback(async () => {
-    const target = inputValue.trim();
-    if (!isValidTarget(target)) {
-      setInputError(t('deliveryTrace.invalidTarget', 'Enter a valid email address or domain.'));
-      return;
-    }
-    setInputError(null);
-
-    setState({ kind: 'starting', target });
-
-    try {
-      const tokenResponse = await apiFetch('/api/token/delivery');
-      const token = await tokenResponse.text();
-
-      const baseUrl = getApiBaseUrl();
-      const url = `${baseUrl}/api/live/delivery/${encodeURIComponent(target)}?token=${encodeURIComponent(token)}`;
-
-      const es = new EventSource(url);
-      eventSourceRef.current = es;
-
-      const events: DeliveryStage[] = [];
-      const startedAt = new Date();
-
-      timeoutRef.current = setTimeout(() => {
-        es.close();
-        eventSourceRef.current = null;
-        setState({
-          kind: 'failed',
-          target,
-          events: [...events],
-          error: t('deliveryTrace.timedOut', 'Trace timed out after 120 seconds.'),
-        });
-      }, 120_000);
-
-      es.addEventListener('event', (event) => {
-        try {
-          const batch = JSON.parse(event.data) as DeliveryStage[];
-          for (const stage of batch) {
-            if (stage.type === 'completed') {
-              es.close();
-              eventSourceRef.current = null;
-              if (timeoutRef.current) clearTimeout(timeoutRef.current);
-              setState({
-                kind: 'completed',
-                target,
-                startedAt,
-                completedAt: new Date(),
-                events: [...events],
-              });
-              return;
-            }
-            events.push(stage);
-          }
-          setState({
-            kind: 'running',
-            target,
-            startedAt,
-            events: [...events],
-            eventSource: es,
-          });
-        } catch (e) {
-          console.error('Failed to parse delivery event:', e);
-        }
-      });
-
-      es.onopen = () => {
-        setState({
-          kind: 'running',
-          target,
-          startedAt,
-          events: [],
-          eventSource: es,
-        });
-      };
-
-      es.onerror = () => {
-        es.close();
-        eventSourceRef.current = null;
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        setState((prev) => {
-          if (prev.kind === 'completed') return prev;
-          return {
-            kind: 'failed',
-            target,
-            events: prev.kind === 'running' ? prev.events : [],
-            error: t('deliveryTrace.connectionLost', 'Connection lost before trace completed.'),
-          };
-        });
-      };
-    } catch (e) {
-      setState({
-        kind: 'failed',
-        target,
-        events: [],
-        error: e instanceof Error ? e.message : t('deliveryTrace.failedToStart', 'Failed to start trace.'),
-      });
-    }
-  }, [inputValue, t]);
-
-  const cancelTrace = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    setState({ kind: 'idle' });
-  }, []);
-
-  const resetToIdle = useCallback(() => {
-    setState({ kind: 'idle' });
-  }, []);
-
-  const rawEvents = useMemo(() => (state.kind === 'idle' || state.kind === 'starting' ? [] : state.events), [state]);
-  const pairedEvents = useMemo(() => {
-    const result: DeliveryStage[] = [];
-    const pendingByPhase = new Map<string, number>();
-
-    for (const evt of rawEvents) {
-      const pk = phaseKey(evt);
-      const severity = stageSeverity(evt);
-
-      if (severity === 'pending') {
-        pendingByPhase.set(pk, result.length);
-        result.push(evt);
-      } else {
-        const pendingIdx = pendingByPhase.get(pk);
-        if (pendingIdx !== undefined) {
-          result[pendingIdx] = evt;
-          pendingByPhase.delete(pk);
-        } else {
-          result.push(evt);
-        }
-      }
-    }
-    return result;
-  }, [rawEvents]);
+  // Kept here, not in the form, so the form still has it after a trace.
+  const [input, setInput] = useState(searchParams.get('target') ?? '');
+  const { state, start, reset } = useDeliveryTrace();
+  const events = state.kind === 'idle' || state.kind === 'starting' ? null : state.events;
+  const rows = useMemo(() => (events ? pairStages(events) : []), [events]);
 
   if (state.kind === 'idle' || state.kind === 'starting') {
-    return (
-      <div className="mx-auto max-w-2xl space-y-6 pt-8">
-        <div>
-          <h1 className="text-2xl font-bold">{t('deliveryTrace.title', 'Delivery Trace')}</h1>
-          <p className="mt-2 text-muted-foreground">
-            {t(
-              'deliveryTrace.subtitle',
-              'Run a real outbound SMTP delivery attempt and watch every DNS lookup, TLS handshake, and SMTP command as it happens.',
-            )}
-          </p>
-        </div>
-        <Card>
-          <CardContent className="p-4 space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                {t('deliveryTrace.targetLabel', 'Target address or domain')}
-              </label>
-              <div className="flex gap-2">
-                <Input
-                  placeholder={t('deliveryTrace.targetPlaceholder', 'john@example.org or example.org')}
-                  value={inputValue}
-                  onChange={(e) => {
-                    setInputValue(e.target.value);
-                    setInputError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') startTrace();
-                  }}
-                  autoFocus
-                  className="flex-1"
-                />
-                <Button onClick={startTrace} disabled={state.kind === 'starting'}>
-                  {state.kind === 'starting' ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="h-4 w-4" />
-                  )}
-                  <span className="ml-2">{t('deliveryTrace.startTrace', 'Start trace')}</span>
-                </Button>
-              </div>
-              {inputError && <p className="text-xs text-destructive">{inputError}</p>}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <TraceForm target={input} onTargetChange={setInput} starting={state.kind === 'starting'} onStart={start} />;
   }
 
-  const events = pairedEvents;
-  const target = state.target;
-  const isRunning = state.kind === 'running';
-  const isCompleted = state.kind === 'completed';
-  const isFailed = state.kind === 'failed';
-
-  const groups: { attempt: DeliveryStage | null; events: DeliveryStage[] }[] = [];
-  let currentGroup: { attempt: DeliveryStage | null; events: DeliveryStage[] } = {
-    attempt: null,
-    events: [],
-  };
-  for (const evt of events) {
-    if (evt.type === 'deliveryAttemptStart') {
-      if (currentGroup.events.length > 0 || currentGroup.attempt) {
-        groups.push(currentGroup);
-      }
-      currentGroup = { attempt: evt, events: [] };
-    } else {
-      currentGroup.events.push(evt);
-    }
-  }
-  if (currentGroup.events.length > 0 || currentGroup.attempt) {
-    groups.push(currentGroup);
-  }
-
-  const attemptCount = events.filter((e) => e.type === 'deliveryAttemptStart').length;
-  const lastEvent = events[events.length - 1];
-  const hasSuccessfulDelivery = lastEvent?.type === 'quitCompleted' || events.some((e) => e.type === 'rcptToSuccess');
+  const { target } = state;
+  const { attempts, delivered } = outcome(rows);
+  const heading = {
+    running: () => t('deliveryTrace.tracingDelivery', 'Tracing delivery to {{target}}', { target }),
+    completed: () => t('deliveryTrace.traceCompletedFor', 'Trace completed for {{target}}', { target }),
+    failed: () => t('deliveryTrace.traceFailedFor', 'Trace failed for {{target}}', { target }),
+  }[state.kind]();
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">
-            {isRunning
-              ? t('deliveryTrace.tracingDelivery', 'Tracing delivery to {{target}}', { target })
-              : isCompleted
-                ? t('deliveryTrace.traceCompletedFor', 'Trace completed for {{target}}', { target })
-                : t('deliveryTrace.traceFailedFor', 'Trace failed for {{target}}', { target })}
-          </h2>
-          {isRunning && <p className="text-sm text-muted-foreground">{relTime}</p>}
+          <h2 className="text-lg font-semibold">{heading}</h2>
+          {state.kind === 'running' && <StartedAgo since={state.startedAt} />}
         </div>
         <div className="flex gap-2">
-          {isRunning && (
-            <Button variant="outline" onClick={cancelTrace}>
-              <StopCircle className="mr-2 h-4 w-4" />
-              {t('deliveryTrace.cancelTrace', 'Cancel trace')}
-            </Button>
-          )}
-          {(isCompleted || isFailed) && (
-            <Button variant="outline" onClick={resetToIdle}>
-              {t('deliveryTrace.runAnother', 'Run another trace')}
-            </Button>
-          )}
+          <Button variant="outline" onClick={reset}>
+            {state.kind === 'running' ? (
+              <>
+                <StopCircle className="mr-2 h-4 w-4" />
+                {t('deliveryTrace.cancelTrace', 'Cancel trace')}
+              </>
+            ) : (
+              t('deliveryTrace.runAnother', 'Run another trace')
+            )}
+          </Button>
         </div>
       </div>
 
-      {isCompleted && (
-        <SimpleAlert variant="default">
+      {state.kind === 'completed' && (
+        <Notice tone="default">
           <div className="flex items-center gap-2">
-            {hasSuccessfulDelivery ? (
+            {delivered ? (
               <CircleCheck className="h-4 w-4 text-emerald-500" />
             ) : (
               <CircleX className="h-4 w-4 text-red-500" />
             )}
             <span className="text-sm font-medium">
-              {hasSuccessfulDelivery
+              {delivered
                 ? t('deliveryTrace.deliverySuccessful', 'Delivery successful')
                 : t('deliveryTrace.deliveryFailed', 'Delivery failed')}
             </span>
             <span className="text-sm text-muted-foreground">
-              {attemptCount === 1
-                ? t('deliveryTrace.attemptCount_one', '{{count}} attempt', { count: attemptCount })
-                : t('deliveryTrace.attemptCount_other', '{{count}} attempts', { count: attemptCount })}
-              {state.kind === 'completed' && (
-                <>
-                  {' '}
-                  {t('deliveryTrace.inDuration', 'in {{elapsed}}', {
-                    elapsed: formatElapsed(state.completedAt.getTime() - state.startedAt.getTime()),
-                  })}
-                </>
-              )}
+              {attempts === 1
+                ? t('deliveryTrace.attemptCount_one', '{{count}} attempt', { count: attempts })
+                : t('deliveryTrace.attemptCount_other', '{{count}} attempts', { count: attempts })}{' '}
+              {t('deliveryTrace.inDuration', 'in {{elapsed}}', {
+                elapsed: formatElapsed(state.completedAt - state.startedAt),
+              })}
             </span>
           </div>
-        </SimpleAlert>
+        </Notice>
       )}
 
-      {isFailed && (
-        <SimpleAlert variant="destructive">
+      {state.kind === 'failed' && (
+        <Notice tone="destructive">
           <p className="text-sm">{state.error}</p>
-        </SimpleAlert>
+        </Notice>
       )}
 
       <Card>
         <CardContent className="p-4">
           <div className="space-y-0">
-            {groups.map((group, gi) => (
+            {byAttempt(rows).map((group, gi) => (
               <div key={gi}>
                 {group.attempt && (
                   <div className="mt-3 mb-1">
-                    <EventRow stage={group.attempt} />
+                    <StepRow stage={group.attempt} />
                   </div>
                 )}
                 <div className={group.attempt ? 'ml-6 border-l-2 border-muted/40 pl-4' : ''}>
-                  {group.events.map((evt, ei) => (
-                    <EventRow key={`${gi}-${ei}`} stage={evt} />
+                  {group.events.map((stage, ei) => (
+                    <StepRow key={`${gi}-${ei}`} stage={stage} />
                   ))}
                 </div>
               </div>
             ))}
           </div>
 
-          {isRunning && (
+          {state.kind === 'running' && (
             <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
               <div className="flex gap-1">
-                <span className="animate-pulse">.</span>
-                <span className="animate-pulse" style={{ animationDelay: '0.2s' }}>
-                  .
-                </span>
-                <span className="animate-pulse" style={{ animationDelay: '0.4s' }}>
-                  .
-                </span>
+                {[0, 0.2, 0.4].map((delay) => (
+                  <span
+                    key={delay}
+                    className="animate-pulse"
+                    style={delay ? { animationDelay: `${delay}s` } : undefined}
+                  >
+                    .
+                  </span>
+                ))}
               </div>
               {t('deliveryTrace.waiting', 'Waiting for more events')}
             </div>

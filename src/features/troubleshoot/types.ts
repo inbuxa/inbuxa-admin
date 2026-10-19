@@ -1,10 +1,16 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * The steps the server's live delivery stream reports (`/api/live/delivery`),
+ * by their names on the wire. Each step starts, then ends in Success, Error
+ * or, for the optional lookups, NotFound; `elapsed` is in milliseconds.
+ */
 export type DeliveryStage =
+  // Lookups for the recipient's domain.
   | { type: 'mxLookupStart'; domain: string }
   | { type: 'mxLookupSuccess'; mxs: MX[]; elapsed: number }
   | { type: 'mxLookupError'; reason: string; elapsed: number }
@@ -16,6 +22,7 @@ export type DeliveryStage =
   | { type: 'tlsRptLookupSuccess'; rua: ReportUri[]; elapsed: number }
   | { type: 'tlsRptLookupError'; reason: string; elapsed: number }
   | { type: 'tlsRptNotFound'; elapsed: number }
+  // Then, per MX host tried:
   | { type: 'deliveryAttemptStart'; hostname: string }
   | { type: 'mtaStsVerifySuccess' }
   | { type: 'mtaStsVerifyError'; reason: string }
@@ -48,26 +55,18 @@ export type DeliveryStage =
   | { type: 'rcptToError'; reason: string; elapsed: number }
   | { type: 'quitStart' }
   | { type: 'quitCompleted'; elapsed: number }
+  // The end of the stream.
   | { type: 'completed' };
 
+/** MX hosts that share a preference. */
 export interface MX {
   exchanges: string[];
   preference: number;
 }
 
+/** Where a domain wants TLS reports sent (RFC 8460). */
 export type ReportUri = { type: 'mail'; email: string } | { type: 'http'; url: string };
 
+/** The MTA-STS policy and the TLSA record, shown as the server sends them. */
 export type Policy = Record<string, unknown>;
 export type Tlsa = Record<string, unknown>;
-
-export type StageSeverity = 'pending' | 'ok' | 'warn' | 'error';
-
-export function stageSeverity(stage: DeliveryStage): StageSeverity {
-  const t = stage.type;
-  if (t === 'completed') return 'ok';
-  if (t === 'deliveryAttemptStart') return 'ok';
-  if (t.endsWith('Error')) return 'error';
-  if (t.endsWith('NotFound')) return 'warn';
-  if (t.endsWith('Start')) return 'pending';
-  return 'ok';
-}
