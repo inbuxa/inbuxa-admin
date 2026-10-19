@@ -59,7 +59,6 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { ObjectPicker } from '@/components/common/ObjectPicker';
-import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
 import { toast } from '@/hooks/use-toast';
 import { deleteWithUndo } from '@/components/common/undoableDelete';
 import { useShortcut } from '@/lib/shortcuts';
@@ -397,7 +396,6 @@ export function DynamicList({ viewName }: DynamicListProps) {
   const hasObjectPermission = useAccountStore((s) => s.hasObjectPermission);
   const edition = useAccountStore((s) => s.edition);
   const explainAvailable = useExplainStore((s) => s.available);
-  const [upsellOpen, setUpsellOpen] = useState(false);
 
   const resolved = useMemo(() => {
     if (!schema) return null;
@@ -1199,7 +1197,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
                 onClick={(e) => {
                   e.stopPropagation();
                   if (locked) {
-                    setUpsellOpen(true);
+                    return;
                   } else if (needsConfirmation) {
                     setConfirmAction({
                       label: action.label,
@@ -1617,7 +1615,6 @@ export function DynamicList({ viewName }: DynamicListProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <EnterpriseUpsell open={upsellOpen} onClose={() => setUpsellOpen(false)} />
       {directoryLocks.dialogs}
     </div>
   );
