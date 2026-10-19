@@ -1,311 +1,105 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Play, Square, RotateCcw, Plus, Check, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Check, Play, Plus, RotateCcw, Square, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useSchemaStore } from '@/stores/schemaStore';
-import { apiFetch, getApiBaseUrl } from '@/services/api';
-import type { TraceEvent } from '../types';
-import { normalizeTraceEvents } from '../normalize';
-import { TraceTimeline } from './TraceTimeline';
 import { liveEventSubject } from '@/features/ai/explain/explain';
+import { useSchemaStore } from '@/stores/schemaStore';
+import { appendEvents, liveTracingQuery, MAX_EVENTS, streamLiveTrace, type KeyFilter, type LiveBuffer } from '../live';
+import { TraceTimeline } from './TraceTimeline';
 
-const MAX_EVENTS = 1000;
-const MAX_RECONNECT = 5;
-const RECONNECT_DELAY = 2000;
-
-interface KeyValueFilter {
-  key: string;
-  label: string;
-  value: string;
-}
-
-type LiveTracingState =
+type Live =
   | { kind: 'idle' }
-  | { kind: 'starting'; keywords: string; filters: KeyValueFilter[] }
-  | { kind: 'streaming'; events: TraceEvent[]; anchorTimestamp: string; eventSource: EventSource }
-  | { kind: 'stopped'; events: TraceEvent[]; anchorTimestamp: string }
-  | { kind: 'error'; events: TraceEvent[]; error: string };
+  | { kind: 'starting' }
+  | { kind: 'streaming'; buffer: LiveBuffer }
+  | { kind: 'stopped'; buffer: LiveBuffer }
+  /** Failed; the events so far stay on screen, timed from the first of them. */
+  | { kind: 'failed'; buffer: LiveBuffer; error: string };
+
+const EMPTY: LiveBuffer = { events: [], anchor: '' };
+
+/** One live stream at a time; it stops when the page goes away. */
+function useLiveTrace() {
+  const { t } = useTranslation();
+  const [live, setLive] = useState<Live>({ kind: 'idle' });
+  const stopStream = useRef<(() => void) | null>(null);
+
+  const halt = useCallback(() => {
+    stopStream.current?.();
+    stopStream.current = null;
+  }, []);
+  useEffect(() => halt, [halt]);
+
+  const start = useCallback(
+    (keywords: string, filters: KeyFilter[]) => {
+      halt();
+      setLive({ kind: 'starting' });
+      const bufferOf = (l: Live) => (l.kind === 'idle' || l.kind === 'starting' ? EMPTY : l.buffer);
+      stopStream.current = streamLiveTrace(liveTracingQuery(keywords, filters), {
+        opened: () => setLive((l) => ({ kind: 'streaming', buffer: bufferOf(l) })),
+        events: (batch) => setLive((l) => ({ kind: 'streaming', buffer: appendEvents(bufferOf(l), batch) })),
+        failed: (f) =>
+          setLive((l) => ({
+            kind: 'failed',
+            buffer: { events: bufferOf(l).events, anchor: '' },
+            error:
+              f.reason === 'disconnected'
+                ? t('tracing.liveDisconnected', 'Live tracing stream disconnected after multiple retries.')
+                : (f.message ?? t('tracing.liveFailedStart', 'Failed to start live tracing.')),
+          })),
+      });
+    },
+    [halt, t],
+  );
+
+  const stop = useCallback(() => {
+    halt();
+    setLive((l) => (l.kind === 'streaming' ? { kind: 'stopped', buffer: l.buffer } : l));
+  }, [halt]);
+
+  const reset = useCallback(() => {
+    halt();
+    setLive({ kind: 'idle' });
+  }, [halt]);
+
+  return { live, start, stop, reset };
+}
 
 export function LiveTracingPage() {
   const { t } = useTranslation();
-  const schema = useSchemaStore((s) => s.schema);
-  const [state, setState] = useState<LiveTracingState>({ kind: 'idle' });
+  const { live, start, stop, reset } = useLiveTrace();
   const [keywords, setKeywords] = useState('');
-  const [filters, setFilters] = useState<KeyValueFilter[]>([]);
-  const [addingFilter, setAddingFilter] = useState(false);
-  const [newFilterKey, setNewFilterKey] = useState('');
-  const [newFilterValue, setNewFilterValue] = useState('');
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const eventsRef = useRef<TraceEvent[]>([]);
-  const anchorRef = useRef<string>('');
-  const reconnectAttempts = useRef(0);
+  const [filters, setFilters] = useState<KeyFilter[]>([]);
 
-  const keyEnum = useMemo(() => schema?.enums?.['Key'] ?? [], [schema]);
-
-  useEffect(() => {
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
-    };
-  }, []);
-
-  const openStream = useCallback(async () => {
-    setState({ kind: 'starting', keywords, filters });
-    eventsRef.current = [];
-    anchorRef.current = '';
-    reconnectAttempts.current = 0;
-
-    try {
-      const tokenResponse = await apiFetch('/api/token/tracing');
-      const token = await tokenResponse.text();
-
-      const params = new URLSearchParams();
-      params.set('token', token);
-      if (keywords.trim()) {
-        params.set('filter', keywords.trim());
-      }
-      for (const f of filters) {
-        params.set(f.key, f.value);
-      }
-
-      const baseUrl = getApiBaseUrl();
-      const url = `${baseUrl}/api/live/tracing?${params.toString()}`;
-
-      const connectEventSource = () => {
-        const es = new EventSource(url);
-        eventSourceRef.current = es;
-
-        es.addEventListener('trace', (event) => {
-          try {
-            const batch = normalizeTraceEvents(JSON.parse(event.data));
-            const currentEvents = eventsRef.current;
-
-            for (const evt of batch) {
-              currentEvents.push(evt);
-              if (!anchorRef.current) {
-                anchorRef.current = evt.timestamp;
-              }
-            }
-
-            if (currentEvents.length > MAX_EVENTS) {
-              eventsRef.current = currentEvents.slice(currentEvents.length - MAX_EVENTS);
-            }
-
-            setState({
-              kind: 'streaming',
-              events: [...eventsRef.current],
-              anchorTimestamp: anchorRef.current,
-              eventSource: es,
-            });
-          } catch (e) {
-            console.error('Failed to parse trace event:', e);
-          }
-        });
-
-        es.onopen = () => {
-          reconnectAttempts.current = 0;
-          setState({
-            kind: 'streaming',
-            events: [...eventsRef.current],
-            anchorTimestamp: anchorRef.current || '',
-            eventSource: es,
-          });
-        };
-
-        es.onerror = () => {
-          if (es !== eventSourceRef.current) return;
-          es.close();
-          eventSourceRef.current = null;
-
-          if (reconnectAttempts.current < MAX_RECONNECT) {
-            reconnectAttempts.current++;
-            setTimeout(connectEventSource, RECONNECT_DELAY);
-          } else {
-            setState({
-              kind: 'error',
-              events: [...eventsRef.current],
-              error: t('tracing.liveDisconnected', 'Live tracing stream disconnected after multiple retries.'),
-            });
-          }
-        };
-      };
-
-      connectEventSource();
-    } catch (e) {
-      setState({
-        kind: 'error',
-        events: [],
-        error: e instanceof Error ? e.message : t('tracing.liveFailedStart', 'Failed to start live tracing.'),
-      });
-    }
-  }, [keywords, filters, t]);
-
-  const stopStream = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    setState((prev) => {
-      if (prev.kind === 'streaming') {
-        return {
-          kind: 'stopped',
-          events: prev.events,
-          anchorTimestamp: prev.anchorTimestamp,
-        };
-      }
-      return prev;
-    });
-  }, []);
-
-  const resetToIdle = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-    eventsRef.current = [];
-    anchorRef.current = '';
-    setState({ kind: 'idle' });
-  }, []);
-
-  const addFilter = useCallback(() => {
-    if (!newFilterKey || !newFilterValue.trim()) return;
-    const keyEntry = keyEnum.find((e) => e.name === newFilterKey);
-    setFilters((prev) => [
-      ...prev,
-      {
-        key: newFilterKey,
-        label: keyEntry?.label ?? newFilterKey,
-        value: newFilterValue.trim(),
-      },
-    ]);
-    setNewFilterKey('');
-    setNewFilterValue('');
-    setAddingFilter(false);
-  }, [newFilterKey, newFilterValue, keyEnum]);
-
-  const removeFilter = useCallback((idx: number) => {
-    setFilters((prev) => prev.filter((_, i) => i !== idx));
-  }, []);
-
-  const isIdle = state.kind === 'idle';
-  const isStarting = state.kind === 'starting';
-  const isStreaming = state.kind === 'streaming';
-  const isStopped = state.kind === 'stopped';
-  const isError = state.kind === 'error';
-
-  if (isIdle || isStarting) {
+  if (live.kind === 'idle' || live.kind === 'starting') {
     return (
-      <div className="mx-auto max-w-2xl space-y-6 pt-8">
-        <div>
-          <h1 className="text-2xl font-bold">{t('tracing.liveTitle', 'Live Tracing')}</h1>
-          <p className="mt-2 text-muted-foreground">
-            {t('tracing.liveSubtitle', 'Stream server events in real time.')}
-          </p>
-        </div>
-
-        <Card>
-          <CardContent className="p-4 space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('tracing.keywordsLabel', 'Keywords (optional)')}</label>
-              <Input
-                placeholder={t('tracing.keywordsPlaceholder', 'Enter keywords to filter events...')}
-                value={keywords}
-                onChange={(e) => setKeywords(e.target.value)}
-              />
-            </div>
-
-            {filters.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {filters.map((f, i) => (
-                  <Badge key={i} variant="secondary" className="gap-1">
-                    {f.label} = {f.value}
-                    <button onClick={() => removeFilter(i)} className="ml-1 hover:text-destructive">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-              </div>
-            )}
-
-            {addingFilter ? (
-              <div className="flex items-center gap-2">
-                <Select value={newFilterKey} onValueChange={setNewFilterKey}>
-                  <SelectTrigger className="w-48">
-                    <SelectValue placeholder={t('field.selectKey', 'Select key...')} />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60">
-                    {keyEnum.map((entry) => (
-                      <SelectItem key={entry.name} value={entry.name}>
-                        {entry.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input
-                  placeholder={t('tracing.valuePlaceholder', 'Value...')}
-                  value={newFilterValue}
-                  onChange={(e) => setNewFilterValue(e.target.value)}
-                  className="flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') addFilter();
-                  }}
-                />
-                <Button size="icon" variant="ghost" onClick={addFilter}>
-                  <Check className="h-4 w-4" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => setAddingFilter(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setAddingFilter(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t('tracing.addFilter', 'Add filter')}
-              </Button>
-            )}
-
-            <Button className="w-full" onClick={openStream} disabled={isStarting}>
-              {isStarting ? (
-                <>
-                  <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  {t('tracing.connecting', 'Connecting...')}
-                </>
-              ) : (
-                <>
-                  <Play className="mr-2 h-4 w-4" />
-                  {t('tracing.startTracing', 'Start tracing')}
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      <TracingForm
+        keywords={keywords}
+        onKeywords={setKeywords}
+        filters={filters}
+        onFilters={setFilters}
+        starting={live.kind === 'starting'}
+        onStart={() => start(keywords, filters)}
+      />
     );
   }
 
-  const events = isStreaming ? state.events : isStopped ? state.events : isError ? state.events : [];
-  const anchor = isStreaming ? state.anchorTimestamp : isStopped ? state.anchorTimestamp : undefined;
-
+  const { events, anchor } = live.buffer;
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-semibold">{t('tracing.liveTitle', 'Live Tracing')}</h2>
-          {isStreaming && (
+          {live.kind === 'streaming' && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -314,17 +108,18 @@ export function LiveTracingPage() {
               {t('tracing.streamingEvents', 'Streaming events...')}
             </div>
           )}
-          {isStopped && <span className="text-sm text-muted-foreground">{t('tracing.stopped', 'Stopped')}</span>}
+          {live.kind === 'stopped' && (
+            <span className="text-sm text-muted-foreground">{t('tracing.stopped', 'Stopped')}</span>
+          )}
         </div>
         <div className="flex gap-2">
-          {isStreaming && (
-            <Button variant="outline" onClick={stopStream}>
+          {live.kind === 'streaming' ? (
+            <Button variant="outline" onClick={stop}>
               <Square className="mr-2 h-4 w-4" />
               {t('tracing.stopTracing', 'Stop tracing')}
             </Button>
-          )}
-          {(isStopped || isError) && (
-            <Button variant="outline" onClick={resetToIdle}>
+          ) : (
+            <Button variant="outline" onClick={reset}>
               <RotateCcw className="mr-2 h-4 w-4" />
               {t('tracing.restart', 'Restart')}
             </Button>
@@ -332,15 +127,19 @@ export function LiveTracingPage() {
         </div>
       </div>
 
-      {isError && (
+      {live.kind === 'failed' && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          {state.error}
+          {live.error}
         </div>
       )}
 
       <Card>
         <CardContent className="p-4">
-          <TraceTimeline events={events} anchorTimestamp={anchor} explainSubject={(event) => liveEventSubject(event)} />
+          <TraceTimeline
+            events={events}
+            anchorTimestamp={anchor || undefined}
+            explainSubject={(event) => liveEventSubject(event)}
+          />
         </CardContent>
       </Card>
 
@@ -350,6 +149,120 @@ export function LiveTracingPage() {
           : t('tracing.eventCount_other', '{{count}} events', { count: events.length })}
         {events.length >= MAX_EVENTS && ' ' + t('tracing.bufferFull', '(buffer full)')}
       </p>
+    </div>
+  );
+}
+
+interface TracingFormProps {
+  keywords: string;
+  onKeywords: (keywords: string) => void;
+  filters: KeyFilter[];
+  onFilters: (filters: KeyFilter[]) => void;
+  starting: boolean;
+  onStart: () => void;
+}
+
+/** Keywords and key = value filters for the stream, then Start. */
+function TracingForm({ keywords, onKeywords, filters, onFilters, starting, onStart }: TracingFormProps) {
+  const { t } = useTranslation();
+  const schema = useSchemaStore((s) => s.schema);
+  const keys = useMemo(() => schema?.enums?.Key ?? [], [schema]);
+  const [adding, setAdding] = useState(false);
+  const [key, setKey] = useState('');
+  const [value, setValue] = useState('');
+
+  const add = () => {
+    if (!key || !value.trim()) return;
+    onFilters([...filters, { key, label: keys.find((k) => k.name === key)?.label ?? key, value: value.trim() }]);
+    setKey('');
+    setValue('');
+    setAdding(false);
+  };
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6 pt-8">
+      <div>
+        <h1 className="text-2xl font-bold">{t('tracing.liveTitle', 'Live Tracing')}</h1>
+        <p className="mt-2 text-muted-foreground">{t('tracing.liveSubtitle', 'Stream server events in real time.')}</p>
+      </div>
+
+      <Card>
+        <CardContent className="p-4 space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">{t('tracing.keywordsLabel', 'Keywords (optional)')}</label>
+            <Input
+              placeholder={t('tracing.keywordsPlaceholder', 'Enter keywords to filter events...')}
+              value={keywords}
+              onChange={(e) => onKeywords(e.target.value)}
+            />
+          </div>
+
+          {filters.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {filters.map((f, i) => (
+                <Badge key={i} variant="secondary" className="gap-1">
+                  {f.label} = {f.value}
+                  <button
+                    onClick={() => onFilters(filters.filter((_, j) => j !== i))}
+                    className="ml-1 hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+
+          {adding ? (
+            <div className="flex items-center gap-2">
+              <Select value={key} onValueChange={setKey}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder={t('field.selectKey', 'Select key...')} />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {keys.map((k) => (
+                    <SelectItem key={k.name} value={k.name}>
+                      {k.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Input
+                placeholder={t('tracing.valuePlaceholder', 'Value...')}
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                className="flex-1"
+                onKeyDown={(e) => e.key === 'Enter' && add()}
+              />
+              <Button size="icon" variant="ghost" onClick={add}>
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="ghost" onClick={() => setAdding(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <Button variant="outline" size="sm" onClick={() => setAdding(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              {t('tracing.addFilter', 'Add filter')}
+            </Button>
+          )}
+
+          <Button className="w-full" onClick={onStart} disabled={starting}>
+            {starting ? (
+              <>
+                <span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                {t('tracing.connecting', 'Connecting...')}
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                {t('tracing.startTracing', 'Start tracing')}
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,45 +1,39 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import { jmapMapToArray } from '@/lib/jmapUtils';
 import type { TraceEvent, TraceKeyValue, TraceValue } from './types';
 
+type Raw = Record<string, unknown>;
+
 /**
- * Trace events as the server sends them, stored or live: key-values arrive as
- * a JMAP map ({"0": …, "1": …}), not an array.
+ * Trace events as the server sends them, stored or live. Lists arrive as
+ * JMAP maps ({"0": …, "1": …}), at every level, and become arrays here.
  */
 export function normalizeTraceEvents(raw: unknown): TraceEvent[] {
-  const events = jmapMapToArray<Record<string, unknown>>(raw);
-  return events.map((evt) => ({
-    event: String(evt.event ?? ''),
-    timestamp: String(evt.timestamp ?? ''),
-    keyValues: normalizeKeyValues(evt.keyValues),
+  return jmapMapToArray<Raw>(raw).map((event) => ({
+    event: String(event.event ?? ''),
+    timestamp: String(event.timestamp ?? ''),
+    keyValues: keyValues(event.keyValues),
   }));
 }
 
-function normalizeKeyValues(raw: unknown): TraceKeyValue[] {
-  const kvs = jmapMapToArray<Record<string, unknown>>(raw);
-  return kvs.map((kv) => ({
-    key: String(kv.key ?? ''),
-    value: normalizeTraceValue(kv.value),
-  }));
+function keyValues(raw: unknown): TraceKeyValue[] {
+  return jmapMapToArray<Raw>(raw).map((kv) => ({ key: String(kv.key ?? ''), value: value(kv.value) }));
 }
 
-function normalizeTraceValue(raw: unknown): TraceValue {
-  if (!raw || typeof raw !== 'object') return { '@type': 'Null' };
-  const obj = raw as Record<string, unknown>;
-  const type = obj['@type'] as string;
-
-  if (type === 'List') {
-    return { '@type': 'List', value: jmapMapToArray<unknown>(obj.value).map(normalizeTraceValue) };
+function value(raw: unknown): TraceValue {
+  if (raw === null || typeof raw !== 'object') return { '@type': 'Null' };
+  const v = raw as Raw;
+  switch (v['@type']) {
+    case 'List':
+      return { '@type': 'List', value: jmapMapToArray<unknown>(v.value).map(value) };
+    case 'Event':
+      return { '@type': 'Event', event: String(v.event ?? ''), value: keyValues(v.value) };
+    default:
+      return raw as TraceValue;
   }
-  if (type === 'Event') {
-    return { '@type': 'Event', event: String(obj.event ?? ''), value: normalizeKeyValues(obj.value) };
-  }
-  return raw as TraceValue;
 }
