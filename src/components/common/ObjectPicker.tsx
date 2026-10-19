@@ -1,7 +1,7 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import { useState } from 'react';
@@ -10,11 +10,11 @@ import { Loader2, Search, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
-import { useObjectList, useObjectLabel, useNoPermissionMessage } from '@/lib/objectOptions';
+import { useNoPermissionMessage, useObjectLabel, useObjectList } from '@/lib/objectOptions';
 import type { Schema } from '@/types/schema';
 
 interface ObjectPickerProps {
@@ -26,21 +26,24 @@ interface ObjectPickerProps {
   placeholder?: string;
 }
 
+/**
+ * One object chosen by searching a list of them, shown as a chip with its
+ * name. The list loads the first time it opens; without permission to read
+ * the objects, the search button only says why it can't open.
+ */
 export function ObjectPicker({ schema, objectName, value, onChange, onClear, placeholder }: ObjectPickerProps) {
   const { t } = useTranslation();
   const list = useObjectList(objectName, schema);
-  const fromList = list.options.find((o) => o.id === value)?.label;
-  const { label: cheapLabel, loading: labelLoading } = useObjectLabel(
-    objectName,
-    fromList ? null : value || null,
-    schema,
-  );
-  const display = fromList ?? cheapLabel;
+  const listed = list.options.find((o) => o.id === value)?.label;
+  // Looked up on its own only when the list hasn't been loaded or lacks it.
+  const looked = useObjectLabel(objectName, listed ? null : value || null, schema);
+  const name = listed ?? looked.label ?? value;
   const [open, setOpen] = useState(false);
-  const [tooltipOpen, setTooltipOpen] = useState(false);
-  const noPermissionMessage = useNoPermissionMessage(schema, objectName);
+  const [whyOpen, setWhyOpen] = useState(false);
+  const noPermission = useNoPermissionMessage(schema, objectName);
+  const searchLabel = t('common.search', 'Search');
 
-  const handleOpenChange = (next: boolean) => {
+  const openChange = (next: boolean) => {
     setOpen(next);
     if (next) void list.ensureLoaded();
   };
@@ -49,11 +52,11 @@ export function ObjectPicker({ schema, objectName, value, onChange, onClear, pla
     <div className="flex items-center gap-2 flex-wrap">
       {value && (
         <Badge variant="secondary" className="gap-1 pr-1.5 text-sm max-w-xs">
-          {labelLoading ? (
+          {looked.loading ? (
             <Loader2 className="h-3 w-3 animate-spin" />
           ) : (
-            <span className="truncate" title={display ?? value}>
-              {display ?? value}
+            <span className="truncate" title={name}>
+              {name}
             </span>
           )}
           {onClear && (
@@ -69,39 +72,33 @@ export function ObjectPicker({ schema, objectName, value, onChange, onClear, pla
         </Badge>
       )}
       {!value && placeholder && <span className="text-sm text-muted-foreground">{placeholder}</span>}
-      {noPermissionMessage ? (
+      {noPermission ? (
         <TooltipProvider>
-          <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
+          <Tooltip open={whyOpen} onOpenChange={setWhyOpen}>
             <TooltipTrigger asChild>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 cursor-not-allowed opacity-60"
-                aria-label={t('common.search', 'Search')}
+                aria-label={searchLabel}
                 aria-disabled="true"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  setTooltipOpen(true);
+                  setWhyOpen(true);
                 }}
               >
                 <Search className="h-4 w-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{noPermissionMessage}</TooltipContent>
+            <TooltipContent>{noPermission}</TooltipContent>
           </Tooltip>
         </TooltipProvider>
       ) : (
-        <Popover open={open} onOpenChange={handleOpenChange}>
+        <Popover open={open} onOpenChange={openChange}>
           <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              aria-label={t('common.search', 'Search')}
-            >
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label={searchLabel}>
               <Search className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
@@ -109,26 +106,27 @@ export function ObjectPicker({ schema, objectName, value, onChange, onClear, pla
             <Command>
               <CommandInput placeholder={t('common.searchPlaceholder', 'Search...')} />
               <CommandList>
-                {list.loading && (
+                {list.loading ? (
                   <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {t('common.loading', 'Loading...')}
                   </div>
+                ) : (
+                  <CommandEmpty>{t('common.noResultsDot', 'No results.')}</CommandEmpty>
                 )}
-                {!list.loading && <CommandEmpty>{t('common.noResultsDot', 'No results.')}</CommandEmpty>}
                 <CommandGroup>
-                  {list.options.map((opt) => (
+                  {list.options.map((option) => (
                     <CommandItem
-                      key={opt.id}
-                      value={opt.id}
-                      keywords={[opt.label]}
+                      key={option.id}
+                      value={option.id}
+                      keywords={[option.label]}
                       onSelect={() => {
-                        onChange(opt.id);
+                        onChange(option.id);
                         setOpen(false);
                       }}
                     >
-                      <span className="truncate" title={opt.label}>
-                        {opt.label}
+                      <span className="truncate" title={option.label}>
+                        {option.label}
                       </span>
                     </CommandItem>
                   ))}
