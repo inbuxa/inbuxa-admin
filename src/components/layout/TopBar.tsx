@@ -33,7 +33,6 @@ import {
 import { isPaletteId, PALETTES } from '@/lib/palettes';
 import Logo from '@/components/common/Logo';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
 import { SOURCE_URL } from '@/lib/sourceDownload';
 import { visibleLayouts } from '@/lib/layout';
 import { sectionLandingLink } from '@/lib/lastVisited';
@@ -78,7 +77,6 @@ export function TopBar() {
   const hasObjectPermission = useAccountStore((s) => s.hasObjectPermission);
   const hasPermission = useAccountStore((s) => s.hasPermission);
   const schema = useSchemaStore((s) => s.schema);
-  const [upsellOpen, setUpsellOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -138,8 +136,6 @@ export function TopBar() {
       </div>
 
       <div className="ml-auto flex items-center gap-2 md:ml-0">
-        {edition !== 'enterprise' && <EnterpriseUpsell open={upsellOpen} onClose={() => setUpsellOpen(false)} />}
-
         <Button
           variant="ghost"
           size="icon"

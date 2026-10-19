@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import { lazy } from 'react';
 
+/** The signed-in console, loaded only once someone is signed in. */
 export const AdminPanel = lazy(() => import('./AdminPanel'));

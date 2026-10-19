@@ -23,7 +23,6 @@ import { useTranslation } from 'react-i18next';
 import * as LucideIcons from 'lucide-react';
 const { ChevronDown, Lock, MoreHorizontal } = LucideIcons;
 import { cn } from '@/lib/utils';
-import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -216,7 +215,6 @@ export function SectionNav({ layout }: { layout: Layout }) {
   const navigate = useNavigate();
   const location = useLocation();
   const edition = useAccountStore((s) => s.edition);
-  const [upsellOpen, setUpsellOpen] = useState(false);
 
   const items = useMemo(() => layout.items.filter((item) => topItemVisible(item, edition)), [layout, edition]);
 
@@ -265,10 +263,7 @@ export function SectionNav({ layout }: { layout: Layout }) {
 
   const onPick = useCallback(
     (viewName: string, locked: boolean) => {
-      if (locked) {
-        setUpsellOpen(true);
-        return;
-      }
+      if (locked) return;
       navigate(resolveViewPath(layout.name, viewName));
     },
     [navigate, layout.name],
@@ -358,8 +353,6 @@ export function SectionNav({ layout }: { layout: Layout }) {
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-
-      <EnterpriseUpsell open={upsellOpen} onClose={() => setUpsellOpen(false)} />
     </nav>
   );
 }

@@ -13,7 +13,6 @@ import * as LucideIcons from 'lucide-react';
 const { ChevronDown, Lock, PanelLeftClose, PanelLeftOpen } = LucideIcons;
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { EnterpriseUpsell } from '@/components/common/EnterpriseUpsell';
 import { IconTile } from '@/components/common/IconTile';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -67,7 +66,6 @@ interface SidebarSubItemProps {
   currentPath: string;
   navigate: ReturnType<typeof useNavigate>;
   edition: string;
-  onUpsell: () => void;
   activeItemRef: ActiveItemRef;
 }
 
@@ -78,7 +76,6 @@ function SidebarSubItem({
   currentPath,
   navigate,
   edition,
-  onUpsell,
   activeItemRef,
 }: SidebarSubItemProps) {
   if (item.type === 'link') {
@@ -102,11 +99,7 @@ function SidebarSubItem({
         )}
         style={depth > 1 ? { paddingLeft: `${(depth - 1) * 12 + 12}px` } : undefined}
         onClick={() => {
-          if (isLocked) {
-            onUpsell();
-          } else {
-            navigate(path);
-          }
+          if (!isLocked) navigate(path);
         }}
       >
         <span className="truncate">{item.name || 'Overview'}</span>
@@ -141,7 +134,6 @@ function SidebarSubItem({
               currentPath={currentPath}
               navigate={navigate}
               edition={edition}
-              onUpsell={onUpsell}
               activeItemRef={activeItemRef}
             />
           ))}
@@ -159,19 +151,10 @@ interface SidebarTopItemProps {
   currentPath: string;
   navigate: ReturnType<typeof useNavigate>;
   edition: string;
-  onUpsell: () => void;
   activeItemRef: ActiveItemRef;
 }
 
-function SidebarTopItem({
-  item,
-  sectionName,
-  currentPath,
-  navigate,
-  edition,
-  onUpsell,
-  activeItemRef,
-}: SidebarTopItemProps) {
+function SidebarTopItem({ item, sectionName, currentPath, navigate, edition, activeItemRef }: SidebarTopItemProps) {
   if ('link' in item) {
     const { name, icon, viewName } = item.link;
 
@@ -194,11 +177,7 @@ function SidebarTopItem({
           isActive && 'bg-accent text-accent-foreground hover:bg-accent',
         )}
         onClick={() => {
-          if (isLocked) {
-            onUpsell();
-          } else {
-            navigate(path);
-          }
+          if (!isLocked) navigate(path);
         }}
       >
         <IconTile name={icon} />
@@ -239,7 +218,6 @@ function SidebarTopItem({
               currentPath={currentPath}
               navigate={navigate}
               edition={edition}
-              onUpsell={onUpsell}
               activeItemRef={activeItemRef}
             />
           ))}
@@ -343,7 +321,6 @@ export function Sidebar({ mobileOnly = false }: SidebarProps = {}) {
   const edition = useAccountStore((s) => s.edition);
   const permissions = useAccountStore((s) => s.permissions);
   const hasPermission = useAccountStore((s) => s.hasPermission);
-  const [upsellOpen, setUpsellOpen] = useState(false);
   const activeItem = useRef<HTMLButtonElement | null>(null);
   const activeItemRef = useCallback<ActiveItemRef>((el) => {
     activeItem.current = el;
@@ -452,14 +429,11 @@ export function Sidebar({ mobileOnly = false }: SidebarProps = {}) {
                 currentPath={location.pathname}
                 navigate={navigate}
                 edition={edition}
-                onUpsell={() => setUpsellOpen(true)}
                 activeItemRef={activeItemRef}
               />
             ))}
           </nav>
         </div>
-
-        <EnterpriseUpsell open={upsellOpen} onClose={() => setUpsellOpen(false)} />
       </aside>
     </>
   );

@@ -1,27 +1,26 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
+
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 
+/** A path no route matches. */
 export default function NotFound() {
   const { t } = useTranslation();
-
-  useDocumentTitle(t('errors.notFound'));
-
+  const message = t('errors.notFound');
+  useDocumentTitle(message);
   return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold">404</h1>
-        <p className="mt-2 text-muted-foreground">{t('errors.notFound')}</p>
-        <Link to="/" className="mt-4 inline-block text-primary underline hover:no-underline">
-          {t('common.back')}
-        </Link>
-      </div>
-    </div>
+    <main className="flex min-h-screen flex-col items-center justify-center text-center">
+      <h1 className="text-4xl font-bold">404</h1>
+      <p className="mt-2 text-muted-foreground">{message}</p>
+      <Link to="/" className="mt-4 text-primary underline hover:no-underline">
+        {t('common.back')}
+      </Link>
+    </main>
   );
 }

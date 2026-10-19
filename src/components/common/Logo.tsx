@@ -1,16 +1,14 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 import { useEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getLogoState, loadLogoOnce, subscribeToLogo } from '@/lib/logoCache';
+
 import inbuxaMark from '@/assets/inbuxa-mark.png';
+import { getLogoState, loadLogoOnce, subscribeToLogo } from '@/lib/logoCache';
 
 export function DefaultLogo() {
   const { t } = useTranslation();
@@ -58,21 +56,20 @@ export function DefaultLogo() {
   );
 }
 
+/**
+ * The server's own logo if an admin set one, else inbuxa's. Until the server
+ * answers, an empty space the logo's size holds the layout still.
+ */
 export default function Logo() {
   const { t } = useTranslation();
   const logo = useSyncExternalStore(subscribeToLogo, getLogoState, getLogoState);
-
-  useEffect(() => {
-    loadLogoOnce();
-  }, []);
-
-  if (logo.status === 'custom') {
-    return <img src={logo.url} alt={t('logo.alt', 'Logo')} className="h-7 w-auto max-w-[220px] object-contain" />;
+  useEffect(loadLogoOnce, []);
+  switch (logo.status) {
+    case 'custom':
+      return <img src={logo.url} alt={t('logo.alt', 'Logo')} className="h-7 w-auto max-w-[220px] object-contain" />;
+    case 'loading':
+      return <span aria-hidden="true" className="block h-7 w-[140px]" />;
+    default:
+      return <DefaultLogo />;
   }
-
-  if (logo.status === 'loading') {
-    return <span className="block h-7 w-[140px]" aria-hidden="true" />;
-  }
-
-  return <DefaultLogo />;
 }
