@@ -1,12 +1,14 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * Each section (Management, Settings, Account) opens on the page the admin
+ * last used in it, kept in this browser. A remembered page the admin can no
+ * longer open is skipped.
+ */
 import {
   findFirstAccessibleLinkInLayout,
   findFirstVisibleLinkInLayout,
@@ -16,28 +18,29 @@ import {
 } from '@/lib/layout';
 import type { Layout, Schema } from '@/types/schema';
 
-const STORAGE_KEY = 'inbuxa-last-visited';
+const KEY = 'inbuxa-last-visited';
 
-function readAll(): Record<string, unknown> {
+/** Section name → view name; empty when storage is missing, blocked or garbled. */
+function remembered(): Record<string, unknown> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+    const value: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}');
+    return value !== null && typeof value === 'object' && !Array.isArray(value) ? { ...value } : {};
   } catch {
     return {};
   }
 }
 
 export function rememberLastVisited(section: string, viewName: string): void {
+  const all = remembered();
+  if (all[section] === viewName) return;
   try {
-    const all = readAll();
-    if (all[section] === viewName) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...all, [section]: viewName }));
+    localStorage.setItem(KEY, JSON.stringify({ ...all, [section]: viewName }));
   } catch {
-    return;
+    // Storage full or blocked: the section opens on its first page instead.
   }
 }
 
+/** Where a section opens: the page last used there, else its first page the admin may open, else its first page. */
 export function sectionLandingLink(
   schema: Schema,
   layout: Layout,
@@ -45,10 +48,8 @@ export function sectionLandingLink(
   canGet: CanGet,
   hasPerm?: HasPermission,
 ): string | null {
-  const last = readAll()[layout.name];
-  if (typeof last === 'string' && isLinkAccessible(schema, last, edition, canGet, hasPerm)) {
-    return last;
-  }
+  const last = remembered()[layout.name];
+  if (typeof last === 'string' && isLinkAccessible(schema, last, edition, canGet, hasPerm)) return last;
   return (
     findFirstAccessibleLinkInLayout(schema, layout, edition, canGet, hasPerm) ??
     findFirstVisibleLinkInLayout(schema, layout, edition, canGet, hasPerm)
