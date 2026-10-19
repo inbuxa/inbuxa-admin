@@ -1,15 +1,12 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import * as OTPAuth from 'otpauth';
+import type * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
 import { Check, Copy, Loader2, ShieldCheck, ShieldOff } from 'lucide-react';
 
@@ -17,12 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
-import { SECRET_MASK } from '@/lib/jmapUtils';
 
-interface OtpAuthValue {
-  otpUrl?: string | null;
-  otpCode?: string | null;
-}
+import { checkSetupCode, groupedSecret, newTotp, readOtp, withoutSpaces } from './otp';
 
 interface OtpAuthFieldProps {
   value: unknown;
@@ -30,47 +23,92 @@ interface OtpAuthFieldProps {
   readOnly: boolean;
 }
 
-function buildOtpAuthUrl(totp: OTPAuth.TOTP): string {
-  // No `image` parameter: it made authenticator apps fetch a logo from a
-  // third-party site each time someone set up two-factor.
-  return totp.toString();
+interface Setup {
+  totp: OTPAuth.TOTP;
+  url: string;
 }
 
-function generateTotp(): { totp: OTPAuth.TOTP; url: string } {
-  const totp = new OTPAuth.TOTP({
-    issuer: 'inbuxa',
-    label: 'account',
-    algorithm: 'SHA1',
-    digits: 6,
-    period: 30,
-    secret: new OTPAuth.Secret({ size: 20 }),
-  });
-  return { totp, url: buildOtpAuthUrl(totp) };
+const CODE_INPUT = 'font-mono tracking-widest text-center max-w-[12rem]';
+
+function CodeInput({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+  return (
+    <Input
+      type="text"
+      inputMode="numeric"
+      autoComplete="one-time-code"
+      placeholder="123456"
+      value={value}
+      onChange={(e) => onChange(withoutSpaces(e.target.value))}
+      maxLength={10}
+      className={CODE_INPUT}
+    />
+  );
 }
 
+/**
+ * Two-factor sign-in for an account. Turning it on shows a new secret as a
+ * QR code and as text, and takes it only once the app's first code checks
+ * out; once on, any change to the account needs a current code.
+ */
 export function OtpAuthField({ value, onChange, readOnly }: OtpAuthFieldProps) {
   const { t } = useTranslation();
-  const objValue = (value as OtpAuthValue | null | undefined) ?? {};
-  const isConfigured = objValue.otpUrl != null && objValue.otpUrl !== '';
+  const { configured, code } = readOtp(value);
+  const current = (value ?? {}) as object;
 
-  const [setupTotp, setSetupTotp] = useState<OTPAuth.TOTP | null>(null);
-  const [setupUrl, setSetupUrl] = useState<string | null>(null);
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [setup, setSetup] = useState<Setup | null>(null);
+  const [qr, setQr] = useState<string | null>(null);
   const [setupCode, setSetupCode] = useState('');
   const [setupError, setSetupError] = useState<string | null>(null);
-  const [secretCopied, setSecretCopied] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const setupSecret = useMemo(() => {
-    if (!setupTotp) return null;
-    return setupTotp.secret.base32.replace(/(.{4})/g, '$1 ').trim();
-  }, [setupTotp]);
+  const setupUrl = setup?.url ?? null;
+  useEffect(() => {
+    if (!setupUrl) return;
+    let live = true;
+    QRCode.toDataURL(setupUrl, { width: 220, margin: 1 })
+      .then((dataUrl) => {
+        if (live) setQr(dataUrl);
+      })
+      .catch((err) => console.error('Failed to render QR code', err));
+    return () => {
+      live = false;
+    };
+  }, [setupUrl]);
+
+  const endSetup = () => {
+    setSetup(null);
+    setSetupCode('');
+    setSetupError(null);
+    setCopied(false);
+  };
+
+  const startSetup = () => {
+    setSetup(newTotp());
+    setSetupCode('');
+    setSetupError(null);
+  };
+
+  const confirmSetup = () => {
+    if (!setup) return;
+    switch (checkSetupCode(setup.totp, setupCode)) {
+      case 'missing':
+        setSetupError(t('otp.enterCodePrompt', 'Enter the code shown in your authenticator.'));
+        return;
+      case 'wrong':
+        setSetupError(t('otp.codeIncorrect', 'That code is incorrect. Make sure your authenticator clock is in sync.'));
+        return;
+      case 'ok':
+        onChange({ otpUrl: setup.url, otpCode: setupCode.trim() });
+        endSetup();
+    }
+  };
 
   const copySecret = async () => {
-    if (!setupTotp) return;
+    if (!setup) return;
     try {
-      await navigator.clipboard.writeText(setupTotp.secret.base32);
-      setSecretCopied(true);
-      setTimeout(() => setSecretCopied(false), 1500);
+      await navigator.clipboard.writeText(setup.totp.secret.base32);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     } catch {
       toast({
         title: t('otp.copyFailed', 'Copy failed'),
@@ -80,80 +118,17 @@ export function OtpAuthField({ value, onChange, readOnly }: OtpAuthFieldProps) {
     }
   };
 
-  useEffect(() => {
-    if (!setupUrl) return;
-    let cancelled = false;
-    QRCode.toDataURL(setupUrl, { width: 220, margin: 1 })
-      .then((dataUrl) => {
-        if (!cancelled) setQrDataUrl(dataUrl);
-      })
-      .catch((err) => {
-        console.error('Failed to render QR code', err);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [setupUrl]);
-
-  const startSetup = () => {
-    const { totp, url } = generateTotp();
-    setSetupTotp(totp);
-    setSetupUrl(url);
-    setSetupCode('');
-    setSetupError(null);
-  };
-
-  const confirmSetup = () => {
-    if (!setupTotp || !setupUrl) return;
-    if (!setupCode.trim()) {
-      setSetupError(t('otp.enterCodePrompt', 'Enter the code shown in your authenticator.'));
-      return;
-    }
-    const delta = setupTotp.validate({ token: setupCode.trim(), window: 1 });
-    if (delta === null) {
-      setSetupError(t('otp.codeIncorrect', 'That code is incorrect. Make sure your authenticator clock is in sync.'));
-      return;
-    }
-    setSetupError(null);
-    onChange({ otpUrl: setupUrl, otpCode: setupCode.trim() });
-    setSetupTotp(null);
-    setSetupUrl(null);
-    setSetupCode('');
-    setSecretCopied(false);
-  };
-
-  const cancelSetup = () => {
-    setSetupTotp(null);
-    setSetupUrl(null);
-    setSetupCode('');
-    setSetupError(null);
-    setSecretCopied(false);
-  };
-
-  const otpCodeValue = useMemo(
-    () => (typeof objValue.otpCode === 'string' && objValue.otpCode !== SECRET_MASK ? objValue.otpCode : ''),
-    [objValue.otpCode],
-  );
-
-  const handleCodeChange = (code: string) => {
-    onChange({ ...objValue, otpCode: code });
-  };
-
-  const handleDisable = () => {
-    onChange({ ...objValue, otpUrl: null });
-  };
-
   if (readOnly) {
     return (
       <div className="text-sm text-muted-foreground">
-        {isConfigured
+        {configured
           ? t('otp.statusEnabled', 'Two-factor authentication is enabled.')
           : t('otp.statusDisabled', 'Two-factor authentication is not enabled.')}
       </div>
     );
   }
 
-  if (!isConfigured && setupUrl) {
+  if (!configured && setup) {
     return (
       <div className="rounded-md border bg-muted/30 p-4 space-y-4">
         <div className="space-y-2">
@@ -166,9 +141,9 @@ export function OtpAuthField({ value, onChange, readOnly }: OtpAuthFieldProps) {
           </p>
         </div>
         <div className="flex justify-center">
-          {qrDataUrl ? (
+          {qr ? (
             <img
-              src={qrDataUrl}
+              src={qr}
               alt={t('otp.qrCodeAlt', 'TOTP QR code')}
               width={220}
               height={220}
@@ -180,45 +155,36 @@ export function OtpAuthField({ value, onChange, readOnly }: OtpAuthFieldProps) {
             </div>
           )}
         </div>
-        {setupSecret && (
-          <div className="space-y-1.5">
-            <Label className="text-sm font-medium">{t('otp.manualEntryLabel', 'Or enter this code manually')}</Label>
-            <p className="text-xs text-muted-foreground">
-              {t(
-                'otp.manualEntryDescription',
-                'If you cannot scan the QR code, enter this secret into your authenticator app instead.',
-              )}
-            </p>
-            <div className="flex gap-2">
-              <code className="flex-1 rounded bg-muted p-2 text-sm font-mono break-all select-all">{setupSecret}</code>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={copySecret}
-                aria-label={t('otp.copySecret', 'Copy secret')}
-              >
-                {secretCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>
-            </div>
+        <div className="space-y-1.5">
+          <Label className="text-sm font-medium">{t('otp.manualEntryLabel', 'Or enter this code manually')}</Label>
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'otp.manualEntryDescription',
+              'If you cannot scan the QR code, enter this secret into your authenticator app instead.',
+            )}
+          </p>
+          <div className="flex gap-2">
+            <code className="flex-1 rounded bg-muted p-2 text-sm font-mono break-all select-all">
+              {groupedSecret(setup.totp.secret.base32)}
+            </code>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={copySecret}
+              aria-label={t('otp.copySecret', 'Copy secret')}
+            >
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            </Button>
           </div>
-        )}
+        </div>
         <div className="space-y-1.5">
           <Label className="text-sm font-medium">{t('otp.confirmationCodeLabel', 'Confirmation code')}</Label>
-          <Input
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            placeholder="123456"
-            value={setupCode}
-            onChange={(e) => setSetupCode(e.target.value.replace(/\s+/g, ''))}
-            maxLength={10}
-            className="font-mono tracking-widest text-center max-w-[12rem]"
-          />
+          <CodeInput value={setupCode} onChange={setSetupCode} />
           {setupError && <p className="text-xs text-destructive">{setupError}</p>}
         </div>
         <div className="flex items-center justify-end gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={cancelSetup}>
+          <Button type="button" variant="outline" size="sm" onClick={endSetup}>
             {t('common.cancel', 'Cancel')}
           </Button>
           <Button type="button" size="sm" onClick={confirmSetup}>
@@ -230,7 +196,7 @@ export function OtpAuthField({ value, onChange, readOnly }: OtpAuthFieldProps) {
     );
   }
 
-  if (!isConfigured) {
+  if (!configured) {
     return (
       <div className="flex items-center gap-3">
         <span className="text-sm text-muted-foreground">
@@ -258,19 +224,16 @@ export function OtpAuthField({ value, onChange, readOnly }: OtpAuthFieldProps) {
       </p>
       <div className="space-y-1.5">
         <Label className="text-sm font-medium">{t('otp.currentCodeLabel', 'Current code')}</Label>
-        <Input
-          type="text"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          placeholder="123456"
-          value={otpCodeValue}
-          onChange={(e) => handleCodeChange(e.target.value.replace(/\s+/g, ''))}
-          maxLength={10}
-          className="font-mono tracking-widest text-center max-w-[12rem]"
-        />
+        <CodeInput value={code} onChange={(otpCode) => onChange({ ...current, otpCode })} />
       </div>
       <div className="flex items-center justify-end">
-        <Button type="button" variant="destructive" size="sm" onClick={handleDisable} disabled={!otpCodeValue.trim()}>
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          onClick={() => onChange({ ...current, otpUrl: null })}
+          disabled={!code.trim()}
+        >
           <ShieldOff className="mr-2 h-4 w-4" />
           {t('otp.disable', 'Disable')}
         </Button>
