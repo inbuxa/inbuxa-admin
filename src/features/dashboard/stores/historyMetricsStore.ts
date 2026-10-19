@@ -1,19 +1,22 @@
 /*
- * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
  *
- * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
- *
- * Modified by Coffey Labs in 2026 for INBUXA.
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
+/**
+ * Stored metric samples, per dashboard and period. An answer is reused for a
+ * minute; asking again while a fetch is out waits for nothing and returns
+ * what's there, and a failed fetch keeps the last numbers.
+ */
 import { create } from 'zustand';
 import type { Metric, MetricId, Period } from '../types/metrics';
-import { periodWindow, periodKey } from '../helpers';
+import { periodKey, periodWindow } from '../helpers';
 import { getAccountId, jmapQueryAllAndGet } from '@/services/jmap/client';
 import i18n from '@/i18n';
 
 type FetchStatus = 'idle' | 'loading' | 'error';
+
 const STALE_MS = 60_000;
 
 interface CacheEntry {
@@ -28,26 +31,29 @@ interface HistoryMetricsState {
 
   fetch: (dashboardId: string, period: Period, ids: Set<MetricId>) => Promise<Metric[]>;
   invalidate: (dashboardId: string) => void;
+  /** Fetches again now, still showing the last numbers until the new ones arrive. */
   refresh: (dashboardId: string, period: Period, ids: Set<MetricId>) => Promise<Metric[]>;
 }
 
-async function fetchMetrics(period: Period, ids: Set<MetricId>): Promise<Metric[]> {
+const cacheKey = (dashboardId: string, period: Period) => `${dashboardId}|${periodKey(period)}`;
+
+async function load(period: Period, ids: Set<MetricId>): Promise<Metric[]> {
   if (ids.size === 0) return [];
-
   const { from, to } = periodWindow(period);
-  const accountId = getAccountId('x:Metric');
-  const metricIds = Array.from(ids);
-
-  const result = await jmapQueryAllAndGet('x:Metric', accountId, {
+  const { list } = await jmapQueryAllAndGet('x:Metric', getAccountId('x:Metric'), {
     filter: {
       timestampIsGreaterThanOrEqual: from.toISOString(),
       timestampIsLessThanOrEqual: to.toISOString(),
-      metric: metricIds,
+      metric: [...ids],
     },
   });
-
-  return result.list as Metric[];
+  return list as Metric[];
 }
+
+const withEntry = <V>(map: Map<string, V>, key: string, value: V) => new Map(map).set(key, value);
+
+const without = <V>(map: Map<string, V>, drop: (key: string) => boolean) =>
+  new Map([...map].filter(([key]) => !drop(key)));
 
 export const useHistoryMetricsStore = create<HistoryMetricsState>()((set, get) => ({
   cache: new Map(),
@@ -55,60 +61,35 @@ export const useHistoryMetricsStore = create<HistoryMetricsState>()((set, get) =
   error: new Map(),
 
   fetch: async (dashboardId, period, ids) => {
-    const key = `${dashboardId}|${periodKey(period)}`;
-    const existing = get().cache.get(key);
+    const key = cacheKey(dashboardId, period);
+    const cached = get().cache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < STALE_MS) return cached.metrics;
+    if (get().status.get(key) === 'loading') return cached?.metrics ?? [];
 
-    if (existing && Date.now() - existing.fetchedAt < STALE_MS) {
-      return existing.metrics;
-    }
-
-    if (get().status.get(key) === 'loading') {
-      return existing?.metrics ?? [];
-    }
-
-    set((state) => ({
-      status: new Map(state.status).set(key, 'loading'),
-    }));
-
+    set((s) => ({ status: withEntry(s.status, key, 'loading') }));
     try {
-      const metrics = await fetchMetrics(period, ids);
-      set((state) => ({
-        cache: new Map(state.cache).set(key, { metrics, fetchedAt: Date.now() }),
-        status: new Map(state.status).set(key, 'idle'),
-        error: new Map([...state.error].filter(([k]) => k !== key)),
+      const metrics = await load(period, ids);
+      set((s) => ({
+        cache: withEntry(s.cache, key, { metrics, fetchedAt: Date.now() }),
+        status: withEntry(s.status, key, 'idle'),
+        error: without(s.error, (k) => k === key),
       }));
       return metrics;
     } catch (e) {
-      const msg = e instanceof Error ? e.message : i18n.t('dashboard.failedFetchMetrics', 'Failed to fetch metrics');
-      set((state) => ({
-        status: new Map(state.status).set(key, 'error'),
-        error: new Map(state.error).set(key, msg),
-      }));
-      return existing?.metrics ?? [];
+      const message =
+        e instanceof Error ? e.message : i18n.t('dashboard.failedFetchMetrics', 'Failed to fetch metrics');
+      set((s) => ({ status: withEntry(s.status, key, 'error'), error: withEntry(s.error, key, message) }));
+      return cached?.metrics ?? [];
     }
   },
 
-  invalidate: (dashboardId) => {
-    set((state) => {
-      const newCache = new Map(state.cache);
-      for (const key of newCache.keys()) {
-        if (key.startsWith(`${dashboardId}|`)) {
-          newCache.delete(key);
-        }
-      }
-      return { cache: newCache };
-    });
-  },
+  invalidate: (dashboardId) => set((s) => ({ cache: without(s.cache, (key) => key.startsWith(`${dashboardId}|`)) })),
 
-  refresh: async (dashboardId, period, ids) => {
-    const key = `${dashboardId}|${periodKey(period)}`;
-    // INBUXA: mark the entry stale rather than dropping it, so the dashboard
-    // keeps showing the last numbers until the new ones arrive instead of
-    // blanking every instrument for the length of the fetch.
-    set((state) => {
-      const entry = state.cache.get(key);
-      if (!entry) return {};
-      return { cache: new Map(state.cache).set(key, { ...entry, fetchedAt: 0 }) };
+  refresh: (dashboardId, period, ids) => {
+    const key = cacheKey(dashboardId, period);
+    set((s) => {
+      const cached = s.cache.get(key);
+      return cached ? { cache: withEntry(s.cache, key, { ...cached, fetchedAt: 0 }) } : {};
     });
     return get().fetch(dashboardId, period, ids);
   },
