@@ -52,8 +52,9 @@ npm run build
 
 INBUXA Admin was forked from upstream at v1.0.11 and no longer takes upstream's
 changes. Later upstream releases include code under a proprietary license, so
-nothing after v1.0.11 is merged or copied in. Upstream releases are still
-followed, and a feature worth having is written here, in this fork's own code.
+nothing after v1.0.11 is merged or copied in. The console has diverged too far
+to take anything from upstream, so its releases aren't followed either: new
+features are this fork's own.
 
 ## Versions
 

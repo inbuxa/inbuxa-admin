@@ -20,7 +20,7 @@
  * built on, so the list is what actually differs rather than a guess. A file
  * counts as upstream's when its header names Stalwart Labs as a copyright
  * holder; files the fork wrote carry their own copyright and need nothing.
- * When a newer upstream release is merged, move BASE to it.
+ * Upstream is no longer merged, so BASE stays at v1.0.11.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
