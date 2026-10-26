@@ -31,5 +31,7 @@ EXPOSE 8080
 # stays root's, which is why the entrypoint writes through the file rather
 # than replacing it.
 COPY --from=build --chown=101:101 /build/dist /usr/share/nginx/html
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+# The nginx user's too, so listen-ipv6.sh can add the IPv6 listener at start.
+COPY --chown=101:101 docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chmod=0755 docker/listen-ipv6.sh /docker-entrypoint.d/11-listen-ipv6.sh
 COPY --chmod=0755 docker/entrypoint.sh /docker-entrypoint.d/40-api-base-url.sh
