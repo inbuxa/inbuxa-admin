@@ -5,9 +5,12 @@
 # release with nothing in it moves :latest to an identical build, spends a
 # version number, and notifies everybody about nothing.
 #
-# The version is the date, YYYY.M.D unpadded, with a .N suffix from 2 for a
-# second release on one day. It is committed to main in inbuxa-version.json
-# and the tag names that commit, so the commit is the release.
+# Since 27.1 the version is a series and its patches: this cuts the next patch
+# of the current series (27.1 -> 27.1.1 -> 27.1.2, tools/release-version.sh
+# next). A new series and its release candidates (27.1-rc.N) are cut by hand,
+# so while main is on a release candidate it says so and stops. The version is
+# committed to main in inbuxa-version.json and the tag names that commit, so
+# the commit is the release.
 #
 # Mondays 09:37 UTC, as release.yml did. Run it by hand from the Actions tab
 # (workflow_dispatch); dry_run defaults to true, so a manual run shows the
@@ -74,6 +77,12 @@ jobs:
           set -euo pipefail
           API="${CI_SERVER_INTERNAL}/api/v1/repos/${GITHUB_REPOSITORY}"
           sha="$(git rev-parse HEAD)"
+          current="$(jq -er .version inbuxa-version.json)"
+          version="$(sh tools/release-version.sh next "$current")"
+          if [ -z "$version" ]; then
+            echo "main is on release candidate ${current}: release candidates are cut by hand, so there's no weekly release."
+            exit 0
+          fi
 
           # The newest published release, or empty on a project that has never
           # had one -- in which case everything counts as new.
@@ -92,12 +101,11 @@ jobs:
             echo "Nothing to release: no commits since ${previous}."; exit 0
           fi
 
-          today="$(date -u +%Y.%-m.%-d)"
-          version="$today"; n=2
-          while git show-ref --verify --quiet "refs/tags/v${version}"; do
-            version="${today}.${n}"; n=$((n + 1))
-          done
           tag="v${version}"
+          if git show-ref --verify --quiet "refs/tags/${tag}"; then
+            echo "${tag} exists but main still says ${current}; fix main first." >&2
+            exit 1
+          fi
           echo "Releasing ${tag} -- ${count} commit(s) since ${previous:-the beginning}, from ${sha}."
           if [ "$DRY_RUN" = "1" ]; then echo "Dry run (RELEASE_LIVE='${{ vars.RELEASE_LIVE }}'): stopping here."; exit 0; fi
 

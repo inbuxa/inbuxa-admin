@@ -38,10 +38,14 @@ name: ci
 on:
   push:
     branches: [main]
-    # Only date tags publish (v2026.9.21, v2026.9.21.2). The repository still
-    # carries the inherited v1.0.x tags, and a tag of any other shape pushed
-    # by hand is not a release.
+    # Only release tags publish: a series (v27.1), its patches (v27.1.3) and
+    # release candidates (v27.1-rc.1), and the dated ones from before 27.1
+    # (v2026.9.21, v2026.9.21.2). The repository still carries the inherited
+    # v1.0.x tags, and a tag of any other shape pushed by hand is not a release.
     tags:
+      - 'v[0-9][0-9].[0-9]+'
+      - 'v[0-9][0-9].[0-9]+.[0-9]+'
+      - 'v[0-9][0-9].[0-9]+-rc.[0-9]+'
       - 'v[0-9][0-9][0-9][0-9].[0-9]+.[0-9]+'
       - 'v[0-9][0-9][0-9][0-9].[0-9]+.[0-9]+.[0-9]+'
   pull_request:
@@ -66,6 +70,7 @@ jobs:
       - run: npm run lint
       - run: npm run i18n:check
       - run: npm test
+      - run: sh tools/release-version.test.sh
       - run: npm run build
 
   # A changed upstream file without the AGPL 5(a) notice, as inbuxa-server's
@@ -132,6 +137,9 @@ jobs:
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          # A release moves its series and latest; a release candidate its
+          # series' -rc tag, never latest.
+          echo "TAGS=$(sh tools/release-version.sh tags "$VERSION" | tr '\n' ' ')" >> "$GITHUB_ENV"
       - run: |
           test -n "$REGISTRY"
           test -n "$PACKAGE_TOKEN" || { echo "PACKAGE_TOKEN secret is not set on this repository" >&2; exit 1; }
@@ -144,8 +152,7 @@ jobs:
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --provenance=false --sbom=false \
-            --tag "$IMAGE:$VERSION" \
-            --tag "$IMAGE:latest" \
+            $(for t in $TAGS; do printf '%s %s:%s ' --tag "$IMAGE" "$t"; done) \
             --push .
           docker buildx imagetools inspect "$IMAGE:$VERSION"
       # Gitea keeps a container package on its owner; linking it shows it on
