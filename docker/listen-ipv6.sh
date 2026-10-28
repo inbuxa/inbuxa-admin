@@ -8,10 +8,16 @@
 # open.
 set -eu
 
-conf=/etc/nginx/conf.d/default.conf
+# Both paths can be moved for docker/listen-ipv6.test.sh.
+conf=${NGINX_CONF:-/etc/nginx/conf.d/default.conf}
+if_inet6=${IF_INET6:-/proc/net/if_inet6}
 
-[ -f /proc/net/if_inet6 ] || { echo "no IPv6 on this host, listening on IPv4 only"; exit 0; }
-grep -q 'listen \[::\]:8080' "$conf" && exit 0
+[ -f "$if_inet6" ] || { echo "no IPv6 on this host, listening on IPv4 only"; exit 0; }
+# A restarted container keeps the file as the last start left it, so the
+# listener may be there already: nginx refuses a duplicate listen and the
+# container would restart in a loop. The line below is written with several
+# spaces after "listen", so match any number.
+grep -q 'listen  *\[::\]:8080;' "$conf" && exit 0
 
 # Written back through the file, as 40-api-base-url.sh does with index.html:
 # conf.d belongs to root, the file to the nginx user.

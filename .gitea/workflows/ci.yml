@@ -71,6 +71,7 @@ jobs:
       - run: npm run i18n:check
       - run: npm test
       - run: sh tools/release-version.test.sh
+      - run: sh docker/listen-ipv6.test.sh
       - run: npm run build
 
   # A changed upstream file without the AGPL 5(a) notice, as inbuxa-server's
