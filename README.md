@@ -58,9 +58,12 @@ features are this fork's own.
 
 ## Versions
 
-INBUXA Admin has its own dated version (`inbuxa-version.json`), shown with the
-upstream release it was forked from: `INBUXA Admin 2026.9.18 (base 1.0.11)`.
-`package.json` keeps that release's version.
+INBUXA Admin is versioned with the rest of the suite (`inbuxa-version.json`):
+a series and its patches (`27.1`, `27.1.3`), and release candidates before a
+series ships (`27.1-rc.1`). Releases before 27.1 were dated (`2026.10.26.2`).
+The weekly release cuts the next patch; a series and its release candidates
+are cut by hand. `package.json`'s version is a leftover from the fork and
+isn't shown anywhere.
 
 ## Source code
 

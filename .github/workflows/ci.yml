@@ -32,10 +32,14 @@ name: ci
 on:
   push:
     branches: ['**']
-    # Only date tags publish (v2026.9.21, v2026.9.21.2), the same filter as
-    # Gitea's ci.yml. The repository still carries the inherited v1.0.x tags,
-    # and a tag of any other shape pushed by hand is not a release.
+    # Only release tags publish, the same filter as Gitea's ci.yml: a series (v27.1), its patches (v27.1.3) and
+    # release candidates (v27.1-rc.1), and the dated ones from before 27.1
+    # (v2026.9.21, v2026.9.21.2). The repository still carries the inherited
+    # v1.0.x tags, and a tag of any other shape pushed by hand is not a release.
     tags:
+      - 'v[0-9][0-9].[0-9]+'
+      - 'v[0-9][0-9].[0-9]+.[0-9]+'
+      - 'v[0-9][0-9].[0-9]+-rc.[0-9]+'
       - 'v[0-9][0-9][0-9][0-9].[0-9]+.[0-9]+'
       - 'v[0-9][0-9][0-9][0-9].[0-9]+.[0-9]+.[0-9]+'
   workflow_dispatch:
@@ -88,6 +92,7 @@ jobs:
       - run: npm run lint
       - run: npm run i18n:check
       - run: npm test
+      - run: sh tools/release-version.test.sh
       - run: npm run build
 
   # ----------------------------------------------------------- publish ------
@@ -100,6 +105,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      # A release moves its series and latest; a release candidate its
+      # series' -rc tag, never latest.
+      tags: ${{ steps.v.outputs.tags }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: v
@@ -111,6 +119,7 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tags=$(sh tools/release-version.sh tags "$VERSION" | tr '\n' ' ')" >> "$GITHUB_OUTPUT"
 
   # Each architecture on its own native runner, pushed as an untagged image by
   # digest; `publish` joins the two digests into one multi-arch tag.
@@ -186,10 +195,12 @@ jobs:
       - name: Create the manifest
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          TAGS: ${{ needs.version.outputs.tags }}
         run: |
           refs=()
           for f in /tmp/digests/*; do refs+=("${IMAGE}@sha256:$(basename "$f")"); done
-          docker buildx imagetools create -t "${IMAGE}:${VERSION}" -t "${IMAGE}:latest" "${refs[@]}"
+          tags=(); for t in $TAGS; do tags+=(-t "${IMAGE}:${t}"); done
+          docker buildx imagetools create "${tags[@]}" "${refs[@]}"
           docker buildx imagetools inspect "${IMAGE}:${VERSION}"
       # Shows the package on the repository's Packages tab. Idempotent.
       - env:
@@ -265,13 +276,15 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.version.outputs.version }}
+          TAGS: ${{ needs.version.outputs.tags }}
         run: |
           set -euo pipefail
           src="${{ vars.REGISTRY }}/${GITHUB_REPOSITORY,,}"
           dst="ghcr.io/${GITHUB_REPOSITORY,,}"
           tag="$TAG"
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker buildx imagetools create -t "$dst:$tag" -t "$dst:latest" "$src:$tag"
+          args=(); for t in $TAGS; do args+=(-t "$dst:$t"); done
+          docker buildx imagetools create "${args[@]}" "$src:$tag"
           want="$(docker buildx imagetools inspect "$src:$tag" --format '{{json .Manifest.Digest}}')"
           got="$(docker buildx imagetools inspect "$dst:$tag" --format '{{json .Manifest.Digest}}')"
           echo "registry $src:$tag = $want"
