@@ -20,5 +20,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "source-archive.ts", "sieve-playground.ts"]
+  "include": ["vite.config.ts", "sieve-playground.ts", "well-known-source.ts"]
 }

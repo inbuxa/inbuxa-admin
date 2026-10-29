@@ -153,6 +153,7 @@ jobs:
           # `imagetools create` below expects the two entries pushed here.
           provenance: false
           sbom: false
+          build-args: INBUXA_REVISION=${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.platform }}
           cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true

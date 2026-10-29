@@ -18,6 +18,10 @@ WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# The commit being built, for /.well-known/source. The release workflow passes
+# it; a build without it writes no source document.
+ARG INBUXA_REVISION=""
+ENV INBUXA_REVISION=${INBUXA_REVISION}
 # The version comes from inbuxa-version.json, which the release commits before
 # this builds, so there is nothing to pass in here.
 RUN npm run build
