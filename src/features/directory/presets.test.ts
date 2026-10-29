@@ -14,6 +14,7 @@ const conn: Connection = {
   bindPassword: 'pw',
   allowInvalidCerts: false,
   issuer: '',
+  audience: '',
   usernameDomain: '',
 };
 
@@ -39,13 +40,18 @@ describe('directoryObject', () => {
     expect(directoryObject(presetById('openldap'), { ...conn, bindPassword: '' }, '')).not.toHaveProperty('bindSecret');
   });
 
-  it('builds an OIDC directory from the issuer', () => {
+  it('builds an OIDC directory from the issuer and the audience', () => {
     expect(
-      directoryObject(presetById('keycloak'), { ...conn, issuer: ' https://sso.example.org/realms/x ' }, 'KC'),
+      directoryObject(
+        presetById('keycloak'),
+        { ...conn, issuer: ' https://sso.example.org/realms/x ', audience: ' inbuxa ' },
+        'KC',
+      ),
     ).toEqual({
       '@type': 'Oidc',
       description: 'KC',
       issuerUrl: 'https://sso.example.org/realms/x',
+      requireAudience: 'inbuxa',
       usernameDomain: null,
       claimUsername: 'email',
       claimName: 'name',

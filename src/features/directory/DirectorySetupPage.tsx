@@ -98,6 +98,7 @@ export function DirectorySetupPage() {
     bindPassword: '',
     allowInvalidCerts: false,
     issuer: '',
+    audience: '',
     usernameDomain: '',
   });
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -307,7 +308,7 @@ export function DirectorySetupPage() {
       ? /^ldaps?:\/\//.test(conn.url.trim()) &&
         conn.baseDn.trim() !== '' &&
         (savedId !== null || conn.bindDn.trim() === '' || conn.bindPassword !== '')
-      : /^https:\/\//.test(conn.issuer.trim());
+      : /^https:\/\//.test(conn.issuer.trim()) && conn.audience.trim() !== '';
     return (
       <WizardShell
         {...common}
@@ -377,6 +378,15 @@ export function DirectorySetupPage() {
         ) : (
           <>
             {field('issuer', t('dirSetup.issuer', 'Issuer URL'), preset.example.issuer)}
+            {field(
+              'audience',
+              t('dirSetup.audience', 'Client ID (audience)'),
+              'inbuxa',
+              t(
+                'dirSetup.audienceHint',
+                'The client ID inbuxa is registered with at the provider. Only tokens issued for it sign in, not tokens the provider gave other applications.',
+              ),
+            )}
             {field(
               'usernameDomain',
               t('dirSetup.usernameDomain', 'Domain for plain user names (optional)'),
