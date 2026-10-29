@@ -9,6 +9,7 @@ import { configDefaults, defineConfig } from 'vitest/config'
 
 import inbuxa from './inbuxa-version.json' with { type: 'json' }
 import { sievePlayground } from './sieve-playground.ts'
+import { wellKnownSource } from './well-known-source.ts'
 
 export default defineConfig({
   // Relative, so one build works at any mount point (/admin, /account).
@@ -18,7 +19,7 @@ export default defineConfig({
     // inbuxa's: package.json's is a leftover nothing shows.
     __APP_VERSION__: JSON.stringify(inbuxa.version),
   },
-  plugins: [react(), tailwindcss(), sievePlayground()],
+  plugins: [react(), tailwindcss(), sievePlayground(), wellKnownSource(inbuxa.version)],
   resolve: { alias: { '@': path.resolve(import.meta.dirname, './src') } },
   test: {
     environment: 'happy-dom',
