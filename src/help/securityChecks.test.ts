@@ -24,6 +24,7 @@ const PARTS: Part[] = [
   'domains',
   'dns',
   'legacy',
+  'directories',
 ];
 
 describe('security page help', () => {

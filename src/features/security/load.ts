@@ -65,6 +65,12 @@ const CALLS: Call[] = [
   { part: 'metrics', method: 'x:Metrics/get', ids: ['singleton'], properties: ['prometheus'] },
   { part: 'mtaSts', method: 'x:MtaSts/get', ids: ['singleton'], properties: ['mode'] },
   {
+    part: 'directories',
+    method: 'x:Directory/get',
+    ids: null,
+    properties: ['@type', 'description', 'requireAudience', 'opaqueTokens'],
+  },
+  {
     part: 'domains',
     method: 'x:Domain/get',
     ids: null,
@@ -165,6 +171,15 @@ export async function loadSnapshot(signal?: AbortSignal, critical = false): Prom
         notValidAfter: typeof c.notValidAfter === 'string' ? c.notValidAfter : null,
       };
     });
+  }
+  if (lists.directories) {
+    snapshot.directories = lists.directories.map((d) => ({
+      id: String(d.id),
+      name: String(d.description ?? ''),
+      oidc: d['@type'] === 'Oidc',
+      requireAudience: typeof d.requireAudience === 'string' ? d.requireAudience : null,
+      opaqueTokens: typeof d.opaqueTokens === 'string' ? d.opaqueTokens : null,
+    }));
   }
   if (lists.tlsStrategies) {
     snapshot.tlsStrategies = lists.tlsStrategies.map((t) => ({

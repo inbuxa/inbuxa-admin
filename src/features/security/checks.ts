@@ -86,6 +86,17 @@ export interface DomainSnapshot {
   dmarcPolicy: string | null;
 }
 
+/** An external directory, as SS-30 and SS-31 read it. */
+export interface DirectorySnapshot {
+  id: string;
+  name: string;
+  /** OpenID Connect: the only kind these checks look at. */
+  oidc: boolean;
+  requireAudience: string | null;
+  /** reject, userinfo or introspection; null when not set. */
+  opaqueTokens: string | null;
+}
+
 export interface Snapshot {
   now: number;
   imap?: { allowPlainTextAuth?: boolean };
@@ -101,6 +112,7 @@ export interface Snapshot {
   metrics?: { prometheus?: { '@type'?: string; authSecret?: unknown } };
   mtaSts?: { mode?: string };
   domains?: DomainSnapshot[];
+  directories?: DirectorySnapshot[];
   /** The legacy-protocols switch: true while any legacy protocol is on. */
   legacyOn?: boolean;
   /** Why a part couldn't be read, by part name. */
@@ -122,7 +134,8 @@ export type Part =
   | 'mtaSts'
   | 'domains'
   | 'dns'
-  | 'legacy';
+  | 'legacy'
+  | 'directories';
 
 /** The schema's defaults, as the console knows them. */
 export type Defaults = (object: string, field: string) => unknown;
@@ -550,6 +563,36 @@ export function evaluate(s: Snapshot, defaults: Defaults): Result {
   );
 
   check('SS-14', 'Certificates expiring within 30 days', ['certificates'], certItems(30 * DAY, 'important', 'SS-14'));
+
+  // SS-30 and SS-31 are numbered past the spec's requirements (SS-19 to
+  // SS-29), which share the numbering.
+  check('SS-30', 'OpenID Connect directories without an audience', ['directories'], () =>
+    (s.directories ?? [])
+      .filter((d) => d.oidc && !d.requireAudience)
+      .map((d) => ({
+        check: 'SS-30',
+        severity: 'important' as const,
+        subject: d.id,
+        value: null,
+        title: `${d.name || d.id} accepts tokens issued to other applications`,
+        why: 'It names no required audience, so a token its provider issued to any other application signs people in here. Set it to the client ID inbuxa is registered with at the provider. A later release will require it.',
+        action: { kind: 'review' as const, viewName: 'x:Directory', id: d.id },
+      })),
+  );
+
+  check('SS-31', 'Opaque tokens taken on the user info endpoint’s word', ['directories'], () =>
+    (s.directories ?? [])
+      .filter((d) => d.oidc && d.opaqueTokens === 'userinfo')
+      .map((d) => ({
+        check: 'SS-31',
+        severity: 'important' as const,
+        subject: d.id,
+        value: 'userinfo',
+        title: `${d.name || d.id} accepts any token its provider issued`,
+        why: 'A token that isn’t a JWT signs in whenever the provider’s user info endpoint answers for it, and it does for tokens issued to any application. Check them by introspection, with the client ID and secret inbuxa has at the provider, or reject them.',
+        action: { kind: 'review' as const, viewName: 'x:Directory', id: d.id },
+      })),
+  );
 
   // Good practice
 
