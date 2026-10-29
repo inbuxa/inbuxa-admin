@@ -179,4 +179,25 @@ describe('the checks (acceptance tests 1-8)', () => {
     const locked = { ...fresh(), metrics: { prometheus: { '@type': 'Enabled', authSecret: '********' } } };
     expect(ids(locked)).not.toContain('SS-12');
   });
+
+  it('OpenID Connect directories without an audience, or taking opaque tokens on user info, are flagged', () => {
+    const dir = { oidc: true, requireAudience: 'inbuxa', opaqueTokens: null };
+    const s: Snapshot = {
+      ...fresh(),
+      directories: [
+        { ...dir, id: 'a', name: 'Keycloak' },
+        { ...dir, id: 'b', name: 'Old Keycloak', requireAudience: null, opaqueTokens: 'userinfo' },
+        { ...dir, id: 'c', name: 'Introspected', opaqueTokens: 'introspection' },
+        { ...dir, id: 'd', name: 'LDAP', oidc: false, requireAudience: null },
+      ],
+    };
+    const items = evaluate(s, defaults).items.filter((i) => i.check === 'SS-30' || i.check === 'SS-31');
+    expect(items.map((i) => [i.check, i.subject])).toEqual([
+      ['SS-30', 'b'],
+      ['SS-31', 'b'],
+    ]);
+    expect(items[0].title).toContain('Old Keycloak');
+    expect(items[0].action).toEqual({ kind: 'review', viewName: 'x:Directory', id: 'b' });
+    expect(ids(fresh())).not.toContain('SS-30');
+  });
 });
