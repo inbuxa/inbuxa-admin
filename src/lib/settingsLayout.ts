@@ -60,7 +60,8 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         name: 'Sending',
         pages: [
           p('x:MtaOutboundStrategy', 'Delivery strategy'),
-          p('x:MtaRoute', 'Routes and relays'),
+          p('x:MtaRoute', 'Routes'),
+          p('CustomComponent/Relays', 'Relays'),
           p('x:MtaDeliverySchedule', 'Retry schedules'),
           p('x:MtaVirtualQueue', 'Queues'),
         ],

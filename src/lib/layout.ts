@@ -58,6 +58,7 @@ const PAGES: Record<string, PageRule> = {
   'CustomComponent/Journal': readOnly('sysJournal'),
   'CustomComponent/HeldMail': readOnly('sysDlpReview'),
   'CustomComponent/MailFlowRules': readOnly('sysMailRule'),
+  'CustomComponent/Relays': readOnly('sysRelay'),
   'CustomComponent/AccountLocks': readOnly('sysAccountLock'),
   'CustomComponent/SharedMailboxes': readOnly('sysAccountLock'),
   'CustomComponent/Deliverability': readOnly('sysDeliverability'),

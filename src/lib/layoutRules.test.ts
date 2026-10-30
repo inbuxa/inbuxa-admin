@@ -92,6 +92,7 @@ describe('isLinkVisible for the console’s own pages', () => {
     ['CustomComponent/Journal', 'sysJournal'],
     ['CustomComponent/HeldMail', 'sysDlpReview'],
     ['CustomComponent/MailFlowRules', 'sysMailRule'],
+    ['CustomComponent/Relays', 'sysRelay'],
     ['CustomComponent/AccountLocks', 'sysAccountLock'],
     ['CustomComponent/SharedMailboxes', 'sysAccountLock'],
     ['CustomComponent/Deliverability', 'sysDeliverability'],
