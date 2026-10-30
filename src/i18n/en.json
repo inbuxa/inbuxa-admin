@@ -2392,7 +2392,7 @@
     },
     "cancel": "Cancel",
     "addGo": "Add",
-    "saved": "Saved. The relay gets it within seconds.",
+    "saved": "Saved. A linked relay gets it within seconds.",
     "saveFailed": "Nothing was saved",
     "settingsTitle": "{{name}} settings",
     "settingsBody": "This server pushes these to the relay. The relay has no settings of its own.",
@@ -2466,7 +2466,7 @@
     "rejoinGo": "Start a new join",
     "rejoinFailed": "No new join was started",
     "deleteTitle": "Remove {{name}}?",
-    "deleteBody": "The link ends and the relay closes port 25. Mail it still holds stays there; to keep it, turn the relay off instead.",
+    "deleteBody": "This server stops linking to it. The relay keeps the mail it holds, and goes on taking mail in, until you run inbuxa-relay reset on its host. To stop it for a while, turn it off instead: it comes back without a new join.",
     "deleteGo": "Remove",
     "deleteFailed": "The relay wasn’t removed"
   }

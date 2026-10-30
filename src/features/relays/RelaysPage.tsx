@@ -73,6 +73,12 @@ function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** Dialogs open on their first field, not on its ⓘ, whose help would pop open. */
+function focusFirstField(e: Event) {
+  e.preventDefault();
+  (e.target as HTMLElement | null)?.querySelector<HTMLElement>('input, textarea')?.focus();
+}
+
 function failed(title: string, e: unknown) {
   toast({ variant: 'destructive', title, description: errorText(e) });
 }
@@ -227,7 +233,7 @@ function AddDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (name: 
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent onOpenAutoFocus={focusFirstField}>
         <DialogHeader>
           <DialogTitle>{t('relays.addTitle', 'Add a relay')}</DialogTitle>
           <DialogDescription>
@@ -358,7 +364,7 @@ function SettingsDialog({
     setBusy(true);
     try {
       await updateRelay(relay.id, patch, reason);
-      toast({ title: t('relays.saved', 'Saved. The relay gets it within seconds.') });
+      toast({ title: t('relays.saved', 'Saved. A linked relay gets it within seconds.') });
       onSaved();
     } catch (e) {
       failed(t('relays.saveFailed', 'Nothing was saved'), e);
@@ -369,7 +375,7 @@ function SettingsDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto" onOpenAutoFocus={focusFirstField}>
         <DialogHeader>
           <DialogTitle>{t('relays.settingsTitle', '{{name}} settings', { name: relay.name })}</DialogTitle>
           <DialogDescription>
@@ -1016,7 +1022,7 @@ export function RelaysPage() {
           title={t('relays.deleteTitle', 'Remove {{name}}?', { name: open.relay.name })}
           body={t(
             'relays.deleteBody',
-            'The link ends and the relay closes port 25. Mail it still holds stays there; to keep it, turn the relay off instead.',
+            'This server stops linking to it. The relay keeps the mail it holds, and goes on taking mail in, until you run inbuxa-relay reset on its host. To stop it for a while, turn it off instead: it comes back without a new join.',
           )}
           action={t('relays.deleteGo', 'Remove')}
           destructive
