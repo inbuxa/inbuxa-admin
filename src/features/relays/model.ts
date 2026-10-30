@@ -63,6 +63,8 @@ export interface Relay {
   enabled: boolean;
   sendThrough: boolean;
   inboundOnly: boolean;
+  /** Absent from servers before RL-25. */
+  mxPreference?: number;
   settings: RelaySettings;
   joinState: 'waiting' | 'expired' | 'joined';
   joinExpiresAt?: string | null;

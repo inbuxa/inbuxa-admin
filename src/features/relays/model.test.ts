@@ -69,6 +69,7 @@ function relay(extra: Partial<Relay> = {}): Relay {
     enabled: true,
     sendThrough: false,
     inboundOnly: false,
+    mxPreference: 10,
     settings: SETTINGS,
     joinState: 'joined',
     links: [link('1')],

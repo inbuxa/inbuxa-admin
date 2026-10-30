@@ -25,13 +25,15 @@ export const FIELD_HELP: Record<string, string> = {
     'The relay’s host name or IP address, as this server dials it for the link. A WireGuard address keeps the link off the internet.',
   'inbuxa:Relay.linkPort': 'The port the relay listens on for this server’s link. 443 unless you chose another.',
   'inbuxa:Relay.enabled':
-    'Turn off to drop the link: the relay closes port 25 and keeps what it holds until it’s turned back on.',
+    'Turn off to stop this server linking to it. The relay keeps the mail it holds and goes on taking mail in, held until it’s turned back on.',
   'inbuxa:Relay.sendThrough':
     'Send all outgoing mail through relays instead of straight from this server. Mail waits here while no relay is linked.',
   'inbuxa:Relay.inboundOnly':
     'The relay takes mail in but sends none, for instance while its address is new to other providers or not in your SPF record yet.',
   'inbuxa:Relay.hostname':
-    'The relay’s public name: what it says when other servers connect, and the name on its certificate. Needs an A record and matching reverse DNS.',
+    'The relay’s public name: what it says when other servers connect, and the name on its certificate. Needs an A record and matching reverse DNS. Where this server publishes a domain’s DNS, it’s in the MX and SPF records.',
+  'inbuxa:Relay.mxPreference':
+    'Where this server publishes a domain’s DNS, the relay’s MX preference: senders try the lowest first. Give relays the same number to share the mail.',
   'inbuxa:Relay.smtpListen': 'The addresses the relay takes mail on, usually [::]:25 for every address on port 25.',
   'inbuxa:Relay.maxMessageSize': 'The largest message the relay accepts, in either direction.',
   'inbuxa:Relay.maxRecipients': 'How many recipients one message may have at the relay.',

@@ -2388,7 +2388,8 @@
       "spoolMaxBytes": "Spool size (GB)",
       "outboundRetry": "Waits between attempts",
       "outboundExpiry": "Give up after",
-      "outboundTls": "Encryption"
+      "outboundTls": "Encryption",
+      "mxPreference": "MX preference"
     },
     "cancel": "Cancel",
     "addGo": "Add",
