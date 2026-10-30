@@ -10,13 +10,26 @@
  * with the command to run on the relay host. The list says something only
  * when a relay needs attention. Each relay has its settings, which the
  * server pushes to it, and its queues, read over the server's link, where
- * held mail can be discarded and outbound mail cancelled.
+ * held mail can be discarded and outbound mail cancelled. A relay older
+ * than this server can be handed a signed release to upgrade to.
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { AlertTriangle, Check, Copy, Inbox, Loader2, Plus, RefreshCw, Send, Settings2, Trash2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowUpCircle,
+  Check,
+  Copy,
+  Inbox,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Send,
+  Settings2,
+  Trash2,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,12 +61,14 @@ import {
   RelaysUnavailable,
   RelayUnreachable,
   updateRelay,
+  upgradeRelay,
 } from './api';
 import {
   attention,
   envelopeLine,
   joinCommand,
   latestStatus,
+  readSignatureFile,
   settingsPatch,
   toForm,
   waiting,
@@ -163,6 +178,18 @@ function attentionText(t: TFunction, a: Attention): string {
       return t('relays.att.certFailed', 'Its certificate couldn’t be ordered: {{error}}', { error: a.error });
     case 'relayError':
       return t('relays.att.relayError', 'The relay reports: {{error}}', { error: a.error });
+    case 'olderVersion': {
+      const version = a.version ?? t('relays.att.anOlderRelease', 'an older release');
+      return a.selfUpgrade
+        ? t('relays.att.older', 'It runs {{version}}, older than this server. Upgrade it to this server’s release.', {
+            version,
+          })
+        : t(
+            'relays.att.olderImage',
+            'It runs {{version}}, older than this server, from a container image: pull the image that matches this server and restart it.',
+            { version },
+          );
+    }
     case 'recipientsDiffer':
       return t('relays.att.recipients', 'Nodes sent it different recipient lists; one of them is out of date.');
   }
@@ -879,6 +906,104 @@ function ConfirmDialog({
   );
 }
 
+/** Hands a relay a signed release: the binary and its .sig file (RL-29). */
+function UpgradeDialog({ relay, onClose, onDone }: { relay: Relay; onClose: () => void; onDone: () => void }) {
+  const { t } = useTranslation();
+  const [binary, setBinary] = useState<File | null>(null);
+  const [signature, setSignature] = useState<{ text: string; name: string } | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const info = signature ? readSignatureFile(signature.text) : null;
+  const running = latestStatus(relay)?.relayVersion;
+
+  const upgrade = async () => {
+    if (!binary || !signature || !info) return;
+    setBusy(true);
+    try {
+      await upgradeRelay(relay.id, binary, signature.text, reason);
+      toast({
+        title: t('relays.upgraded', '{{name}} is restarting with {{version}}.', {
+          name: relay.name,
+          version: info.version,
+        }),
+      });
+      onDone();
+    } catch (e) {
+      failed(t('relays.upgradeFailed', 'The relay wasn’t upgraded'), e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent onOpenAutoFocus={focusFirstField}>
+        <DialogHeader>
+          <DialogTitle>{t('relays.upgradeTitle', 'Upgrade {{name}}', { name: relay.name })}</DialogTitle>
+          <DialogDescription>
+            {t(
+              'relays.upgradeBody',
+              'Choose the inbuxa-relay binary for its host and the .sig file that comes with it, from the release that matches this server. The relay checks the signature, refuses an older release, and restarts on the new one.',
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          {running && (
+            <p className="text-muted-foreground">
+              {t('relays.upgradeRunning', 'It runs {{version}} now.', { version: running })}
+            </p>
+          )}
+          <label className="block space-y-1">
+            <span className="text-muted-foreground">{t('relays.upgradeBinary', 'Release binary')}</span>
+            <Input type="file" onChange={(e) => setBinary(e.target.files?.[0] ?? null)} disabled={busy} />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-muted-foreground">{t('relays.upgradeSignature', 'Its signature file (.sig)')}</span>
+            <Input
+              type="file"
+              accept=".sig"
+              disabled={busy}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return setSignature(null);
+                void file.text().then((text) => setSignature({ text, name: file.name }));
+              }}
+            />
+          </label>
+          {signature &&
+            (info ? (
+              <p>
+                {t('relays.upgradeRelease', 'Release {{version}}, for {{target}}.', {
+                  version: info.version,
+                  target: info.target,
+                })}
+              </p>
+            ) : (
+              <p className="text-destructive">
+                {t('relays.upgradeNotSig', '{{file}} isn’t a relay release’s signature file.', {
+                  file: signature.name,
+                })}
+              </p>
+            ))}
+          <label className="block space-y-1">
+            <span className="text-muted-foreground">{t('relays.reason', 'Reason, for the audit log (optional)')}</span>
+            <Input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} disabled={busy} />
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            {t('relays.cancel', 'Cancel')}
+          </Button>
+          <Button onClick={() => void upgrade()} disabled={busy || !binary || !info}>
+            {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {t('relays.upgradeGo', 'Upgrade')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function RelayCard({
   relay,
   canChange,
@@ -886,6 +1011,7 @@ function RelayCard({
   onSettings,
   onQueue,
   onRejoin,
+  onUpgrade,
   onDelete,
 }: {
   relay: Relay;
@@ -894,6 +1020,7 @@ function RelayCard({
   onSettings: () => void;
   onQueue: () => void;
   onRejoin: () => void;
+  onUpgrade: () => void;
   onDelete: () => void;
 }) {
   const { t } = useTranslation();
@@ -956,6 +1083,12 @@ function RelayCard({
               {t('relays.queue', 'Queue…')}
             </Button>
           )}
+          {canChange && relay.olderThanServer && status?.selfUpgrade !== false && (
+            <Button variant="outline" size="sm" onClick={onUpgrade}>
+              <ArrowUpCircle className="mr-2 h-4 w-4" />
+              {t('relays.upgrade', 'Upgrade…')}
+            </Button>
+          )}
           {canChange && (
             <>
               <Button variant="ghost" size="sm" onClick={onRejoin}>
@@ -989,6 +1122,7 @@ type Open =
   | { kind: 'settings'; relay: Relay }
   | { kind: 'queue'; relay: Relay }
   | { kind: 'rejoin'; relay: Relay }
+  | { kind: 'upgrade'; relay: Relay }
   | { kind: 'delete'; relay: Relay };
 
 export function RelaysPage() {
@@ -1056,6 +1190,7 @@ export function RelaysPage() {
             onSettings={() => setOpen({ kind: 'settings', relay })}
             onQueue={() => setOpen({ kind: 'queue', relay })}
             onRejoin={() => setOpen({ kind: 'rejoin', relay })}
+            onUpgrade={() => setOpen({ kind: 'upgrade', relay })}
             onDelete={() => setOpen({ kind: 'delete', relay })}
           />
         ))}
@@ -1099,6 +1234,16 @@ export function RelaysPage() {
             } catch (e) {
               failed(t('relays.rejoinFailed', 'No new join was started'), e);
             }
+          }}
+        />
+      )}
+      {open?.kind === 'upgrade' && (
+        <UpgradeDialog
+          relay={open.relay}
+          onClose={close}
+          onDone={() => {
+            close();
+            refetch();
           }}
         />
       )}

@@ -2358,7 +2358,10 @@
       "relayError": "The relay reports: {{error}}",
       "recipients": "Nodes sent it different recipient lists; one of them is out of date.",
       "noCertificate": "It has no certificate yet. This server orders one when a domain here manages the DNS of its public name; otherwise, upload one in its settings.",
-      "certFailed": "Its certificate couldn’t be ordered: {{error}}"
+      "certFailed": "Its certificate couldn’t be ordered: {{error}}",
+      "anOlderRelease": "an older release",
+      "older": "It runs {{version}}, older than this server. Upgrade it to this server’s release.",
+      "olderImage": "It runs {{version}}, older than this server, from a container image: pull the image that matches this server and restart it."
     },
     "copied": "Copied",
     "tokenTitle": "Join {{name}}",
@@ -2481,6 +2484,17 @@
       "none": "None yet.",
       "how": "Where a domain here manages its public name’s DNS, this server orders and renews it. Otherwise, paste one here.",
       "keepKey": "Leave empty to keep the stored key"
-    }
+    },
+    "upgraded": "{{name}} is restarting with {{version}}.",
+    "upgradeFailed": "The relay wasn’t upgraded",
+    "upgradeTitle": "Upgrade {{name}}",
+    "upgradeBody": "Choose the inbuxa-relay binary for its host and the .sig file that comes with it, from the release that matches this server. The relay checks the signature, refuses an older release, and restarts on the new one.",
+    "upgradeRunning": "It runs {{version}} now.",
+    "upgradeBinary": "Release binary",
+    "upgradeSignature": "Its signature file (.sig)",
+    "upgradeRelease": "Release {{version}}, for {{target}}.",
+    "upgradeNotSig": "{{file}} isn’t a relay release’s signature file.",
+    "upgradeGo": "Upgrade",
+    "upgrade": "Upgrade…"
   }
 }
