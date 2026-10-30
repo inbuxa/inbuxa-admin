@@ -288,6 +288,7 @@ interface General {
   description: string;
   address: string;
   linkPort: string;
+  mxPreference: string;
   enabled: boolean;
   sendThrough: boolean;
   inboundOnly: boolean;
@@ -299,6 +300,7 @@ function general(relay: Relay): General {
     description: relay.description,
     address: relay.address,
     linkPort: String(relay.linkPort),
+    mxPreference: String(relay.mxPreference ?? 10),
     enabled: relay.enabled,
     sendThrough: relay.sendThrough,
     inboundOnly: relay.inboundOnly,
@@ -353,6 +355,13 @@ function SettingsDialog({
         return;
       }
       patch.linkPort = Number(g.linkPort);
+    }
+    if (g.mxPreference !== startGeneral.mxPreference) {
+      if (!/^\d+$/.test(g.mxPreference) || Number(g.mxPreference) > 65535) {
+        setInvalid('mxPreference');
+        return;
+      }
+      patch.mxPreference = Number(g.mxPreference);
     }
     for (const flag of ['enabled', 'sendThrough', 'inboundOnly'] as const) {
       if (g[flag] !== startGeneral[flag]) patch[flag] = g[flag];
@@ -443,9 +452,20 @@ function SettingsDialog({
 
         <section className="space-y-3">
           <h3 className="text-sm font-medium">{t('relays.s.receiving', 'Taking mail in')}</h3>
-          <Field field="hostname" label={t('relays.f.hostname', 'Public name')}>
-            {input('hostname', { placeholder: 'mx1.example.com' })}
-          </Field>
+          <div className="grid grid-cols-[1fr_8rem] gap-3">
+            <Field field="hostname" label={t('relays.f.hostname', 'Public name')}>
+              {input('hostname', { placeholder: 'mx1.example.com' })}
+            </Field>
+            <Field field="mxPreference" label={t('relays.f.mxPreference', 'MX preference')}>
+              <Input
+                value={g.mxPreference}
+                inputMode="numeric"
+                disabled={!canChange}
+                aria-invalid={invalid === 'mxPreference'}
+                onChange={(e) => setG({ ...g, mxPreference: e.target.value })}
+              />
+            </Field>
+          </div>
           <Field field="smtpListen" label={t('relays.f.smtpListen', 'Listens on')}>
             {input('smtpListen', { placeholder: '[::]:25' })}
           </Field>
