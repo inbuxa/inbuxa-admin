@@ -66,6 +66,13 @@ export interface Relay {
   /** Absent from servers before RL-25. */
   mxPreference?: number;
   settings: RelaySettings;
+  /** Its STARTTLS certificate chain, PEM; the key reads back as `****`. */
+  smtpCertificate?: string | null;
+  smtpPrivateKey?: string | null;
+  /** Absent from servers before RL-27: when the stored certificate runs out. */
+  certificateNotAfter?: string | null;
+  /** Why this server's last order for its certificate failed (RL-27). */
+  certificateError?: string | null;
   joinState: 'waiting' | 'expired' | 'joined';
   joinExpiresAt?: string | null;
   joinedAt?: string | null;
@@ -120,6 +127,8 @@ export type Attention =
   | { kind: 'spoolFilling'; percent: number }
   | { kind: 'certificateExpiring'; notAfter: string }
   | { kind: 'certificateExpired'; notAfter: string }
+  | { kind: 'noCertificate' }
+  | { kind: 'certificateFailed'; error: string }
   | { kind: 'relayError'; error: string }
   | { kind: 'recipientsDiffer' };
 
@@ -154,14 +163,19 @@ export function attention(relay: Relay, now: Date = new Date()): Attention[] {
     if (max > 0 && status.spool.bytes / max >= SPOOL_WARN) {
       out.push({ kind: 'spoolFilling', percent: Math.min(100, Math.round((status.spool.bytes / max) * 100)) });
     }
-    if (status.certificateNotAfter) {
-      const left = new Date(status.certificateNotAfter).getTime() - now.getTime();
-      if (left <= 0) out.push({ kind: 'certificateExpired', notAfter: status.certificateNotAfter });
-      else if (left < CERTIFICATE_WARN_DAYS * 86_400_000)
-        out.push({ kind: 'certificateExpiring', notAfter: status.certificateNotAfter });
-    }
-    if (status.lastError) out.push({ kind: 'relayError', error: status.lastError });
   }
+  // The certificate stored here, or else the one the relay reports
+  const notAfter = relay.certificateNotAfter ?? status?.certificateNotAfter;
+  if (notAfter) {
+    const left = new Date(notAfter).getTime() - now.getTime();
+    if (left <= 0) out.push({ kind: 'certificateExpired', notAfter });
+    else if (left < CERTIFICATE_WARN_DAYS * 86_400_000) out.push({ kind: 'certificateExpiring', notAfter });
+  } else if (relay.certificateNotAfter === null && !relay.certificateError) {
+    // A server that reads certificates says there's none
+    out.push({ kind: 'noCertificate' });
+  }
+  if (relay.certificateError) out.push({ kind: 'certificateFailed', error: relay.certificateError });
+  if (status?.lastError) out.push({ kind: 'relayError', error: status.lastError });
   // Every node sends the same recipients; nodes that disagree have a stale set
   const counts = new Set(
     relay.links.filter((l) => l.state === 'linked' && l.recipients != null).map((l) => l.recipients),
