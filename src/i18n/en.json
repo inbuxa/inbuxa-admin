@@ -2356,7 +2356,9 @@
       "certSoon": "Its certificate runs out {{when}}.",
       "certGone": "Its certificate ran out {{when}}.",
       "relayError": "The relay reports: {{error}}",
-      "recipients": "Nodes sent it different recipient lists; one of them is out of date."
+      "recipients": "Nodes sent it different recipient lists; one of them is out of date.",
+      "noCertificate": "It has no certificate yet. This server orders one when a domain here manages the DNS of its public name; otherwise, upload one in its settings.",
+      "certFailed": "Its certificate couldn’t be ordered: {{error}}"
     },
     "copied": "Copied",
     "tokenTitle": "Join {{name}}",
@@ -2389,7 +2391,9 @@
       "outboundRetry": "Waits between attempts",
       "outboundExpiry": "Give up after",
       "outboundTls": "Encryption",
-      "mxPreference": "MX preference"
+      "mxPreference": "MX preference",
+      "smtpCertificate": "Certificate chain (PEM)",
+      "smtpPrivateKey": "Private key (PEM)"
     },
     "cancel": "Cancel",
     "addGo": "Add",
@@ -2400,7 +2404,8 @@
     "s": {
       "general": "The relay",
       "receiving": "Taking mail in",
-      "sending": "Sending mail on"
+      "sending": "Sending mail on",
+      "certificate": "Certificate"
     },
     "tls": {
       "opportunistic": "When offered",
@@ -2469,6 +2474,13 @@
     "deleteTitle": "Remove {{name}}?",
     "deleteBody": "This server stops linking to it. The relay keeps the mail it holds, and goes on taking mail in, until you run inbuxa-relay reset on its host. To stop it for a while, turn it off instead: it comes back without a new join.",
     "deleteGo": "Remove",
-    "deleteFailed": "The relay wasn’t removed"
+    "deleteFailed": "The relay wasn’t removed",
+    "cert": {
+      "failed": "The last order failed: {{error}}",
+      "until": "Good until {{when}}.",
+      "none": "None yet.",
+      "how": "Where a domain here manages its public name’s DNS, this server orders and renews it. Otherwise, paste one here.",
+      "keepKey": "Leave empty to keep the stored key"
+    }
   }
 }

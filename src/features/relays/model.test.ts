@@ -134,6 +134,23 @@ describe('attention', () => {
     expect(expired).toEqual([{ kind: 'certificateExpired', notAfter: '2026-10-01T00:00:00Z' }]);
   });
 
+  it('reads the certificate stored here before the one the relay reports', () => {
+    const status = link('1').relay!;
+    const linked = [link('1', { relay: { ...status, certificateNotAfter: '2027-01-01T00:00:00Z' } })];
+    expect(attention(relay({ links: linked, certificateNotAfter: '2026-11-05T00:00:00Z' }), NOW)).toEqual([
+      { kind: 'certificateExpiring', notAfter: '2026-11-05T00:00:00Z' },
+    ]);
+    // None stored, on a server that reads certificates
+    expect(attention(relay({ links: [link('1')], certificateNotAfter: null }), NOW)).toEqual([
+      { kind: 'noCertificate' },
+    ]);
+    // An older server sends neither: no line
+    expect(attention(relay({ links: [link('1')] }), NOW)).toEqual([]);
+    expect(
+      attention(relay({ links: [link('1')], certificateNotAfter: null, certificateError: 'rate limited' }), NOW),
+    ).toEqual([{ kind: 'certificateFailed', error: 'rate limited' }]);
+  });
+
   it('reads the status the relay sent last', () => {
     const status = link('1').relay!;
     const found = attention(

@@ -154,6 +154,13 @@ function attentionText(t: TFunction, a: Attention): string {
       return t('relays.att.certSoon', 'Its certificate runs out {{when}}.', { when: when(a.notAfter) });
     case 'certificateExpired':
       return t('relays.att.certGone', 'Its certificate ran out {{when}}.', { when: when(a.notAfter) });
+    case 'noCertificate':
+      return t(
+        'relays.att.noCertificate',
+        'It has no certificate yet. This server orders one when a domain here manages the DNS of its public name; otherwise, upload one in its settings.',
+      );
+    case 'certificateFailed':
+      return t('relays.att.certFailed', 'Its certificate couldn’t be ordered: {{error}}', { error: a.error });
     case 'relayError':
       return t('relays.att.relayError', 'The relay reports: {{error}}', { error: a.error });
     case 'recipientsDiffer':
@@ -323,6 +330,8 @@ function SettingsDialog({
   const startForm = useMemo(() => toForm(relay.settings), [relay]);
   const [g, setG] = useState(startGeneral);
   const [form, setForm] = useState<SettingsForm>(startForm);
+  const [chain, setChain] = useState(relay.smtpCertificate ?? '');
+  const [key, setKey] = useState('');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
@@ -362,6 +371,19 @@ function SettingsDialog({
         return;
       }
       patch.mxPreference = Number(g.mxPreference);
+    }
+    // A certificate uploaded by hand: the chain and its key go together
+    if (chain.trim() !== (relay.smtpCertificate ?? '').trim() || key.trim()) {
+      if (!chain.trim()) {
+        patch.smtpCertificate = null;
+        patch.smtpPrivateKey = null;
+      } else if (!key.trim() && !relay.smtpPrivateKey) {
+        setInvalid('smtpPrivateKey');
+        return;
+      } else {
+        patch.smtpCertificate = chain.trim();
+        if (key.trim()) patch.smtpPrivateKey = key.trim();
+      }
     }
     for (const flag of ['enabled', 'sendThrough', 'inboundOnly'] as const) {
       if (g[flag] !== startGeneral[flag]) patch[flag] = g[flag];
@@ -534,6 +556,49 @@ function SettingsDialog({
               </Select>
             </Field>
           </div>
+        </section>
+
+        <section className="space-y-3">
+          <h3 className="text-sm font-medium">{t('relays.s.certificate', 'Certificate')}</h3>
+          <p className="text-sm text-muted-foreground">
+            {relay.certificateError
+              ? t('relays.cert.failed', 'The last order failed: {{error}}', { error: relay.certificateError })
+              : relay.certificateNotAfter
+                ? t('relays.cert.until', 'Good until {{when}}.', { when: when(relay.certificateNotAfter) })
+                : t('relays.cert.none', 'None yet.')}{' '}
+            {t(
+              'relays.cert.how',
+              'Where a domain here manages its public name’s DNS, this server orders and renews it. Otherwise, paste one here.',
+            )}
+          </p>
+          <Field field="smtpCertificate" label={t('relays.f.smtpCertificate', 'Certificate chain (PEM)')}>
+            <Textarea
+              value={chain}
+              rows={4}
+              disabled={!canChange}
+              spellCheck={false}
+              className="font-mono text-xs"
+              placeholder="-----BEGIN CERTIFICATE-----"
+              onChange={(e) => setChain(e.target.value)}
+            />
+          </Field>
+          <Field field="smtpPrivateKey" label={t('relays.f.smtpPrivateKey', 'Private key (PEM)')}>
+            <Textarea
+              value={key}
+              rows={3}
+              disabled={!canChange}
+              spellCheck={false}
+              autoComplete="off"
+              aria-invalid={invalid === 'smtpPrivateKey'}
+              className="font-mono text-xs"
+              placeholder={
+                relay.smtpPrivateKey
+                  ? t('relays.cert.keepKey', 'Leave empty to keep the stored key')
+                  : '-----BEGIN PRIVATE KEY-----'
+              }
+              onChange={(e) => setKey(e.target.value)}
+            />
+          </Field>
         </section>
 
         {invalid && (

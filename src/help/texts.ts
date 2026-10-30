@@ -32,6 +32,10 @@ export const FIELD_HELP: Record<string, string> = {
     'The relay takes mail in but sends none, for instance while its address is new to other providers or not in your SPF record yet.',
   'inbuxa:Relay.hostname':
     'The relay’s public name: what it says when other servers connect, and the name on its certificate. Needs an A record and matching reverse DNS. Where this server publishes a domain’s DNS, it’s in the MX and SPF records.',
+  'inbuxa:Relay.smtpCertificate':
+    'The certificate the relay offers when other servers start TLS on port 25, with its chain. This server orders and renews it where a domain here manages the public name’s DNS; anything pasted is replaced only once it no longer does.',
+  'inbuxa:Relay.smtpPrivateKey':
+    'The key for the certificate. It’s never shown again: leave the box empty to keep the stored one.',
   'inbuxa:Relay.mxPreference':
     'Where this server publishes a domain’s DNS, the relay’s MX preference: senders try the lowest first. Give relays the same number to share the mail.',
   'inbuxa:Relay.smtpListen': 'The addresses the relay takes mail on, usually [::]:25 for every address on port 25.',
