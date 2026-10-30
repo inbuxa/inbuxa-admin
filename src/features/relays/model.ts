@@ -73,6 +73,8 @@ export interface Relay {
   certificateNotAfter?: string | null;
   /** Why this server's last order for its certificate failed (RL-27). */
   certificateError?: string | null;
+  /** Absent from servers before RL-28: a link last heard an older release than the server's. */
+  olderThanServer?: boolean | null;
   joinState: 'waiting' | 'expired' | 'joined';
   joinExpiresAt?: string | null;
   joinedAt?: string | null;
@@ -130,6 +132,7 @@ export type Attention =
   | { kind: 'noCertificate' }
   | { kind: 'certificateFailed'; error: string }
   | { kind: 'relayError'; error: string }
+  | { kind: 'olderVersion'; version: string | null; selfUpgrade: boolean }
   | { kind: 'recipientsDiffer' };
 
 /** A spool this full is worth a line. */
@@ -176,12 +179,37 @@ export function attention(relay: Relay, now: Date = new Date()): Attention[] {
   }
   if (relay.certificateError) out.push({ kind: 'certificateFailed', error: relay.certificateError });
   if (status?.lastError) out.push({ kind: 'relayError', error: status.lastError });
+  if (relay.olderThanServer) {
+    out.push({ kind: 'olderVersion', version: status?.relayVersion ?? null, selfUpgrade: status?.selfUpgrade ?? true });
+  }
   // Every node sends the same recipients; nodes that disagree have a stale set
   const counts = new Set(
     relay.links.filter((l) => l.state === 'linked' && l.recipients != null).map((l) => l.recipients),
   );
   if (counts.size > 1) out.push({ kind: 'recipientsDiffer' });
   return out;
+}
+
+/** What a relay release's signature file says it is (RL-29). */
+export interface ReleaseInfo {
+  version: string;
+  target: string;
+}
+
+/**
+ * Reads a signature file, `inbuxa-relay-<target>.sig`, for the upgrade
+ * dialog to show; null if it isn't one. The server and the relay check the
+ * signature: this only reads it.
+ */
+export function readSignatureFile(text: string): ReleaseInfo | null {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  if (lines[0] !== 'inbuxa-relay release 1') return null;
+  const field = (line: string | undefined, name: string) =>
+    line?.startsWith(`${name} `) ? line.slice(name.length + 1).trim() || null : null;
+  const version = field(lines[1], 'version');
+  const target = field(lines[2], 'target');
+  if (!version || !target || !field(lines[3], 'sha256') || !field(lines[4], 'signature')) return null;
+  return { version, target };
 }
 
 /** The one command to run on the relay host, with the join token. */

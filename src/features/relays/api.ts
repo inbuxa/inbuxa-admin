@@ -10,7 +10,8 @@
  * pushes what is saved here, and reads a relay's queues over its own link.
  */
 
-import { getAccountId, jmapRequest } from '@/services/jmap/client';
+import { apiFetch } from '@/services/api';
+import { fetchSession, getAccountId, jmapRequest } from '@/services/jmap/client';
 import type { Relay, RelayMessage } from './model';
 
 const CAPABILITY = 'urn:inbuxa:jmap';
@@ -108,6 +109,36 @@ export async function rejoinRelay(id: string, reason?: string): Promise<string> 
   const token = (result.updated as Record<string, { joinToken?: string } | null> | undefined)?.[id]?.joinToken;
   if (!token) throw new Error('The server gave no join token.');
   return token;
+}
+
+/**
+ * Uploads a relay release binary to this account, for `upgrade`: its blob
+ * id. The upload URL is the session's, as a path for apiFetch.
+ */
+async function uploadRelease(file: File): Promise<string> {
+  const accountId = getAccountId('x:Account');
+  const session = await fetchSession();
+  const template = typeof session.uploadUrl === 'string' ? session.uploadUrl : '/jmap/upload/{accountId}/';
+  const url = new URL(template.replace('{accountId}', encodeURIComponent(accountId)), 'http://placeholder');
+  const response = await apiFetch(url.pathname + url.search, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: file,
+  });
+  if (!response.ok) throw new Error(`The upload failed (${response.status}).`);
+  const blobId = ((await response.json()) as { blobId?: string }).blobId;
+  if (!blobId) throw new Error('The server gave no blob id.');
+  return blobId;
+}
+
+/**
+ * Hands a relay a signed release (RL-29): the binary and its signature
+ * file's text. The server checks the signature, the relay checks it again,
+ * installs it and restarts.
+ */
+export async function upgradeRelay(id: string, binary: File, signature: string, reason?: string): Promise<void> {
+  const blobId = await uploadRelease(binary);
+  await updateRelay(id, { upgrade: { blobId, signature } }, reason);
 }
 
 export async function deleteRelay(id: string, reason?: string): Promise<void> {

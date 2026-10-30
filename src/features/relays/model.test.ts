@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  readSignatureFile,
   attention,
   envelopeLine,
   formatDuration,
@@ -169,6 +170,40 @@ describe('attention', () => {
     expect(attention(relay({ links: [link('1'), link('2', { recipients: 11 })] }), NOW)).toEqual([
       { kind: 'recipientsDiffer' },
     ]);
+  });
+
+  it('says when a relay runs an older release than the server', () => {
+    expect(attention(relay({ olderThanServer: false }), NOW)).toEqual([]);
+    expect(attention(relay({ olderThanServer: null }), NOW)).toEqual([]);
+    expect(attention(relay({ olderThanServer: true }), NOW)).toEqual([
+      { kind: 'olderVersion', version: '27.1.0', selfUpgrade: true },
+    ]);
+    const status = link('1').relay!;
+    const image = [link('1', { relay: { ...status, selfUpgrade: false } })];
+    expect(attention(relay({ olderThanServer: true, links: image }), NOW)).toEqual([
+      { kind: 'olderVersion', version: '27.1.0', selfUpgrade: false },
+    ]);
+  });
+});
+
+describe('signature files', () => {
+  const file =
+    'inbuxa-relay release 1\nversion 27.1.0-rc.5\ntarget x86_64-linux-musl\nsha256 ' +
+    'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad\nsignature zRj9\n';
+
+  it('reads what a release says it is', () => {
+    expect(readSignatureFile(file)).toEqual({ version: '27.1.0-rc.5', target: 'x86_64-linux-musl' });
+    expect(readSignatureFile(file.replace(/\n/g, '\r\n'))).toEqual({
+      version: '27.1.0-rc.5',
+      target: 'x86_64-linux-musl',
+    });
+  });
+
+  it('refuses anything else', () => {
+    expect(readSignatureFile('')).toBeNull();
+    expect(readSignatureFile('\x7fELF')).toBeNull();
+    expect(readSignatureFile(file.replace('signature zRj9', ''))).toBeNull();
+    expect(readSignatureFile(file.replace('version 27.1.0-rc.5', 'version '))).toBeNull();
   });
 });
 
