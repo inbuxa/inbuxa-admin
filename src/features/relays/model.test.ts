@@ -1,0 +1,240 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Coffey Labs LLC
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only
+ */
+
+import { describe, expect, it } from 'vitest';
+import {
+  attention,
+  envelopeLine,
+  formatDuration,
+  joinCommand,
+  parseDuration,
+  parseDurations,
+  settingsPatch,
+  toForm,
+  waiting,
+  type Relay,
+  type RelayLink,
+  type RelayMessage,
+  type RelaySettings,
+} from './model';
+
+const SETTINGS: RelaySettings = {
+  hostname: 'mx1.example.com',
+  smtpListen: ['[::]:25'],
+  domains: ['example.com'],
+  maxMessageSize: 50 * 1024 * 1024,
+  maxRecipients: 100,
+  rateLimits: { connectionsPerMinute: 60, messagesPerMinute: 60, concurrentSessions: 10 },
+  dnsbl: [],
+  liveVerdictTimeout: 30,
+  heldMaxAge: 30,
+  spoolMaxBytes: 2 * 1024 * 1024 * 1024,
+  outboundRetry: [120, 300, 600, 1800, 3600, 7200, 14400],
+  outboundExpiry: 3 * 86400,
+  outboundTls: 'opportunistic',
+};
+
+const NOW = new Date('2026-10-30T12:00:00Z');
+
+function link(nodeId: string, extra: Partial<RelayLink> = {}): RelayLink {
+  return {
+    nodeId,
+    state: 'linked',
+    since: '2026-10-30T10:00:00Z',
+    updatedAt: '2026-10-30T11:59:00Z',
+    recipients: 12,
+    relay: {
+      startedAt: '2026-10-30T09:00:00Z',
+      relayVersion: '27.1.0',
+      linkClients: 1,
+      mode: 'live',
+      spool: { inbound: 0, outbound: 2, bytes: 1024 },
+      recipientState: 's1',
+      selfUpgrade: true,
+    },
+    ...extra,
+  };
+}
+
+function relay(extra: Partial<Relay> = {}): Relay {
+  return {
+    id: 'b',
+    name: 'Edge',
+    description: '',
+    address: '10.0.0.2',
+    linkPort: 443,
+    enabled: true,
+    sendThrough: false,
+    inboundOnly: false,
+    settings: SETTINGS,
+    joinState: 'joined',
+    links: [link('1')],
+    createdBy: 'admin',
+    createdAt: '2026-10-30T08:00:00Z',
+    updatedAt: '2026-10-30T08:00:00Z',
+    ...extra,
+  };
+}
+
+describe('attention', () => {
+  it('says nothing when everything is fine, or the relay is off', () => {
+    expect(attention(relay(), NOW)).toEqual([]);
+    expect(attention(relay({ enabled: false, links: [] }), NOW)).toEqual([]);
+  });
+
+  it('waits for a join, or says it ran out', () => {
+    expect(attention(relay({ joinState: 'waiting', joinExpiresAt: 'x', links: [] }), NOW)).toEqual([
+      { kind: 'joinWaiting', until: 'x' },
+    ]);
+    expect(attention(relay({ joinState: 'expired', links: [] }), NOW)).toEqual([{ kind: 'joinExpired' }]);
+  });
+
+  it('names each node whose link is down', () => {
+    const found = attention(
+      relay({
+        links: [link('1'), link('2', { state: 'down', lastError: 'refused' }), link('3', { state: 'joinFailed' })],
+      }),
+      NOW,
+    );
+    expect(found).toContainEqual({ kind: 'linkDown', nodeId: '2', since: '2026-10-30T10:00:00Z', error: 'refused' });
+    expect(found).toContainEqual({ kind: 'joinFailed', nodeId: '3', error: undefined });
+    expect(attention(relay({ links: [] }), NOW)).toEqual([{ kind: 'notLinked' }]);
+  });
+
+  it('warns of a filling spool, a certificate near its end, and the relay’s own error', () => {
+    const status = link('1').relay!;
+    const found = attention(
+      relay({
+        links: [
+          link('1', {
+            relay: {
+              ...status,
+              spool: { ...status.spool, bytes: SETTINGS.spoolMaxBytes * 0.9 },
+              certificateNotAfter: '2026-11-05T00:00:00Z',
+              lastError: 'disk full',
+            },
+          }),
+        ],
+      }),
+      NOW,
+    );
+    expect(found).toEqual([
+      { kind: 'spoolFilling', percent: 90 },
+      { kind: 'certificateExpiring', notAfter: '2026-11-05T00:00:00Z' },
+      { kind: 'relayError', error: 'disk full' },
+    ]);
+    const expired = attention(
+      relay({ links: [link('1', { relay: { ...status, certificateNotAfter: '2026-10-01T00:00:00Z' } })] }),
+      NOW,
+    );
+    expect(expired).toEqual([{ kind: 'certificateExpired', notAfter: '2026-10-01T00:00:00Z' }]);
+  });
+
+  it('reads the status the relay sent last', () => {
+    const status = link('1').relay!;
+    const found = attention(
+      relay({
+        links: [
+          link('1', { updatedAt: '2026-10-30T11:00:00Z', relay: { ...status, lastError: 'old' } }),
+          link('2', { updatedAt: '2026-10-30T11:59:00Z' }),
+        ],
+      }),
+      NOW,
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('notices nodes that sent different recipient sets', () => {
+    expect(attention(relay({ links: [link('1'), link('2', { recipients: 11 })] }), NOW)).toEqual([
+      { kind: 'recipientsDiffer' },
+    ]);
+  });
+});
+
+describe('plain forms', () => {
+  it('reads and writes durations', () => {
+    expect(formatDuration(300)).toBe('5m');
+    expect(formatDuration(259200)).toBe('3d');
+    expect(formatDuration(90)).toBe('90s');
+    expect(formatDuration(0)).toBe('0s');
+    expect(parseDuration('5m')).toBe(300);
+    expect(parseDuration(' 2H ')).toBe(7200);
+    expect(parseDuration('45')).toBe(45);
+    expect(parseDuration('5 minutes')).toBeNull();
+    expect(parseDurations('2m, 5m,1h')).toEqual([120, 300, 3600]);
+    expect(parseDurations('2m, soon')).toBeNull();
+  });
+
+  it('sends only what changed', () => {
+    const before = toForm(SETTINGS);
+    expect(before.outboundRetry).toBe('2m, 5m, 10m, 30m, 1h, 2h, 4h');
+    expect(before.maxMessageSizeMb).toBe('50');
+    expect(settingsPatch(before, before, SETTINGS)).toEqual({ patch: {} });
+    expect(
+      settingsPatch(
+        before,
+        { ...before, maxRecipients: '20', outboundRetry: '1m, 1h', dnsbl: 'zen.example.org\nbl.example.net' },
+        SETTINGS,
+      ),
+    ).toEqual({
+      patch: {
+        'settings/maxRecipients': 20,
+        'settings/outboundRetry': [60, 3600],
+        'settings/dnsbl': ['zen.example.org', 'bl.example.net'],
+      },
+    });
+    expect(settingsPatch(before, { ...before, messagesPerMinute: '30' }, SETTINGS)).toEqual({
+      patch: {
+        'settings/rateLimits': { connectionsPerMinute: 60, messagesPerMinute: 30, concurrentSessions: 10 },
+      },
+    });
+  });
+
+  it('keeps a size it shows rounded until it is changed', () => {
+    const odd = { ...SETTINGS, maxMessageSize: 12_345_678 };
+    const before = toForm(odd);
+    expect(before.maxMessageSizeMb).toBe('11.77');
+    expect(settingsPatch(before, { ...before, hostname: 'mx2.example.com' }, odd)).toEqual({
+      patch: { 'settings/hostname': 'mx2.example.com' },
+    });
+    expect(settingsPatch(before, { ...before, maxMessageSizeMb: '25' }, odd)).toEqual({
+      patch: { 'settings/maxMessageSize': 25 * 1024 * 1024 },
+    });
+  });
+
+  it('names the field that doesn’t read', () => {
+    const before = toForm(SETTINGS);
+    expect(settingsPatch(before, { ...before, maxRecipients: 'many' }, SETTINGS)).toEqual({
+      invalid: 'maxRecipients',
+    });
+    expect(settingsPatch(before, { ...before, outboundRetry: '' }, SETTINGS)).toEqual({ invalid: 'outboundRetry' });
+  });
+});
+
+describe('queues', () => {
+  it('lists who it is from and to, and who still waits', () => {
+    const message: RelayMessage = {
+      id: 'm',
+      relayId: 'b',
+      direction: 'outbound',
+      relayMessageId: 'o1',
+      createdAt: '2026-10-30T11:00:00Z',
+      size: 2048,
+      envelope: { mailFrom: { email: 'jane@example.com' }, rcptTo: [{ email: 'a@x.test' }, { email: 'b@x.test' }] },
+      deliveryStatus: {
+        'a@x.test': { smtpReply: '250 2.0.0 Ok', delivered: 'yes' },
+        'b@x.test': { smtpReply: '451 4.7.1 Try again later', delivered: 'queued' },
+      },
+    };
+    expect(envelopeLine(message)).toEqual({ from: 'jane@example.com', to: ['a@x.test', 'b@x.test'] });
+    expect(waiting(message)).toEqual([{ to: 'b@x.test', reply: '451 4.7.1 Try again later' }]);
+    expect(envelopeLine({ ...message, envelope: { mailFrom: { email: '' }, rcptTo: [] } }).from).toBe('<>');
+  });
+
+  it('gives the join command', () => {
+    expect(joinCommand('abc')).toBe('inbuxa-relay join abc');
+  });
+});

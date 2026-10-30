@@ -131,6 +131,10 @@ const CUSTOM_PAGES: Record<string, ComponentType> = {
     () => import('@/features/dlp/RulesPage'),
     (m) => m.MailFlowRulesPage,
   ),
+  Relays: onDemand(
+    () => import('@/features/relays/RelaysPage'),
+    (m) => m.RelaysPage,
+  ),
   Journal: onDemand(
     () => import('@/features/journal/JournalPage'),
     (m) => m.JournalPage,

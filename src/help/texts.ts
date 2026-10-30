@@ -18,6 +18,38 @@ import { SETTINGS_PAGE_HELP } from './settingsPages';
 import { SECURITY_PAGE_HELP } from './securityChecks';
 
 export const FIELD_HELP: Record<string, string> = {
+  // inbuxa Relays (relay spec, "inbuxa-admin")
+  'inbuxa:Relay.name': 'What you call this relay here. Routes name relays by it.',
+  'inbuxa:Relay.description': 'A note for administrators, such as where the relay runs.',
+  'inbuxa:Relay.address':
+    'The relay’s host name or IP address, as this server dials it for the link. A WireGuard address keeps the link off the internet.',
+  'inbuxa:Relay.linkPort': 'The port the relay listens on for this server’s link. 443 unless you chose another.',
+  'inbuxa:Relay.enabled':
+    'Turn off to drop the link: the relay closes port 25 and keeps what it holds until it’s turned back on.',
+  'inbuxa:Relay.sendThrough':
+    'Send all outgoing mail through relays instead of straight from this server. Mail waits here while no relay is linked.',
+  'inbuxa:Relay.inboundOnly':
+    'The relay takes mail in but sends none, for instance while its address is new to other providers or not in your SPF record yet.',
+  'inbuxa:Relay.hostname':
+    'The relay’s public name: what it says when other servers connect, and the name on its certificate. Needs an A record and matching reverse DNS.',
+  'inbuxa:Relay.smtpListen': 'The addresses the relay takes mail on, usually [::]:25 for every address on port 25.',
+  'inbuxa:Relay.maxMessageSize': 'The largest message the relay accepts, in either direction.',
+  'inbuxa:Relay.maxRecipients': 'How many recipients one message may have at the relay.',
+  'inbuxa:Relay.rateLimits':
+    'How fast one sending address may connect and send to the relay, so a flood stops at the edge.',
+  'inbuxa:Relay.dnsbl':
+    'Blocklists the relay checks connecting servers against while this server is unreachable. Empty checks none.',
+  'inbuxa:Relay.liveVerdictTimeout':
+    'How long the relay waits for this server’s answer about a message before keeping it to deliver later. Keep it above the spam check’s time limit.',
+  'inbuxa:Relay.heldMaxAge':
+    'How many days the relay keeps mail it couldn’t hand over before returning it to the sender.',
+  'inbuxa:Relay.spoolMaxBytes':
+    'How much disk the relay may use for mail it holds. Past it, it asks senders to try again later.',
+  'inbuxa:Relay.outboundRetry':
+    'How long the relay waits between attempts to deliver outgoing mail, in order; the last wait repeats.',
+  'inbuxa:Relay.outboundExpiry': 'How long the relay keeps trying before outgoing mail fails and the sender is told.',
+  'inbuxa:Relay.outboundTls':
+    'Opportunistic uses encryption when the other server offers it. Required delivers nothing unencrypted. DANE and MTA-STS are always enforced.',
   // Domains
   'x:Domain.name': 'The domain people’s addresses end in, like example.com.',
   'x:Domain.aliases':
