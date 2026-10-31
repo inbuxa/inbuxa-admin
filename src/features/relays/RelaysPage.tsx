@@ -11,7 +11,8 @@
  * when a relay needs attention. Each relay has its settings, which the
  * server pushes to it, and its queues, read over the server's link, where
  * held mail can be discarded and outbound mail cancelled. A relay older
- * than this server can be handed a signed release to upgrade to.
+ * than this server can be handed a signed release to upgrade to. The link
+ * CA they all share can be replaced without a new join on each (RL-34).
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -23,6 +24,7 @@ import {
   Check,
   Copy,
   Inbox,
+  KeyRound,
   Loader2,
   Plus,
   RefreshCw,
@@ -59,6 +61,7 @@ import {
   fetchRelays,
   rejoinRelay,
   RelaysUnavailable,
+  replaceLinkCa,
   RelayUnreachable,
   updateRelay,
   upgradeRelay,
@@ -68,6 +71,7 @@ import {
   envelopeLine,
   joinCommand,
   latestStatus,
+  linkCaReplacement,
   readSignatureFile,
   settingsPatch,
   shutOut,
@@ -193,7 +197,62 @@ function attentionText(t: TFunction, a: Attention): string {
     }
     case 'recipientsDiffer':
       return t('relays.att.recipients', 'Nodes sent it different recipient lists; one of them is out of date.');
+    case 'linkCaOld':
+      return t(
+        'relays.att.linkCaOld',
+        'It only trusts a link CA this server has replaced, so no node can link to it. Start a new join.',
+      );
+    case 'linkCaWaiting':
+      return t('relays.att.linkCaWaiting', 'It doesn’t trust the new link CA yet; the replacement waits for it.');
   }
+}
+
+type LinkCaChange = 'start' | 'finish' | 'cancel';
+
+/** The replacement of the link CA under way, and what can be done about it. */
+function LinkCaBanner({
+  since,
+  waiting,
+  canChange,
+  onChange,
+}: {
+  since: string;
+  waiting: Relay[];
+  canChange: boolean;
+  onChange: (change: LinkCaChange) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className="flex flex-wrap items-start justify-between gap-3 rounded-xl border p-4">
+      <div className="flex min-w-0 items-start gap-3">
+        <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
+        <div className="space-y-1 text-sm">
+          <p className="font-medium">
+            {t('relays.linkCa.since', 'Replacing the link CA, since {{since}}', { since: when(since) })}
+          </p>
+          <p className="text-muted-foreground">
+            {waiting.length > 0
+              ? t(
+                  'relays.linkCa.waiting',
+                  'Waiting for {{names}} to trust the new one. Once every relay does, the nodes move to it and the old one stops working.',
+                  { names: waiting.map((r) => r.name).join(', ') },
+                )
+              : t('relays.linkCa.ready', 'Every relay trusts the new one. The nodes move to it within a minute.')}
+          </p>
+        </div>
+      </div>
+      {canChange && (
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => onChange('finish')}>
+            {t('relays.linkCa.finish', 'Finish now…')}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => onChange('cancel')}>
+            {t('relays.linkCa.cancel', 'Cancel it…')}
+          </Button>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -1152,7 +1211,11 @@ type Open =
   | { kind: 'queue'; relay: Relay }
   | { kind: 'rejoin'; relay: Relay }
   | { kind: 'upgrade'; relay: Relay }
-  | { kind: 'delete'; relay: Relay };
+  | { kind: 'delete'; relay: Relay }
+  | { kind: 'linkCa'; change: LinkCaChange; relayId: string; waiting: Relay[] };
+
+/** While the link CA is replaced, the page looks again this often, as the server finishes it by itself. */
+const REPLACING_REFRESH_MS = 15_000;
 
 export function RelaysPage() {
   const { t } = useTranslation();
@@ -1180,6 +1243,21 @@ export function RelaysPage() {
     return () => controller.abort();
   }, [fetches, t]);
 
+  const relays = useMemo(() => (load.kind === 'ready' ? load.relays : []), [load]);
+  const replacement = useMemo(() => linkCaReplacement(relays), [relays]);
+  // A server from before RL-34 sends no linkCaReplacing at all
+  const canReplaceLinkCa =
+    canChange && !replacement && relays.some((r) => r.joinState === 'joined' && r.linkCaReplacing !== undefined);
+
+  useEffect(() => {
+    if (!replacement || open) return;
+    const timer = setInterval(refetch, REPLACING_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [replacement, open, refetch]);
+
+  const changeLinkCa = (change: LinkCaChange) =>
+    relays[0] && setOpen({ kind: 'linkCa', change, relayId: relays[0].id, waiting: replacement?.waiting ?? [] });
+
   const close = () => setOpen(null);
 
   return (
@@ -1193,13 +1271,29 @@ export function RelaysPage() {
         )}
         actions={
           canChange && (
-            <Button onClick={() => setOpen({ kind: 'add' })}>
-              <Plus className="mr-2 h-4 w-4" />
-              {t('relays.add', 'Add a relay…')}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {canReplaceLinkCa && (
+                <Button variant="outline" onClick={() => changeLinkCa('start')}>
+                  <KeyRound className="mr-2 h-4 w-4" />
+                  {t('relays.linkCa.start', 'Replace link CA…')}
+                </Button>
+              )}
+              <Button onClick={() => setOpen({ kind: 'add' })}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t('relays.add', 'Add a relay…')}
+              </Button>
+            </div>
           )
         }
       />
+      {replacement && (
+        <LinkCaBanner
+          since={replacement.since}
+          waiting={replacement.waiting}
+          canChange={canChange}
+          onChange={changeLinkCa}
+        />
+      )}
       {load.kind === 'loading' && <LoadingFallback />}
       {load.kind === 'error' && (
         <div className="rounded-lg border border-dashed p-12 text-center text-muted-foreground">{load.message}</div>
@@ -1210,7 +1304,7 @@ export function RelaysPage() {
         </div>
       )}
       {load.kind === 'ready' &&
-        load.relays.map((relay) => (
+        relays.map((relay) => (
           <RelayCard
             key={relay.id}
             relay={relay}
@@ -1273,6 +1367,54 @@ export function RelaysPage() {
           onDone={() => {
             close();
             refetch();
+          }}
+        />
+      )}
+      {open?.kind === 'linkCa' && (
+        <ConfirmDialog
+          title={
+            open.change === 'start'
+              ? t('relays.linkCa.startTitle', 'Replace the link CA?')
+              : open.change === 'finish'
+                ? t('relays.linkCa.finishTitle', 'Finish the replacement now?')
+                : t('relays.linkCa.cancelTitle', 'Cancel the replacement?')
+          }
+          body={
+            open.change === 'start'
+              ? t(
+                  'relays.linkCa.startBody',
+                  'For when a node’s link certificate may have leaked. This server makes a new link CA, and every relay trusts it beside the old one. Once all of them do, the nodes move to it and a certificate from the old one stops working. A relay that is off or unreachable meanwhile will need a new join.',
+                )
+              : open.change === 'finish'
+                ? open.waiting.length > 0
+                  ? t(
+                      'relays.linkCa.finishBody',
+                      'The nodes move to the new link CA without waiting for {{names}}, which will each need a new join.',
+                      { names: open.waiting.map((r) => r.name).join(', ') },
+                    )
+                  : t('relays.linkCa.finishReady', 'The nodes move to the new link CA now.')
+                : t(
+                    'relays.linkCa.cancelBody',
+                    'This server drops the new link CA, and the relays go back to trusting only the current one.',
+                  )
+          }
+          action={
+            open.change === 'start'
+              ? t('relays.linkCa.startGo', 'Replace it')
+              : open.change === 'finish'
+                ? t('relays.linkCa.finishGo', 'Finish now')
+                : t('relays.linkCa.cancelGo', 'Cancel the replacement')
+          }
+          destructive={open.change === 'finish' && open.waiting.length > 0}
+          onClose={close}
+          onConfirm={async (reason) => {
+            try {
+              await replaceLinkCa(open.relayId, open.change, reason);
+              close();
+              refetch();
+            } catch (e) {
+              failed(t('relays.linkCa.failed', 'The link CA wasn’t changed'), e);
+            }
           }}
         />
       )}

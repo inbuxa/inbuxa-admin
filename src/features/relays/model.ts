@@ -11,6 +11,8 @@
  * page edits its settings in.
  */
 
+export type LinkCa = 'current' | 'both' | 'old';
+
 export type LinkState = 'connecting' | 'joining' | 'linked' | 'down' | 'joinFailed';
 
 /** What a relay last said of itself, over one node's link. */
@@ -79,6 +81,14 @@ export interface Relay {
   certificateError?: string | null;
   /** Absent from servers before RL-28: a link last heard an older release than the server's. */
   olderThanServer?: boolean | null;
+  /**
+   * Absent from servers before RL-34: the link CA it trusts, `both` during a
+   * replacement, `old` when it only trusts one since replaced; null before
+   * it has said.
+   */
+  linkCa?: LinkCa | null;
+  /** Absent from servers before RL-34: when the replacement of the link CA under way began. */
+  linkCaReplacing?: string | null;
   joinState: 'waiting' | 'expired' | 'joined';
   joinExpiresAt?: string | null;
   joinedAt?: string | null;
@@ -137,7 +147,9 @@ export type Attention =
   | { kind: 'certificateFailed'; error: string }
   | { kind: 'relayError'; error: string }
   | { kind: 'olderVersion'; version: string | null; selfUpgrade: boolean }
-  | { kind: 'recipientsDiffer' };
+  | { kind: 'recipientsDiffer' }
+  | { kind: 'linkCaOld' }
+  | { kind: 'linkCaWaiting' };
 
 /** A spool this full is worth a line. */
 export const SPOOL_WARN = 0.8;
@@ -155,6 +167,8 @@ export function latestStatus(relay: Relay): RelayStatus | null {
 
 export function attention(relay: Relay, now: Date = new Date()): Attention[] {
   if (!relay.enabled) return [];
+  // It can't link until it joins again, so nothing else it says matters
+  if (relay.linkCa === 'old') return [{ kind: 'linkCaOld' }];
   if (relay.joinState === 'waiting') return [{ kind: 'joinWaiting', until: relay.joinExpiresAt }];
   if (relay.joinState === 'expired') return [{ kind: 'joinExpired' }];
   const out: Attention[] = [];
@@ -191,7 +205,19 @@ export function attention(relay: Relay, now: Date = new Date()): Attention[] {
     relay.links.filter((l) => l.state === 'linked' && l.recipients != null).map((l) => l.recipients),
   );
   if (counts.size > 1) out.push({ kind: 'recipientsDiffer' });
+  if (holdsUpReplacement(relay)) out.push({ kind: 'linkCaWaiting' });
   return out;
+}
+
+/** The server finishes a replacement once every enabled, joined relay trusts both CAs. */
+function holdsUpReplacement(relay: Relay): boolean {
+  return !!relay.linkCaReplacing && relay.enabled && relay.joinState === 'joined' && relay.linkCa !== 'both';
+}
+
+/** A replacement of the link CA under way (RL-34): when it began, and the relays it waits for. */
+export function linkCaReplacement(relays: Relay[]): { since: string; waiting: Relay[] } | null {
+  const since = relays.find((r) => r.linkCaReplacing)?.linkCaReplacing;
+  return since ? { since, waiting: relays.filter(holdsUpReplacement) } : null;
 }
 
 /** What a relay release's signature file says it is (RL-29). */

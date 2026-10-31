@@ -11,6 +11,7 @@ import {
   envelopeLine,
   formatDuration,
   joinCommand,
+  linkCaReplacement,
   parseDuration,
   parseDurations,
   parseRange,
@@ -82,6 +83,38 @@ function relay(extra: Partial<Relay> = {}): Relay {
     ...extra,
   };
 }
+
+describe('the link CA', () => {
+  it('asks for a new join from a relay on an old one, and nothing else', () => {
+    expect(attention(relay({ linkCa: 'old', links: [link('1', { state: 'down' })] }), NOW)).toEqual([
+      { kind: 'linkCaOld' },
+    ]);
+    expect(attention(relay({ linkCa: 'old', joinState: 'waiting', links: [] }), NOW)).toEqual([{ kind: 'linkCaOld' }]);
+    expect(attention(relay({ linkCa: 'old', enabled: false }), NOW)).toEqual([]);
+  });
+
+  it('names the relays a replacement waits for', () => {
+    const since = '2026-10-30T11:00:00Z';
+    const relays = [
+      relay({ id: 'a', linkCa: 'both', linkCaReplacing: since }),
+      relay({ id: 'b', linkCa: 'current', linkCaReplacing: since }),
+      relay({ id: 'c', linkCa: null, linkCaReplacing: since }),
+      relay({ id: 'd', linkCa: 'current', linkCaReplacing: since, enabled: false }),
+      relay({ id: 'e', linkCa: 'old', linkCaReplacing: since, joinState: 'waiting', links: [] }),
+    ];
+    const found = linkCaReplacement(relays);
+    expect(found?.since).toBe(since);
+    expect(found?.waiting.map((r) => r.id)).toEqual(['b', 'c']);
+    expect(attention(relays[1], NOW)).toEqual([{ kind: 'linkCaWaiting' }]);
+    expect(attention(relays[0], NOW)).toEqual([]);
+  });
+
+  it('sees none under way, or none on a server before RL-34', () => {
+    expect(linkCaReplacement([relay({ linkCa: 'current', linkCaReplacing: null })])).toBeNull();
+    expect(linkCaReplacement([relay()])).toBeNull();
+    expect(attention(relay({ linkCa: 'current', linkCaReplacing: null }), NOW)).toEqual([]);
+  });
+});
 
 describe('attention', () => {
   it('says nothing when everything is fine, or the relay is off', () => {

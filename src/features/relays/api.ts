@@ -141,6 +141,18 @@ export async function upgradeRelay(id: string, binary: File, signature: string, 
   await updateRelay(id, { upgrade: { blobId, signature } }, reason);
 }
 
+/**
+ * Starts, finishes or cancels a replacement of the link CA every relay
+ * shares (RL-34). It goes as an update of any one relay, on its own.
+ */
+export async function replaceLinkCa(
+  relayId: string,
+  change: 'start' | 'finish' | 'cancel',
+  reason?: string,
+): Promise<void> {
+  await updateRelay(relayId, { replaceLinkCa: change }, reason);
+}
+
 export async function deleteRelay(id: string, reason?: string): Promise<void> {
   const result = await call('inbuxa:Relay/set', { ...withReason(reason), destroy: [id] });
   const failed = setFailure(result, 'notDestroyed', id);
