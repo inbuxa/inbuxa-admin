@@ -89,6 +89,8 @@ export interface Relay {
   linkCa?: LinkCa | null;
   /** Absent from servers before RL-34: when the replacement of the link CA under way began. */
   linkCaReplacing?: string | null;
+  /** Absent from servers before RL-35: the relay keys are wrapped under INBUXA_RELAY_KEY_FILE's file. */
+  keysWrapped?: boolean;
   joinState: 'waiting' | 'expired' | 'joined';
   joinExpiresAt?: string | null;
   joinedAt?: string | null;

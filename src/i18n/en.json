@@ -2520,6 +2520,7 @@
       "finishGo": "Finish now",
       "cancelGo": "Cancel the replacement",
       "failed": "The link CA wasn’t changed"
-    }
+    },
+    "keysWrapped": "The relay keys are wrapped under the key file INBUXA_RELAY_KEY_FILE names. Back that file up on its own: without it, mail the relays hold can’t be opened, and every relay needs a new join."
   }
 }

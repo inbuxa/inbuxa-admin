@@ -13,6 +13,8 @@
  * held mail can be discarded and outbound mail cancelled. A relay older
  * than this server can be handed a signed release to upgrade to. The link
  * CA they all share can be replaced without a new join on each (RL-34).
+ * When the relay keys are wrapped under a key file, the page says to back
+ * it up (RL-35).
  */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -26,6 +28,7 @@ import {
   Inbox,
   KeyRound,
   Loader2,
+  LockKeyhole,
   Plus,
   RefreshCw,
   Send,
@@ -1286,6 +1289,17 @@ export function RelaysPage() {
           )
         }
       />
+      {relays.some((r) => r.keysWrapped) && (
+        <p className="flex items-start gap-2 text-sm text-muted-foreground">
+          <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            {t(
+              'relays.keysWrapped',
+              'The relay keys are wrapped under the key file INBUXA_RELAY_KEY_FILE names. Back that file up on its own: without it, mail the relays hold can’t be opened, and every relay needs a new join.',
+            )}
+          </span>
+        </p>
+      )}
       {replacement && (
         <LinkCaBanner
           since={replacement.since}
