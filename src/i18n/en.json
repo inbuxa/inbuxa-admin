@@ -2396,7 +2396,8 @@
       "outboundTls": "Encryption",
       "mxPreference": "MX preference",
       "smtpCertificate": "Certificate chain (PEM)",
-      "smtpPrivateKey": "Private key (PEM)"
+      "smtpPrivateKey": "Private key (PEM)",
+      "linkAllowFrom": "Who may link"
     },
     "cancel": "Cancel",
     "addGo": "Add",
@@ -2495,6 +2496,9 @@
     "upgradeRelease": "Release {{version}}, for {{target}}.",
     "upgradeNotSig": "{{file}} isn’t a relay release’s signature file.",
     "upgradeGo": "Upgrade",
-    "upgrade": "Upgrade…"
+    "upgrade": "Upgrade…",
+    "anyone": "Anyone",
+    "allowShutsOut": "This server links from {{addresses}}, which this list leaves out: it couldn’t link to the relay again. To undo that, run the relay with --link-allow-any.",
+    "allowLeavesOut": "Some of this server’s nodes link from {{addresses}}, which this list leaves out: they couldn’t link to the relay again."
   }
 }

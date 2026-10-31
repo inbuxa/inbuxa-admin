@@ -13,7 +13,9 @@ import {
   joinCommand,
   parseDuration,
   parseDurations,
+  parseRange,
   settingsPatch,
+  shutOut,
   toForm,
   waiting,
   type Relay,
@@ -289,5 +291,65 @@ describe('queues', () => {
 
   it('gives the join command', () => {
     expect(joinCommand('abc')).toBe('inbuxa-relay join abc');
+  });
+});
+
+describe('who may link (RL-33)', () => {
+  const from = (address: string) => link('n', { relay: { ...link('n').relay!, linkFrom: address } });
+
+  it('reads addresses and ranges as the relay does', () => {
+    for (const ok of [
+      '192.0.2.7',
+      '192.0.2.0/24',
+      '0.0.0.0/0',
+      '2001:db8::/32',
+      '::1',
+      '::ffff:192.0.2.1',
+      'fd42:1::2',
+    ]) {
+      expect(parseRange(ok), ok).not.toBeNull();
+    }
+    for (const bad of [
+      '',
+      'relay.example',
+      '192.0.2.0/33',
+      '2001:db8::/129',
+      '192.0.2.0/',
+      '192.0.2',
+      '1::2::3',
+      '192.0.2.0/24/1',
+      '256.0.0.1',
+    ]) {
+      expect(parseRange(bad), bad).toBeNull();
+    }
+  });
+
+  it('says which addresses this server links from a list leaves out', () => {
+    const links = [from('203.0.113.5'), from('2001:db8:5::9'), link('m')];
+    expect(shutOut('', links)).toEqual({ known: ['203.0.113.5', '2001:db8:5::9'], outside: [] });
+    expect(shutOut('203.0.113.0/24, 2001:db8:5::/48', links).outside).toEqual([]);
+    expect(shutOut('203.0.113.0/24', links).outside).toEqual(['2001:db8:5::9']);
+    expect(shutOut('198.51.100.1', links).outside).toEqual(['203.0.113.5', '2001:db8:5::9']);
+    // An IPv4 node behind a [::] listener is matched as IPv4, both ways
+    expect(shutOut('::ffff:203.0.113.5', [from('203.0.113.5')]).outside).toEqual([]);
+    expect(shutOut('203.0.113.5', [from('::ffff:203.0.113.5')]).outside).toEqual([]);
+    // Nothing to check against, or a list that doesn't read yet
+    expect(shutOut('198.51.100.1', [link('m')])).toEqual({ known: [], outside: [] });
+    expect(shutOut('198.51.100.1, nope', links).outside).toEqual([]);
+  });
+
+  it('sends the list when it changes, and refuses one that does not read', () => {
+    const settings = { ...SETTINGS, linkAllowFrom: [] };
+    const before = toForm(settings);
+    expect(before.linkAllowFrom).toBe('');
+    expect(settingsPatch(before, { ...before, linkAllowFrom: '192.0.2.0/24\n2001:db8::/48' }, settings)).toEqual({
+      patch: { 'settings/linkAllowFrom': ['192.0.2.0/24', '2001:db8::/48'] },
+    });
+    expect(settingsPatch(before, { ...before, linkAllowFrom: '192.0.2.0/24, relay.example' }, settings)).toEqual({
+      invalid: 'linkAllowFrom',
+    });
+    // A server before RL-33 has no list, and none is sent
+    expect(toForm(SETTINGS).linkAllowFrom).toBe('');
+    expect(settingsPatch(toForm(SETTINGS), toForm(SETTINGS), SETTINGS)).toEqual({ patch: {} });
   });
 });

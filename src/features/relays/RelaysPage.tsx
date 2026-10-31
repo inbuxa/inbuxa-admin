@@ -70,6 +70,7 @@ import {
   latestStatus,
   readSignatureFile,
   settingsPatch,
+  shutOut,
   toForm,
   waiting,
   type Attention,
@@ -476,6 +477,34 @@ function SettingsDialog({
               />
             </Field>
           </div>
+          {relay.settings.linkAllowFrom !== undefined && (
+            <Field field="linkAllowFrom" label={t('relays.f.linkAllowFrom', 'Who may link')}>
+              {input('linkAllowFrom', { placeholder: t('relays.anyone', 'Anyone') })}
+            </Field>
+          )}
+          {(() => {
+            const { known, outside } = shutOut(form.linkAllowFrom, relay.links);
+            if (outside.length === 0) return null;
+            const all = outside.length === known.length;
+            return (
+              <p className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span className="break-words">
+                  {all
+                    ? t(
+                        'relays.allowShutsOut',
+                        'This server links from {{addresses}}, which this list leaves out: it couldn’t link to the relay again. To undo that, run the relay with --link-allow-any.',
+                        { addresses: outside.join(', ') },
+                      )
+                    : t(
+                        'relays.allowLeavesOut',
+                        'Some of this server’s nodes link from {{addresses}}, which this list leaves out: they couldn’t link to the relay again.',
+                        { addresses: outside.join(', ') },
+                      )}
+                </span>
+              </p>
+            );
+          })()}
           <ToggleField
             field="enabled"
             label={t('relays.f.enabled', 'Linked')}
