@@ -69,6 +69,13 @@ describe('isLinkVisible for the console’s own pages', () => {
     }
   });
 
+  it('shows Migrations to whoever may run them, and only them', () => {
+    const view = 'CustomComponent/Migrations';
+    expect(isLinkVisible(schema, view, 'oss', none, hasPermFrom(['sysMigrationRun']))).toBe(true);
+    expect(isLinkVisible(schema, view, 'oss', all, hasPermFrom([]))).toBe(false);
+    expect(isLinkEnterprise(schema, view)).toBe(false);
+  });
+
   it('shows the live delivery test and live tracing to whoever holds their permission', () => {
     expect(isLinkVisible(schema, 'CustomComponent/LiveDelivery', 'oss', none, hasPermFrom(['liveDeliveryTest']))).toBe(
       true,

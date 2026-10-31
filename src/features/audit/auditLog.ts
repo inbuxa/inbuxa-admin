@@ -17,15 +17,7 @@ export const INBUXA_CAPABILITY = 'urn:inbuxa:jmap';
 export const PAGE_SIZE = 50;
 
 export type AuditAction =
-  | 'create'
-  | 'update'
-  | 'destroy'
-  | 'signIn'
-  | 'signInFailed'
-  | 'accountAccess'
-  | 'blobAccess'
-  | 'export'
-  | 'verify';
+  'create' | 'update' | 'destroy' | 'signIn' | 'signInFailed' | 'accountAccess' | 'blobAccess' | 'export' | 'verify';
 
 export const AUDIT_ACTIONS: AuditAction[] = [
   'create',
@@ -52,7 +44,8 @@ export type AuditVia =
   | { kind: 'oauth'; client: string }
   | { kind: 'directory' }
   | { kind: 'master'; accountId?: string; name: string }
-  | { kind: 'recovery' };
+  | { kind: 'recovery' }
+  | { kind: 'migration'; id: number };
 
 export interface AuditTarget {
   kind: string;
@@ -114,7 +107,10 @@ export const EMPTY_FILTER: AuditFilterInput = {
 /** The server's filter object: every condition must hold. */
 export function toServerFilter(input: AuditFilterInput): Record<string, string> {
   const filter: Record<string, string> = {};
-  if (input.from) filter.after = localDayStart(input.from).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  if (input.from)
+    filter.after = localDayStart(input.from)
+      .toISOString()
+      .replace(/\.\d{3}Z$/, 'Z');
   if (input.to) {
     const end = localDayStart(input.to);
     end.setDate(end.getDate() + 1);
@@ -153,11 +149,7 @@ export interface AuditPage {
 }
 
 /** One page of events, newest first. */
-export async function queryEvents(
-  input: AuditFilterInput,
-  position: number,
-  signal?: AbortSignal,
-): Promise<AuditPage> {
+export async function queryEvents(input: AuditFilterInput, position: number, signal?: AbortSignal): Promise<AuditPage> {
   const accountId = getAccountId('x:Account');
   const responses = await jmapRequest(
     [
@@ -208,11 +200,9 @@ export function normalize(raw: Partial<AuditEvent> & { id: string }): AuditEvent
 
 export async function fetchKeepForDays(): Promise<number> {
   const accountId = getAccountId('x:Account');
-  const responses = await jmapRequest(
-    [['inbuxa:AuditSettings/get', { accountId, ids: null }, '0']],
-    undefined,
-    [INBUXA_CAPABILITY],
-  );
+  const responses = await jmapRequest([['inbuxa:AuditSettings/get', { accountId, ids: null }, '0']], undefined, [
+    INBUXA_CAPABILITY,
+  ]);
   const [name, result] = responses[0] ?? [];
   if (name !== 'inbuxa:AuditSettings/get') throw methodError(name, result);
   return (result as { list?: { keepForDays?: number }[] }).list?.[0]?.keepForDays ?? 730;
