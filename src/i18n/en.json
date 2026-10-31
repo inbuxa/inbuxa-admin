@@ -2361,7 +2361,9 @@
       "certFailed": "Its certificate couldn’t be ordered: {{error}}",
       "anOlderRelease": "an older release",
       "older": "It runs {{version}}, older than this server. Upgrade it to this server’s release.",
-      "olderImage": "It runs {{version}}, older than this server, from a container image: pull the image that matches this server and restart it."
+      "olderImage": "It runs {{version}}, older than this server, from a container image: pull the image that matches this server and restart it.",
+      "linkCaOld": "It only trusts a link CA this server has replaced, so no node can link to it. Start a new join.",
+      "linkCaWaiting": "It doesn’t trust the new link CA yet; the replacement waits for it."
     },
     "copied": "Copied",
     "tokenTitle": "Join {{name}}",
@@ -2499,6 +2501,25 @@
     "upgrade": "Upgrade…",
     "anyone": "Anyone",
     "allowShutsOut": "This server links from {{addresses}}, which this list leaves out: it couldn’t link to the relay again. To undo that, run the relay with --link-allow-any.",
-    "allowLeavesOut": "Some of this server’s nodes link from {{addresses}}, which this list leaves out: they couldn’t link to the relay again."
+    "allowLeavesOut": "Some of this server’s nodes link from {{addresses}}, which this list leaves out: they couldn’t link to the relay again.",
+    "linkCa": {
+      "since": "Replacing the link CA, since {{since}}",
+      "waiting": "Waiting for {{names}} to trust the new one. Once every relay does, the nodes move to it and the old one stops working.",
+      "ready": "Every relay trusts the new one. The nodes move to it within a minute.",
+      "finish": "Finish now…",
+      "cancel": "Cancel it…",
+      "start": "Replace link CA…",
+      "startTitle": "Replace the link CA?",
+      "finishTitle": "Finish the replacement now?",
+      "cancelTitle": "Cancel the replacement?",
+      "startBody": "For when a node’s link certificate may have leaked. This server makes a new link CA, and every relay trusts it beside the old one. Once all of them do, the nodes move to it and a certificate from the old one stops working. A relay that is off or unreachable meanwhile will need a new join.",
+      "finishBody": "The nodes move to the new link CA without waiting for {{names}}, which will each need a new join.",
+      "finishReady": "The nodes move to the new link CA now.",
+      "cancelBody": "This server drops the new link CA, and the relays go back to trusting only the current one.",
+      "startGo": "Replace it",
+      "finishGo": "Finish now",
+      "cancelGo": "Cancel the replacement",
+      "failed": "The link CA wasn’t changed"
+    }
   }
 }
