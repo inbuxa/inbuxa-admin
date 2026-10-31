@@ -18,6 +18,29 @@ import { SETTINGS_PAGE_HELP } from './settingsPages';
 import { SECURITY_PAGE_HELP } from './securityChecks';
 
 export const FIELD_HELP: Record<string, string> = {
+  // Migrations (inbuxa-server docs/spec/features/migrations.md)
+  'inbuxa:Migration.sourceKind':
+    'The server the mailboxes are on now. Each kind asks for its own secret when a run starts.',
+  'inbuxa:Migration.url':
+    'The old server’s address. For IMAP, imaps:// for TLS from the start, or imap:// for STARTTLS.',
+  'inbuxa:Migration.login':
+    'One login that opens every mailbox, with {email} or {local} where the account goes, such as {email}*master for a Dovecot master user.',
+  'inbuxa:Migration.cleartext':
+    'Lets the login go over imap:// without TLS. Only for an old server on a network you trust.',
+  'inbuxa:Migration.jmapLogin':
+    'An administrator’s login on the old server. Leave it empty to give an API key instead when the run starts.',
+  'inbuxa:Migration.tenant': 'The Microsoft 365 tenant, as its domain or its id.',
+  'inbuxa:Migration.clientId':
+    'The Entra app’s client id. The app needs the User.Read.All and Mail.Read application permissions.',
+  'inbuxa:Migration.accounts':
+    'Each address to move, as it is on the old server. A CSV works too: the first address on each line is read.',
+  'inbuxa:Migration.createAccounts':
+    'Adds a plain account for each address this server doesn’t have, with a new password you download once.',
+  'inbuxa:Migration.parallel': 'How many accounts move side by side. More is faster, and loads both servers harder.',
+  'inbuxa:Migration.description': 'What you call this migration here.',
+  'inbuxa:Migration.run': 'The run to start with the new secret. It replaces the one the server held.',
+  'inbuxa:Migration.secret':
+    'Sent with this run and kept in the server’s memory only, for this migration’s next runs. A restart forgets it.',
   // inbuxa Relays (relay spec, "inbuxa-admin")
   'inbuxa:Relay.name': 'What you call this relay here. Routes name relays by it.',
   'inbuxa:Relay.description': 'A note for administrators, such as where the relay runs.',

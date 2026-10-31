@@ -50,6 +50,8 @@ export function viaLabel(t: T, via: AuditVia | null): string {
       return t('audit.via.master', 'as master user {{name}}', { name: via.name });
     case 'recovery':
       return t('audit.via.recovery', 'recovery administrator');
+    case 'migration':
+      return t('audit.via.migration', 'by a migration run');
   }
 }
 
@@ -57,4 +59,3 @@ export function viaLabel(t: T, via: AuditVia | null): string {
 function shortClient(client: string): string {
   return client.length > 24 ? `${client.slice(0, 12)}…` : client;
 }
-

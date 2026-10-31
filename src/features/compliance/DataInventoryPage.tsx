@@ -34,7 +34,16 @@ import {
 } from './inventory';
 
 const CATEGORIES = ['identifier', 'contact', 'network', 'content', 'metadata', 'credential'];
-const PLACES = ['data-store', 'blob-store', 'search-store', 'in-memory-store', 'memory', 'log-file', 'external'];
+const PLACES = [
+  'data-store',
+  'blob-store',
+  'search-store',
+  'in-memory-store',
+  'memory',
+  'log-file',
+  'data-directory',
+  'external',
+];
 const ANY = '__any';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; inventory: Inventory } | { kind: 'error'; message: string };

@@ -192,6 +192,7 @@ const WHERE_NAMES: Record<string, string> = {
   'in-memory-store': 'in-memory store',
   memory: 'memory',
   'log-file': 'log files',
+  'data-directory': 'files in the data directory',
   external: 'sent elsewhere',
 };
 

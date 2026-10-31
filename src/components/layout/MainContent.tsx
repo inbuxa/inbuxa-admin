@@ -135,6 +135,10 @@ const CUSTOM_PAGES: Record<string, ComponentType> = {
     () => import('@/features/relays/RelaysPage'),
     (m) => m.RelaysPage,
   ),
+  Migrations: onDemand(
+    () => import('@/features/migrations/MigrationsPage'),
+    (m) => m.MigrationsPage,
+  ),
   Journal: onDemand(
     () => import('@/features/journal/JournalPage'),
     (m) => m.JournalPage,
