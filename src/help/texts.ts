@@ -24,6 +24,8 @@ export const FIELD_HELP: Record<string, string> = {
   'inbuxa:Relay.address':
     'The relay’s host name or IP address, as this server dials it for the link. A WireGuard address keeps the link off the internet.',
   'inbuxa:Relay.linkPort': 'The port the relay listens on for this server’s link. 443 unless you chose another.',
+  'inbuxa:Relay.linkAllowFrom':
+    'The addresses and ranges, such as 192.0.2.0/24, the relay takes this server’s link from. Others get no answer. Empty takes it from anyone, so keep the port closed with a firewall instead.',
   'inbuxa:Relay.enabled':
     'Turn off to stop this server linking to it. The relay keeps the mail it holds and goes on taking mail in, held until it’s turned back on.',
   'inbuxa:Relay.sendThrough':

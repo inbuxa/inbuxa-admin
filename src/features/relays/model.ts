@@ -24,6 +24,8 @@ export interface RelayStatus {
   certificateNotAfter?: string | null;
   lastError?: string | null;
   selfUpgrade: boolean;
+  /** Absent from relays before RL-33: where the relay sees this node's link from. */
+  linkFrom?: string | null;
 }
 
 /** One node's link to a relay. */
@@ -52,6 +54,8 @@ export interface RelaySettings {
   outboundRetry: number[];
   outboundExpiry: number;
   outboundTls: 'opportunistic' | 'required';
+  /** Absent from servers before RL-33: who may dial the link; empty is anyone. */
+  linkAllowFrom?: string[];
 }
 
 export interface Relay {
@@ -281,6 +285,7 @@ export interface SettingsForm {
   outboundRetry: string;
   outboundExpiry: string;
   outboundTls: 'opportunistic' | 'required';
+  linkAllowFrom: string;
 }
 
 function trimmedNumber(value: number): string {
@@ -303,6 +308,7 @@ export function toForm(s: RelaySettings): SettingsForm {
     outboundRetry: s.outboundRetry.map(formatDuration).join(', '),
     outboundExpiry: formatDuration(s.outboundExpiry),
     outboundTls: s.outboundTls,
+    linkAllowFrom: (s.linkAllowFrom ?? []).join(', '),
   };
 }
 
@@ -358,6 +364,11 @@ export function settingsPatch(
     if (changed('outboundExpiry'))
       patch['settings/outboundExpiry'] = read('outboundExpiry', parseDuration(after.outboundExpiry));
     if (changed('outboundTls')) patch['settings/outboundTls'] = after.outboundTls;
+    if (changed('linkAllowFrom')) {
+      const list = parseList(after.linkAllowFrom);
+      if (list.length > MAX_ALLOW || !list.every((entry) => parseRange(entry))) throw 'linkAllowFrom';
+      patch['settings/linkAllowFrom'] = list;
+    }
   } catch (field) {
     return { invalid: field as keyof SettingsForm };
   }
@@ -377,4 +388,108 @@ export function waiting(message: RelayMessage): { to: string; reply: string }[] 
   return Object.entries(message.deliveryStatus ?? {})
     .filter(([, status]) => status.delivered === 'queued')
     .map(([to, status]) => ({ to, reply: status.smtpReply }));
+}
+
+// ---- who may dial the link (RL-33) ----
+
+/** The most entries the relay takes in `linkAllowFrom`. */
+export const MAX_ALLOW = 64;
+
+interface Range {
+  v6: boolean;
+  addr: bigint;
+  bits: number;
+}
+
+function parseIPv4(text: string): bigint | null {
+  const parts = text.split('.');
+  if (parts.length !== 4) return null;
+  let out = 0n;
+  for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part) || Number(part) > 255) return null;
+    out = (out << 8n) | BigInt(Number(part));
+  }
+  return out;
+}
+
+function parseIPv6(text: string): bigint | null {
+  let groups: string[];
+  // A trailing IPv4 part, as in ::ffff:192.0.2.1
+  const v4 = /^(.*:)(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  let tail: bigint | null = null;
+  if (v4) {
+    tail = parseIPv4(v4[2]);
+    if (tail === null) return null;
+    text = v4[1] + '0:0';
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const split = (h: string) => (h === '' ? [] : h.split(':'));
+  if (halves.length === 2) {
+    const head = split(halves[0]);
+    const rest = split(halves[1]);
+    if (head.length + rest.length > 7) return null;
+    groups = [...head, ...Array(8 - head.length - rest.length).fill('0'), ...rest];
+  } else {
+    groups = split(text);
+  }
+  if (groups.length !== 8) return null;
+  let out = 0n;
+  for (const group of groups) {
+    if (!/^[0-9a-fA-F]{1,4}$/.test(group)) return null;
+    out = (out << 16n) | BigInt(parseInt(group, 16));
+  }
+  if (tail !== null) out = (out & ~0xffffffffn) | tail;
+  return out;
+}
+
+const MAPPED = 0xffff00000000n;
+
+/** An address, IPv4-mapped IPv6 taken as the IPv4 it carries, as the relay takes it. */
+function parseAddress(text: string): { v6: boolean; addr: bigint } | null {
+  const v4 = parseIPv4(text);
+  if (v4 !== null) return { v6: false, addr: v4 };
+  const v6 = parseIPv6(text);
+  if (v6 === null) return null;
+  if (v6 >> 32n === MAPPED >> 32n) return { v6: false, addr: v6 & 0xffffffffn };
+  return { v6: true, addr: v6 };
+}
+
+function masked(addr: bigint, bits: number, width: number): bigint {
+  const shift = BigInt(width - bits);
+  return (addr >> shift) << shift;
+}
+
+/** `192.0.2.7`, `192.0.2.0/24` or `2001:db8::/48`, as the relay reads them. */
+export function parseRange(text: string): Range | null {
+  const [addrText, bitsText, extra] = text.trim().split('/');
+  if (extra !== undefined) return null;
+  const parsed = parseAddress(addrText);
+  if (!parsed) return null;
+  const width = parsed.v6 ? 128 : 32;
+  let bits = width;
+  if (bitsText !== undefined) {
+    if (!/^\d+$/.test(bitsText) || Number(bitsText) > width) return null;
+    bits = Number(bitsText);
+  }
+  return { v6: parsed.v6, addr: masked(parsed.addr, bits, width), bits };
+}
+
+function allows(ranges: Range[], address: string): boolean {
+  const parsed = parseAddress(address);
+  if (!parsed) return false;
+  return ranges.some((r) => r.v6 === parsed.v6 && masked(parsed.addr, r.bits, r.v6 ? 128 : 32) === r.addr);
+}
+
+/**
+ * The addresses the relay last saw this server's nodes link from that a
+ * `linkAllowFrom` list would turn away, and whether any were seen at all:
+ * a list that leaves them all out locks this server out (RL-33).
+ */
+export function shutOut(list: string, links: RelayLink[]): { known: string[]; outside: string[] } {
+  const known = [...new Set(links.map((l) => l.relay?.linkFrom).filter((a): a is string => !!a))];
+  const entries = parseList(list);
+  const ranges = entries.map(parseRange);
+  if (entries.length === 0 || ranges.some((r) => !r)) return { known, outside: [] };
+  return { known, outside: known.filter((a) => !allows(ranges as Range[], a)) };
 }
