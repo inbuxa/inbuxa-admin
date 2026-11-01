@@ -101,6 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
+      latest: ${{ steps.latest.outputs.latest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: v
@@ -112,6 +113,20 @@ jobs:
             exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      # :latest belongs to the newest series. Once a final release numbered by
+      # series exists (v27.1, v27.1.3), a dated release from release/2026
+      # leaves :latest and GitHub's latest release where they are. The check
+      # fails rather than guess: a wrong :latest is worse than a re-run.
+      - id: latest
+        run: |
+          set -euo pipefail
+          url="$GITEA_URL/api/v1/repos/$GITHUB_REPOSITORY/releases?draft=false&pre-release=false&limit=50"
+          series="$(curl -fsS "$url" | jq -er '[.[].tag_name | select(test("^v[0-9]{2}\\."))] | first // ""')"
+          if [ -n "$series" ]; then
+            echo "$series is out: :latest stays on its series"; echo "latest=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "no series release yet: :latest moves"; echo "latest=true" >> "$GITHUB_OUTPUT"
+          fi
 
   # Each architecture on its own native runner, pushed as an untagged image by
   # digest; `publish` joins the two digests into one multi-arch tag.
@@ -165,7 +180,8 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
-  # Joins the digests into `:<version>` and `:latest`, and links the package
+  # Joins the digests into `:<version>`, and `:latest` while the version job
+  # says so, and links the package
   # to the repository on Gitea. The release itself already exists: Gitea's
   # weekly-release.yml made it, which is what made the tag.
   publish:
@@ -187,10 +203,12 @@ jobs:
       - name: Create the manifest
         env:
           VERSION: ${{ needs.version.outputs.version }}
+          LATEST: ${{ needs.version.outputs.latest }}
         run: |
           refs=()
           for f in /tmp/digests/*; do refs+=("${IMAGE}@sha256:$(basename "$f")"); done
-          docker buildx imagetools create -t "${IMAGE}:${VERSION}" -t "${IMAGE}:latest" "${refs[@]}"
+          tags=(-t "${IMAGE}:${VERSION}"); if [ "$LATEST" = true ]; then tags+=(-t "${IMAGE}:latest"); fi
+          docker buildx imagetools create "${tags[@]}" "${refs[@]}"
           docker buildx imagetools inspect "${IMAGE}:${VERSION}"
       # Shows the package on the repository's Packages tab. Idempotent.
       - env:
@@ -250,7 +268,7 @@ jobs:
 
   # ------------------------------------------------------ ghcr replica ------
   # Copies the release image from the Gitea registry, which stays the
-  # authoritative one, to ghcr.io under the same version tag and :latest. It is
+  # authoritative one, to ghcr.io under the same version tag, and :latest as above. It is
   # a copy, not a second build: the digest on GHCR is the digest on the
   # registry, so `docker pull ghcr.io/...` gets exactly the same image. Left
   # out of the report to Gitea, like the release copy, so a GHCR problem
@@ -266,13 +284,15 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.version.outputs.version }}
+          LATEST: ${{ needs.version.outputs.latest }}
         run: |
           set -euo pipefail
           src="${{ vars.REGISTRY }}/${GITHUB_REPOSITORY,,}"
           dst="ghcr.io/${GITHUB_REPOSITORY,,}"
           tag="$TAG"
           echo "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker buildx imagetools create -t "$dst:$tag" -t "$dst:latest" "$src:$tag"
+          args=(-t "$dst:$tag"); if [ "$LATEST" = true ]; then args+=(-t "$dst:latest"); fi
+          docker buildx imagetools create "${args[@]}" "$src:$tag"
           want="$(docker buildx imagetools inspect "$src:$tag" --format '{{json .Manifest.Digest}}')"
           got="$(docker buildx imagetools inspect "$dst:$tag" --format '{{json .Manifest.Digest}}')"
           echo "registry $src:$tag = $want"
@@ -286,9 +306,12 @@ jobs:
   # release is the real one; this is left out of the report to Gitea, so a
   # failure here cannot fail a release. PR and issue numbers in the notes are
   # rewritten to Gitea links: on GitHub a bare #16 is some other PR.
+  # It waits for `files` too: started after `publish` alone, it ran beside
+  # `files` and copied the Gitea release before its files were attached, so
+  # every GitHub copy had none.
   github-release:
     if: ${{ vars.BUILD_ON == 'github' && github.ref_type == 'tag' }}
-    needs: [publish]
+    needs: [version, publish, files]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -296,6 +319,7 @@ jobs:
       GITEA_URL: ${{ vars.GITEA_URL }}
       GH_TOKEN: ${{ github.token }}
       TAG: ${{ github.ref_name }}
+      LATEST: ${{ needs.version.outputs.latest }}
     steps:
       - run: |
           set -euo pipefail
@@ -322,7 +346,7 @@ jobs:
             curl -fsSL -o "files/$name" "$url"; files+=("files/$name")
           done < <(jq -r '.assets[]? | [.name, .browser_download_url] | @tsv' rel.json)
           title="$(jq -r '.name // ""' rel.json)"; [ -n "$title" ] || title="$TAG"
-          if [ "$(jq -r .prerelease rel.json)" = true ]; then kind=--prerelease; else kind=--latest; fi
+          if [ "$(jq -r .prerelease rel.json)" = true ]; then kind=--prerelease; elif [ "$LATEST" = true ]; then kind=--latest; else kind=--latest=false; fi
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$title" \
             --notes-file notes.md "$kind" "${files[@]}"
           echo "created the GitHub release for $TAG with ${#files[@]} file(s)"

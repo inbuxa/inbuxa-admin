@@ -887,7 +887,9 @@
     "defaultMoves": "Every other domain without its own directory signs in through {{dir}}.",
     "done": "Sign-in now goes through {{dir}}.",
     "doneHint": "Have someone sign in to the webmail with their directory password. Their account is created on first sign-in, with the name, aliases and groups the directory gives.",
-    "tabTitle": "Sign-in directory"
+    "tabTitle": "Sign-in directory",
+    "audience": "Client ID (audience)",
+    "audienceHint": "The client ID inbuxa is registered with at the provider. Only tokens issued for it sign in, not tokens the provider gave other applications."
   },
   "held": {
     "noSubject": "(no subject)",

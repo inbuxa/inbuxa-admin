@@ -139,6 +139,8 @@ export interface Connection {
   bindPassword: string;
   allowInvalidCerts: boolean;
   issuer: string;
+  /** The client ID registered for this server at the provider: a token must name it as its audience. */
+  audience: string;
   usernameDomain: string;
 }
 
@@ -149,6 +151,7 @@ export function directoryObject(p: Preset, c: Connection, description: string): 
       '@type': 'Oidc',
       description,
       issuerUrl: c.issuer.trim(),
+      requireAudience: c.audience.trim(),
       usernameDomain: c.usernameDomain.trim() || null,
       ...p.fields,
     };

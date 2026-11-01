@@ -103,6 +103,16 @@ export const SECURITY_CHECK_HELP: { check: string; label: string; text: string }
     label: 'DMARC policies',
     text: 'Good practice for each domain whose DMARC record says p=none. Once DMARC reports show your own mail passing, move to quarantine or reject at your DNS host.',
   },
+  {
+    check: 'SS-30',
+    label: 'OpenID Connect directories without an audience',
+    text: 'Important for each OpenID Connect directory saved without a required audience (a new one can’t be). A token its provider issued to any other application signs people in here. Review opens the directory: set the audience to the client ID inbuxa is registered with at the provider.',
+  },
+  {
+    check: 'SS-31',
+    label: 'Opaque tokens taken on the user info endpoint’s word',
+    text: 'Important for each OpenID Connect directory that accepts tokens which aren’t JWTs whenever the provider’s user info endpoint answers for them, as directories saved before the choice existed do. Review opens the directory: choose introspection, with inbuxa’s client ID and secret at the provider, or reject.',
+  },
 ];
 
 export const SECURITY_PAGE_HELP: PageHelp = {
