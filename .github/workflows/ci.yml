@@ -93,6 +93,7 @@ jobs:
       - run: npm run i18n:check
       - run: npm test
       - run: sh tools/release-version.test.sh
+      - run: sh docker/listen-ipv6.test.sh
       - run: npm run build
 
   # ----------------------------------------------------------- publish ------
