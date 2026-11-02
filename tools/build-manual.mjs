@@ -45,6 +45,7 @@ const { FIELD_HELP, PAGE_HELP } = await vite.ssrLoadModule('/src/help/texts.ts')
 const { describeDefault } = await vite.ssrLoadModule('/src/help/defaults.ts');
 const { humanize } = await vite.ssrLoadModule('/src/lib/humanize.ts');
 const { manualPage } = await vite.ssrLoadModule('/src/help/manual.ts');
+const { withRegroupedSettings } = await vite.ssrLoadModule('/src/lib/settingsLayout.ts');
 await vite.close();
 
 const WORDS = { on: 'On', off: 'Off', none: 'None' };
@@ -87,7 +88,16 @@ function walk(items, path) {
     }
   }
 }
-for (const layout of schema.layouts) walk(layout.items, [layout.name].filter(Boolean));
+// The menus as the console shows them: Settings is regrouped client-side, so the
+// server's own layout names groups nobody sees.
+for (const layout of withRegroupedSettings(schema).layouts) walk(layout.items, [layout.name].filter(Boolean));
+
+// Settings › category › group › page reads as the category and the page, the way
+// the guides write it; the group is only a heading in the category's menu.
+function whereWords(where) {
+  const path = where[0] === 'Settings' && where.length === 4 ? [where[0], where[1], where[3]] : where;
+  return path.map(md).join(' › ');
+}
 
 // --- What a field holds, in words --------------------------------------------
 
@@ -223,7 +233,7 @@ function fieldEntry(scope, f) {
 function schemaPage(name) {
   const lines = front(title(name));
   const where = whereInConsole.get(name);
-  if (where) lines.push(`*In the console: ${where.map(md).join(' › ')}*`, '');
+  if (where) lines.push(`*In the console: ${whereWords(where)}*`, '');
   const text = about(name);
   if (text) lines.push(sentence(md(text)), '');
 
@@ -261,7 +271,7 @@ function ownPage(name) {
   const help = PAGE_HELP[name];
   const lines = front(title(name));
   const where = whereInConsole.get(name);
-  if (where) lines.push(`*In the console: ${where.map(md).join(' › ')}*`, '');
+  if (where) lines.push(`*In the console: ${whereWords(where)}*`, '');
   if (help?.about) lines.push(md(help.about), '');
   for (const option of help?.options ?? []) {
     lines.push(`### ${md(option.label)}`, '', md(option.text), '');
