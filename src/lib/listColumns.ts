@@ -7,13 +7,14 @@
 /**
  * inbuxa: columns a served list leaves out. The Directories list shows only
  * each directory's type, so two LDAP directories look the same until you
- * open them (admin #108).
+ * open them (admin #108). DNS providers have the same problem.
  */
 
 import type { Column, Schema } from '@/types/schema';
 
 const EXTRA_COLUMNS: Record<string, Column[]> = {
   'x:Directory': [{ name: 'description', label: 'Description' }],
+  'x:DnsServer': [{ name: 'description', label: 'Description' }],
 };
 
 /** The schema with the extra columns added after the served ones; applied once, when the schema loads. */
