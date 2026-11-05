@@ -25,6 +25,24 @@ describe('withExtraColumns', () => {
     ]);
   });
 
+  it('adds Description after the served columns on the DNS providers list', () => {
+    const out = withExtraColumns(
+      schema({
+        'x:DnsServer': list([
+          { name: '@type', label: 'DNS server type' },
+          { name: 'ttl', label: 'TTL' },
+          { name: 'timeout', label: 'Timeout' },
+        ]),
+      }),
+    );
+    expect(out.lists['x:DnsServer'].columns).toEqual([
+      { name: '@type', label: 'DNS server type' },
+      { name: 'ttl', label: 'TTL' },
+      { name: 'timeout', label: 'Timeout' },
+      { name: 'description', label: 'Description' },
+    ]);
+  });
+
   it('leaves a list that already has the column alone', () => {
     const served = schema({
       'x:Directory': list([
