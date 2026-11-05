@@ -63,11 +63,21 @@ export const RECORD_GROUPS: RecordGroup[] = [
     id: 'certs',
     title: 'Limit who can issue certificates',
     why: 'Names the certificate authorities allowed to issue for this domain.',
-    kinds: [{ kind: 'caa', label: 'Certificate authorities (CAA)' }],
+    kinds: [
+      {
+        kind: 'caa',
+        label: 'Certificate authorities (CAA)',
+        caution:
+          "Covers every name under this domain and ties it to this server's ACME account. Another ACME client under this domain, like certbot on a web server, is refused at its next renewal.",
+      },
+    ],
   },
 ];
 
-/** The guided default: everything but TLSA, which needs DNSSEC to mean anything. */
+/**
+ * The guided default: everything but TLSA, which needs DNSSEC to mean anything,
+ * and CAA, which can stop other ACME clients under the domain from renewing.
+ */
 export const DEFAULT_KINDS: RecordKind[] = RECORD_GROUPS.flatMap((g) => g.kinds.map((k) => k.kind)).filter(
-  (k) => k !== 'tlsa',
+  (k) => k !== 'tlsa' && k !== 'caa',
 );
