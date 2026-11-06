@@ -41,6 +41,8 @@ interface DomainRow {
   name: string;
   automatic: boolean;
   providerId?: string;
+  /** The domain's own certificate hostnames, kept as they are when it's switched. */
+  hostnames: string[];
   dnsAutomatic: boolean;
   zone: ReturnType<typeof parseZone>;
 }
@@ -93,6 +95,7 @@ async function load(): Promise<Loaded> {
           name: String(d.name),
           automatic: cm['@type'] === 'Automatic',
           providerId: cm.acmeProviderId as string | undefined,
+          hostnames: cm['@type'] === 'Automatic' ? keys(cm.subjectAlternativeNames) : [],
           dnsAutomatic: dm['@type'] === 'Automatic',
           zone: parseZone(d.dnsZoneFile as string | undefined),
         };
@@ -112,6 +115,9 @@ async function load(): Promise<Loaded> {
     serverName: String(list('s')[0]?.defaultHostname ?? ''),
   };
 }
+
+/** "a and b" for the default pair, "a, b, c" for a domain's own list. */
+const joinNames = (names: string[]) => (names.length === 2 ? names.join(' and ') : names.join(', '));
 
 /** When the switch happened, read in the click handler, for telling a new certificate from an old one. */
 async function switchedAt(): Promise<number> {
@@ -206,7 +212,7 @@ export function CertificateSetupPage() {
   const chosen = useMemo(() => (data ? data.domains.filter((d) => picked.has(d.id)) : []), [data, picked]);
   const methodOf = (d: DomainRow): Method => (d.dnsAutomatic ? 'dns' : 'tls');
   const namesOf = useCallback(
-    (d: DomainRow) => orderNames(d.name, methodOf(d), data?.serverName ?? '', d.zone),
+    (d: DomainRow) => orderNames(d.name, methodOf(d), data?.serverName ?? '', d.zone, d.hostnames),
     [data],
   );
 
@@ -344,7 +350,7 @@ export function CertificateSetupPage() {
             certificateManagement: {
               '@type': 'Automatic',
               acmeProviderId: ids[methodOf(d)],
-              subjectAlternativeNames: {},
+              subjectAlternativeNames: Object.fromEntries(d.hostnames.map((h) => [h, true])),
             },
           },
         ]),
@@ -506,7 +512,7 @@ export function CertificateSetupPage() {
               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
               {t('certSetup.dnsReady', '{{domain}}: checked through its connected DNS, covering {{names}}.', {
                 domain: d.name,
-                names: namesOf(d).join(' and '),
+                names: joinNames(namesOf(d)),
               })}
             </p>
           ))}
