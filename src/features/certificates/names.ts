@@ -11,8 +11,10 @@
  * The server decides the names (common/src/network/acme/order.rs): with DNS
  * validation it asks for the domain and a wildcard under it; otherwise for
  * mta-sts, ua-auto-config, autoconfig and autodiscover under the domain, plus
- * the server's own name when it's inside the domain. Every name must pass, or
- * the whole order fails and keeps retrying, so the guide checks them first.
+ * the server's own name when it's inside the domain. A domain's own hostname
+ * list replaces all of that: a name without a dot gets the domain added, one
+ * with a dot is used as written. Every name must pass, or the whole order
+ * fails and keeps retrying, so the guide checks them first.
  */
 
 import type { ZoneRecord } from '@/features/dns/zone';
@@ -25,8 +27,17 @@ function inZone(name: string, domain: string): boolean {
   return name === domain || name.endsWith(`.${domain}`);
 }
 
-export function orderNames(domain: string, method: Method, serverName: string, zone: ZoneRecord[] = []): string[] {
+export function orderNames(
+  domain: string,
+  method: Method,
+  serverName: string,
+  zone: ZoneRecord[] = [],
+  hostnames: string[] = [],
+): string[] {
   const d = domain.toLowerCase();
+  if (hostnames.length > 0) {
+    return [...new Set(hostnames.map((h) => (h.includes('.') ? h : `${h}.${d}`).toLowerCase()))];
+  }
   if (method === 'dns') return [`*.${d}`, d];
   const names = new Set(TECHNICAL_NAMES.map((h) => `${h}.${d}`));
   const host = serverName.toLowerCase().replace(/\.$/, '');
