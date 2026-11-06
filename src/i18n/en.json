@@ -1064,7 +1064,13 @@
     "failedSaid": "Your DNS host said:",
     "failedHelp": "Check that the credential can edit this zone, then fix it on the DNS provider’s page. The server retries on its own.",
     "differentHelp": "An amber mark means that name has a different value right now, often an old record that hasn’t expired from caches yet.",
-    "tabTitle": "Publish DNS"
+    "tabTitle": "Publish DNS",
+    "noRecordsNote": "Nothing is selected, so the server writes no records. That suits a domain that only needs its DNS host for DNS-01 certificate orders.",
+    "reviewNoRecords": "None. The DNS host is only used for certificate orders.",
+    "connectedOnly": "{{domain}} is connected.",
+    "nothingPublished": "No records are written. The server uses your DNS host only to answer DNS-01 challenges when it orders a certificate.",
+    "connectOnlyButton": "Connect",
+    "happensNoRecords": "{{domain}} switches to automatic DNS, and nothing is written. The server uses the connection only for DNS-01 certificate orders."
   },
   "dnsCopy": {
     "copied": "Copied",
