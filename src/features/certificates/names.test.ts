@@ -27,6 +27,13 @@ describe('orderNames', () => {
     ]);
   });
 
+  it("uses a domain's own hostnames in place of the defaults, with either method", () => {
+    const own = ['mail', 'Example.com', 'smtp.example.com', 'mail'];
+    const want = ['mail.example.com', 'example.com', 'smtp.example.com'];
+    expect(orderNames('example.com', 'dns', 'mail.example.com', [], own)).toEqual(want);
+    expect(orderNames('example.com', 'tls', 'mail.example.com', [], own)).toEqual(want);
+  });
+
   it('leaves out a server name in another domain', () => {
     expect(orderNames('example.com', 'tls', 'mail.other.net')).not.toContain('mail.other.net');
   });
