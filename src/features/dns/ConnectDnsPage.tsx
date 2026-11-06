@@ -619,7 +619,6 @@ export function ConnectDnsPage({ domainId }: { domainId: string }) {
         {...common}
         onBack={() => setStep(choice?.mode === 'new' ? 1 : 0)}
         onNext={() => setStep(3)}
-        canNext={kinds.size > 0}
         aside={
           <WizardNote title={t('dnsWizard.recordsNote', 'Your other records are safe')}>
             <p>
@@ -663,6 +662,14 @@ export function ConnectDnsPage({ domainId }: { domainId: string }) {
               </div>
             </section>
           ))}
+          {kinds.size === 0 && (
+            <p className="rounded-xl border bg-muted/40 p-4 text-sm text-muted-foreground">
+              {t(
+                'dnsWizard.noRecordsNote',
+                'Nothing is selected, so the server writes no records. That suits a domain that only needs its DNS host for DNS-01 certificate orders.',
+              )}
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="dns-origin">{t('dnsWizard.origin', 'DNS zone (optional)')}</Label>
@@ -693,7 +700,11 @@ export function ConnectDnsPage({ domainId }: { domainId: string }) {
         onBack={() => setStep(2)}
         onNext={finish}
         busy={busy}
-        nextLabel={t('dnsWizard.publish', 'Connect and publish')}
+        nextLabel={
+          selectedRecords.length === 0
+            ? t('dnsWizard.connectOnlyButton', 'Connect')
+            : t('dnsWizard.publish', 'Connect and publish')
+        }
         aside={
           <>
             <WizardNote title={t('dnsWizard.happensTitle', 'What happens next')}>
@@ -703,11 +714,17 @@ export function ConnectDnsPage({ domainId }: { domainId: string }) {
                       provider: labelOf(choice.variant),
                     })
                   : t('dnsWizard.happensExisting', 'Your existing connection is used,')}{' '}
-                {t(
-                  'dnsWizard.happensRest',
-                  '{{domain}} switches to automatic DNS, and the server starts writing records straight away. Most hosts show them within a minute or two.',
-                  { domain: domain.name },
-                )}
+                {selectedRecords.length === 0
+                  ? t(
+                      'dnsWizard.happensNoRecords',
+                      '{{domain}} switches to automatic DNS, and nothing is written. The server uses the connection only for DNS-01 certificate orders.',
+                      { domain: domain.name },
+                    )
+                  : t(
+                      'dnsWizard.happensRest',
+                      '{{domain}} switches to automatic DNS, and the server starts writing records straight away. Most hosts show them within a minute or two.',
+                      { domain: domain.name },
+                    )}
               </p>
             </WizardNote>
             <WizardNote tone="undo" title={t('dnsWizard.undoTitle', 'Changing your mind')}>
@@ -735,14 +752,22 @@ export function ConnectDnsPage({ domainId }: { domainId: string }) {
           </dd>
           <dt className="text-muted-foreground">{t('dnsWizard.reviewRecords', 'Records')}</dt>
           <dd>
-            <span className="font-medium">{selectedRecords.length}</span>{' '}
-            <span className="text-muted-foreground">
-              {t('dnsWizard.reviewGroups', 'across {{groups}}', {
-                groups: RECORD_GROUPS.filter((g) => g.kinds.some((k) => kinds.has(k.kind)))
-                  .map((g) => g.title.toLowerCase())
-                  .join(', '),
-              })}
-            </span>
+            {selectedRecords.length === 0 ? (
+              <span className="text-muted-foreground">
+                {t('dnsWizard.reviewNoRecords', 'None. The DNS host is only used for certificate orders.')}
+              </span>
+            ) : (
+              <>
+                <span className="font-medium">{selectedRecords.length}</span>{' '}
+                <span className="text-muted-foreground">
+                  {t('dnsWizard.reviewGroups', 'across {{groups}}', {
+                    groups: RECORD_GROUPS.filter((g) => g.kinds.some((k) => kinds.has(k.kind)))
+                      .map((g) => g.title.toLowerCase())
+                      .join(', '),
+                  })}
+                </span>
+              </>
+            )}
           </dd>
           {origin.trim() && (
             <>
@@ -756,7 +781,7 @@ export function ConnectDnsPage({ domainId }: { domainId: string }) {
             {t('dnsWizard.alreadyAuto', 'This domain already publishes automatically; this updates its settings.')}
           </p>
         )}
-        <div>
+        <div hidden={selectedRecords.length === 0}>
           <button
             type="button"
             onClick={() => setShowZone((v) => !v)}
@@ -938,6 +963,8 @@ function LiveStep({
   const failed = task?.status?.['@type'] === 'Failed' || task?.status?.['@type'] === 'Retry';
   const failure = summarizeFailure(task?.status?.failureReason);
   const pct = records.length ? Math.round((liveCount / records.length) * 100) : 0;
+  // A domain that only needs DNS for DNS-01 orders publishes nothing (#304)
+  const nothingToPublish = records.length === 0 && !failed;
 
   return (
     <WizardShell
@@ -946,15 +973,17 @@ function LiveStep({
       nextLabel={t('dnsWizard.done', 'Done')}
       aside={
         <>
-          <WizardNote title={t('dnsWizard.howChecked', 'How this is checked')}>
-            <p>
-              {t(
-                'dnsWizard.howCheckedBody',
-                'Every few seconds this page asks {{resolver}} for each record, so a green tick means the whole internet can see it.',
-                { resolver: RESOLVER_NAME },
-              )}
-            </p>
-          </WizardNote>
+          {!nothingToPublish && (
+            <WizardNote title={t('dnsWizard.howChecked', 'How this is checked')}>
+              <p>
+                {t(
+                  'dnsWizard.howCheckedBody',
+                  'Every few seconds this page asks {{resolver}} for each record, so a green tick means the whole internet can see it.',
+                  { resolver: RESOLVER_NAME },
+                )}
+              </p>
+            </WizardNote>
+          )}
           {createdServerId && (
             <WizardNote tone="undo" title={t('dnsWizard.undoTitle', 'Changing your mind')}>
               <p>
@@ -969,29 +998,36 @@ function LiveStep({
       }
     >
       <div className="flex flex-wrap items-center gap-6">
-        <ProgressRing pct={pct} done={allLive} />
+        <ProgressRing pct={nothingToPublish ? 100 : pct} done={allLive || nothingToPublish} />
         <div className="min-w-0 flex-1 space-y-1">
           <h2 className="text-lg font-semibold">
-            {allLive
-              ? t('dnsWizard.allLive', 'All set. {{domain}} is live.', { domain: domain.name })
-              : t('dnsWizard.progress', '{{live}} of {{total}} records are live', {
-                  live: liveCount,
-                  total: records.length,
-                })}
+            {nothingToPublish
+              ? t('dnsWizard.connectedOnly', '{{domain}} is connected.', { domain: domain.name })
+              : allLive
+                ? t('dnsWizard.allLive', 'All set. {{domain}} is live.', { domain: domain.name })
+                : t('dnsWizard.progress', '{{live}} of {{total}} records are live', {
+                    live: liveCount,
+                    total: records.length,
+                  })}
           </h2>
           <p className="text-sm text-muted-foreground">
-            {failed
-              ? t('dnsWizard.taskFailedShort', 'Your DNS host turned the update down.')
-              : task
-                ? t('dnsWizard.taskPending', 'The server is writing the records to your DNS host…')
-                : allLive
-                  ? t('dnsWizard.keepsUpdating', 'From now on the server keeps them up to date by itself.')
-                  : t(
-                      'dnsWizard.waiting',
-                      'Written. Waiting for them to show up in public DNS, which can take a few minutes.',
-                    )}
+            {nothingToPublish
+              ? t(
+                  'dnsWizard.nothingPublished',
+                  'No records are written. The server uses your DNS host only to answer DNS-01 challenges when it orders a certificate.',
+                )
+              : failed
+                ? t('dnsWizard.taskFailedShort', 'Your DNS host turned the update down.')
+                : task
+                  ? t('dnsWizard.taskPending', 'The server is writing the records to your DNS host…')
+                  : allLive
+                    ? t('dnsWizard.keepsUpdating', 'From now on the server keeps them up to date by itself.')
+                    : t(
+                        'dnsWizard.waiting',
+                        'Written. Waiting for them to show up in public DNS, which can take a few minutes.',
+                      )}
           </p>
-          <div className="flex items-center gap-3 pt-1 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 pt-1 text-xs text-muted-foreground" hidden={nothingToPublish}>
             <Button variant="outline" size="sm" onClick={() => void check()} disabled={checking}>
               <RefreshCw className={cn('h-3.5 w-3.5', checking && 'animate-spin')} />
               {t('dnsWizard.checkNow', 'Check now')}
@@ -1025,7 +1061,7 @@ function LiveStep({
           </p>
         </div>
       )}
-      <RecordTable records={records} states={states} />
+      {!nothingToPublish && <RecordTable records={records} states={states} />}
       {records.some((r) => states.get(r) === 'different') && (
         <p className="text-xs text-muted-foreground">
           <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-highlight" />
