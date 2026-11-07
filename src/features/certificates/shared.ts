@@ -159,7 +159,10 @@ export async function pollOrders(): Promise<{ certs: CertRow[]; tasks: Record<st
   return { certs, tasks, at: Date.now() };
 }
 
-/** Adds a Let’s Encrypt account for one way of checking names, and returns its id. */
+/**
+ * Adds a Let’s Encrypt account for one way of checking names, and returns its
+ * id. The server writes the description itself, and refuses one from a client.
+ */
 export async function addProvider(method: Method, contact: string, staging: boolean): Promise<string> {
   const [res] = await jmapSet('x:AcmeProvider', getAccountId('x:AcmeProvider'), {
     create: {
@@ -167,7 +170,6 @@ export async function addProvider(method: Method, contact: string, staging: bool
         directory: staging ? LE_STAGING : LE_PRODUCTION,
         challengeType: CHALLENGE[method],
         contact: { [contact.trim()]: true },
-        description: `${staging ? 'Let’s Encrypt (staging)' : 'Let’s Encrypt'}, ${method === 'dns' ? 'DNS-01' : 'TLS-ALPN-01'}, ${contact.trim()}`,
       },
     },
   });
