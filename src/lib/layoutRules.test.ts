@@ -114,6 +114,7 @@ describe('isLinkVisible for the console’s own pages', () => {
 
   const wizards: [string, string[]][] = [
     ['Wizard/certificates', ['sysDomain', 'sysAcmeProvider', 'sysCertificate']],
+    ['Wizard/certificate-order', ['sysDomain', 'sysAcmeProvider', 'sysCertificate']],
     ['Wizard/sending', ['sysMtaRoute', 'sysMtaOutboundStrategy']],
     ['Wizard/directory', ['sysDirectory', 'sysDomain', 'sysAuthentication']],
     ['Wizard/limits', ['sysMtaInboundThrottle', 'sysMtaOutboundThrottle', 'sysMtaQueueQuota']],

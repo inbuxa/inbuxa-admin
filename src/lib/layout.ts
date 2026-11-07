@@ -67,6 +67,7 @@ const PAGES: Record<string, PageRule> = {
   'CustomComponent/Migrations': { enterprise: false, visible: (c) => holds('sysMigrationRun', c) },
   // Guided jobs are for whoever may read everything they change.
   'Wizard/certificates': readOnly('sysDomain', 'sysAcmeProvider', 'sysCertificate'),
+  'Wizard/certificate-order': readOnly('sysDomain', 'sysAcmeProvider', 'sysCertificate'),
   'Wizard/sending': readOnly('sysMtaRoute', 'sysMtaOutboundStrategy'),
   'Wizard/directory': readOnly('sysDirectory', 'sysDomain', 'sysAuthentication'),
   'Wizard/limits': readOnly('sysMtaInboundThrottle', 'sysMtaOutboundThrottle', 'sysMtaQueueQuota'),

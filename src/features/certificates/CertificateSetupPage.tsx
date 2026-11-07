@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, RefreshCw, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -23,98 +23,31 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { WizardNote, WizardShell, type WizardStep } from '@/components/wizard/WizardShell';
-import { getAccountId, jmapQueryAndGet, jmapRequest, jmapSet } from '@/services/jmap/client';
+import { getAccountId, jmapSet } from '@/services/jmap/client';
 import { useSchemaStore } from '@/stores/schemaStore';
 import type { JmapSetResponse } from '@/types/jmap';
-import { dohQuery, RESOLVER_NAME } from '@/features/dns/liveCheck';
-import { parseZone } from '@/features/dns/zone';
+import { RESOLVER_NAME } from '@/features/dns/liveCheck';
 import { cn } from '@/lib/utils';
-import { classify, orderNames, type Method, type NameState } from './names';
+import { classify, orderNames, type Method } from './names';
+import {
+  addProvider,
+  CHALLENGE,
+  type CertRow,
+  type Check,
+  coveringCert,
+  currentCert,
+  type DomainRow,
+  fmtDate,
+  LE_PRODUCTION,
+  LE_STAGING,
+  type Loaded,
+  load,
+  pollOrders,
+  resolveAddresses,
+} from './shared';
+import { StateIcon } from './StateIcon';
 
-const LE_PRODUCTION = 'https://acme-v02.api.letsencrypt.org/directory';
-const LE_STAGING = 'https://acme-staging-v02.api.letsencrypt.org/directory';
-const CHALLENGE: Record<Method, string> = { dns: 'Dns01', tls: 'TlsAlpn01' };
 const WATCH_MS = 5 * 60_000;
-
-interface DomainRow {
-  id: string;
-  name: string;
-  automatic: boolean;
-  providerId?: string;
-  /** The domain's own certificate hostnames, kept as they are when it's switched. */
-  hostnames: string[];
-  dnsAutomatic: boolean;
-  zone: ReturnType<typeof parseZone>;
-}
-
-interface ProviderRow {
-  id: string;
-  directory: string;
-  challengeType: string;
-  contact: string[];
-}
-
-interface CertRow {
-  sans: string[];
-  notValidBefore: string;
-  notValidAfter: string;
-}
-
-interface Loaded {
-  domains: DomainRow[];
-  providers: ProviderRow[];
-  certs: CertRow[];
-  serverName: string;
-}
-
-type Check = { name: string; state: NameState | 'checking' | 'error'; addresses: string[] };
-
-async function load(): Promise<Loaded> {
-  const get = (obj: string, args: Record<string, unknown>, id: string) =>
-    [`${obj}/get`, { accountId: getAccountId(obj), ...args }, id] as [string, Record<string, unknown>, string];
-  const res = await jmapRequest([
-    get('x:Domain', { ids: null, properties: ['name', 'certificateManagement', 'dnsManagement', 'dnsZoneFile'] }, 'd'),
-    get('x:AcmeProvider', { ids: null, properties: ['directory', 'challengeType', 'contact'] }, 'p'),
-    get(
-      'x:Certificate',
-      { ids: null, properties: ['subjectAlternativeNames', 'notValidBefore', 'notValidAfter'] },
-      'c',
-    ),
-    get('x:SystemSettings', { ids: ['singleton'], properties: ['defaultHostname'] }, 's'),
-  ]);
-  const list = (id: string) =>
-    (res.find(([, , i]) => i === id)?.[1] as { list?: Record<string, unknown>[] } | undefined)?.list ?? [];
-  const keys = (v: unknown) => (v && typeof v === 'object' ? Object.keys(v as object) : []);
-  return {
-    domains: list('d')
-      .map((d) => {
-        const cm = (d.certificateManagement ?? {}) as Record<string, unknown>;
-        const dm = (d.dnsManagement ?? {}) as Record<string, unknown>;
-        return {
-          id: String(d.id),
-          name: String(d.name),
-          automatic: cm['@type'] === 'Automatic',
-          providerId: cm.acmeProviderId as string | undefined,
-          hostnames: cm['@type'] === 'Automatic' ? keys(cm.subjectAlternativeNames) : [],
-          dnsAutomatic: dm['@type'] === 'Automatic',
-          zone: parseZone(d.dnsZoneFile as string | undefined),
-        };
-      })
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    providers: list('p').map((p) => ({
-      id: String(p.id),
-      directory: String(p.directory ?? ''),
-      challengeType: String(p.challengeType ?? ''),
-      contact: keys(p.contact).map((c) => c.replace(/^mailto:/, '')),
-    })),
-    certs: list('c').map((c) => ({
-      sans: keys(c.subjectAlternativeNames).map((s) => s.toLowerCase()),
-      notValidBefore: String(c.notValidBefore ?? ''),
-      notValidAfter: String(c.notValidAfter ?? ''),
-    })),
-    serverName: String(list('s')[0]?.defaultHostname ?? ''),
-  };
-}
 
 /** "a and b" for the default pair, "a, b, c" for a domain's own list. */
 const joinNames = (names: string[]) => (names.length === 2 ? names.join(' and ') : names.join(', '));
@@ -122,41 +55,6 @@ const joinNames = (names: string[]) => (names.length === 2 ? names.join(' and ')
 /** When the switch happened, read in the click handler, for telling a new certificate from an old one. */
 async function switchedAt(): Promise<number> {
   return Date.now();
-}
-
-/** The newest certificate covering every one of these names. */
-function coveringCert(certs: CertRow[], names: string[]): CertRow | undefined {
-  return certs
-    .filter((c) => names.every((n) => c.sans.includes(n.toLowerCase())))
-    .sort((a, b) => b.notValidAfter.localeCompare(a.notValidAfter))[0];
-}
-
-/** The newest certificate covering any of these names: what the domain uses today. */
-function currentCert(certs: CertRow[], names: string[]): CertRow | undefined {
-  return certs
-    .filter((c) => names.some((n) => c.sans.includes(n.toLowerCase())))
-    .sort((a, b) => b.notValidAfter.localeCompare(a.notValidAfter))[0];
-}
-
-async function resolveAddresses(name: string): Promise<string[]> {
-  const out: string[] = [];
-  for (const type of ['A', 'AAAA']) {
-    const r = await dohQuery(name.replace(/^\*\./, ''), type);
-    out.push(...r.answer.filter((a) => a.type === 1 || a.type === 28).map((a) => a.data));
-  }
-  return out;
-}
-
-function fmtDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { dateStyle: 'medium' });
-}
-
-function StateIcon({ state }: { state: Check['state'] }) {
-  if (state === 'ok') return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />;
-  if (state === 'checking') return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-muted-foreground" />;
-  if (state === 'error') return <CircleDashed className="h-4 w-4 shrink-0 text-muted-foreground" />;
-  return <XCircle className="h-4 w-4 shrink-0 text-destructive" />;
 }
 
 export function CertificateSetupPage() {
@@ -264,35 +162,7 @@ export function CertificateSetupPage() {
   const needsNewProvider = methodsNeeded.some((m) => !providerFor(m));
 
   const poll = useCallback(async () => {
-    const [certRes] = await jmapRequest([
-      [
-        'x:Certificate/get',
-        {
-          accountId: getAccountId('x:Certificate'),
-          ids: null,
-          properties: ['subjectAlternativeNames', 'notValidBefore', 'notValidAfter'],
-        },
-        'c',
-      ],
-    ]);
-    const [, taskRes] = await jmapQueryAndGet(
-      'x:Task',
-      getAccountId('x:Task'),
-      { filter: { '@type': 'AcmeRenewal' } },
-      ['@type', 'domainId', 'status'],
-    );
-    const keys = (v: unknown) => (v && typeof v === 'object' ? Object.keys(v as object) : []);
-    const certs = (
-      ((certRes?.[1] as { list?: Record<string, unknown>[] })?.list ?? []) as Record<string, unknown>[]
-    ).map((c) => ({
-      sans: keys(c.subjectAlternativeNames).map((s) => s.toLowerCase()),
-      notValidBefore: String(c.notValidBefore ?? ''),
-      notValidAfter: String(c.notValidAfter ?? ''),
-    }));
-    const tasks = (
-      ((taskRes?.[1] as { list?: Record<string, unknown>[] })?.list ?? []) as Record<string, unknown>[]
-    ).filter((x) => x['@type'] === 'AcmeRenewal');
-    setWatch({ certs, tasks, at: Date.now() });
+    setWatch(await pollOrders());
   }, []);
 
   const startWatching = useCallback(() => {
@@ -324,22 +194,7 @@ export function CertificateSetupPage() {
           ids[m] = existing.id;
           continue;
         }
-        const [res] = await jmapSet('x:AcmeProvider', getAccountId('x:AcmeProvider'), {
-          create: {
-            acme: {
-              directory,
-              challengeType: CHALLENGE[m],
-              contact: { [contact.trim()]: true },
-              description: `${staging ? 'Let’s Encrypt (staging)' : 'Let’s Encrypt'}, ${m === 'dns' ? 'DNS-01' : 'TLS-ALPN-01'}, ${contact.trim()}`,
-            },
-          },
-        });
-        const body = res?.[1] as unknown as JmapSetResponse | undefined;
-        const id = (body?.created?.acme as { id?: string } | undefined)?.id;
-        if (!id) {
-          const e = body?.notCreated ? Object.values(body.notCreated)[0] : undefined;
-          throw new Error(e?.description ?? e?.type ?? 'The Let’s Encrypt account could not be added.');
-        }
+        const id = await addProvider(m, contact, staging);
         ids[m] = id;
         made.push(id);
       }

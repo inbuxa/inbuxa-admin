@@ -12,6 +12,7 @@ import { DynamicList } from '@/components/lists/DynamicList';
 import { DynamicViewPage } from '@/components/views/DynamicViewPage';
 import { AlertsPage } from '@/features/alerts/AlertsPage';
 import { CertificateSetupCard } from '@/features/certificates/CertificateSetupCard';
+import { CertificateOrdersPanel } from '@/features/certificates/CertificateOrdersPanel';
 import { DirectorySetupCard } from '@/features/directory/DirectorySetupCard';
 import { WebhooksPage } from '@/features/events/WebhooksPage';
 import { WebhookTestCard } from '@/features/events/WebhookTestCard';
@@ -171,6 +172,10 @@ const WIZARDS: Record<string, ComponentType> = {
     () => import('@/features/certificates/CertificateSetupPage'),
     (m) => m.CertificateSetupPage,
   ),
+  'certificate-order': onDemand(
+    () => import('@/features/certificates/OrderCertificatePage'),
+    (m) => m.OrderCertificatePage,
+  ),
 };
 
 const stacked = (...parts: ReactNode[]) => createElement('div', { className: 'space-y-4' }, ...parts);
@@ -206,7 +211,7 @@ const limitsList = (object: LimitObject) => () =>
 
 /** Lists that open with a guide or a summary above them, or have a page of their own. */
 const LIST_PAGES: Record<string, (viewName: string) => ReactNode> = {
-  'x:Certificate': listUnder(<CertificateSetupCard />),
+  'x:Certificate': listUnder(stacked(<CertificateSetupCard />, <CertificateOrdersPanel />)),
   'x:AcmeProvider': listUnder(<CertificateSetupCard />),
   // Received reports open with who sends as us and whether they pass.
   'x:DmarcExternalReport': listUnder(<DmarcSummaryCard />),
