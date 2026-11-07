@@ -55,6 +55,8 @@ function wizardTitle(t: TFunction, viewName: string): string | null {
       return t('dirSetup.tabTitle', 'Sign-in directory');
     case 'Wizard/certificates':
       return t('certSetup.tabTitle', 'Certificates');
+    case 'Wizard/certificate-order':
+      return t('certOrder.tabTitle', 'Order a certificate');
     case 'Wizard/sending':
       return t('sendingSetup.tabTitle', 'Sending mail');
   }

@@ -2727,6 +2727,7 @@
     "where": "Every connection that asks for one of its names gets this certificate, with nothing to assign. The default certificate is the one sent when a connection asks for a name no certificate covers.",
     "isDefault": "This is the default certificate.",
     "makeDefault": "Make it the default certificate",
-    "failedNext": "Fix what the reason says, then use Order again on the Certificates page."
+    "failedNext": "Fix what the reason says, then use Order again on the Certificates page.",
+    "tabTitle": "Order a certificate"
   }
 }
