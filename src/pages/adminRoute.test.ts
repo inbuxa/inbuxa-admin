@@ -82,6 +82,7 @@ describe('adminPageTitle', () => {
     expect(title('Settings', 'Wizard/limits')).toBe('Limits · Settings');
     expect(title('Settings', 'Wizard/directory')).toBe('Sign-in directory · Settings');
     expect(title('Settings', 'Wizard/certificates')).toBe('Certificates · Settings');
+    expect(title('Settings', 'Wizard/certificate-order')).toBe('Order a certificate · Settings');
     expect(title('Settings', 'Wizard/sending')).toBe('Sending mail · Settings');
   });
 

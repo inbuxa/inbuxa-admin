@@ -14,6 +14,7 @@ import { useSchemaStore } from '@/stores/schemaStore';
 import { cn } from '@/lib/utils';
 
 export const CERTIFICATE_WIZARD_VIEW = 'Wizard/certificates';
+export const ORDER_WIZARD_VIEW = 'Wizard/certificate-order';
 
 /** "Guided or manual?" for automatic certificates. Manual opens the domains, where the setting lives. */
 export function CertificateLaunchChoice({
