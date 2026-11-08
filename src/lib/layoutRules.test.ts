@@ -102,6 +102,7 @@ describe('isLinkVisible for the console’s own pages', () => {
     ['CustomComponent/Relays', 'sysRelay'],
     ['CustomComponent/AccountLocks', 'sysAccountLock'],
     ['CustomComponent/SharedMailboxes', 'sysAccountLock'],
+    ['CustomComponent/DeletedAccounts', 'sysAccount'],
     ['CustomComponent/Deliverability', 'sysDeliverability'],
     ['CustomComponent/ScheduledReports', 'sysScheduledReport'],
     ['Wizard/dns/connect', 'sysDomain'],

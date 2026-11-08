@@ -108,6 +108,10 @@ const CUSTOM_PAGES: Record<string, ComponentType> = {
     () => import('@/features/lock/SharedMailboxesPage'),
     (m) => m.SharedMailboxesPage,
   ),
+  DeletedAccounts: onDemand(
+    () => import('@/features/deletedAccounts/DeletedAccountsPage'),
+    (m) => m.DeletedAccountsPage,
+  ),
   Deliverability: onDemand(
     () => import('@/features/deliverability/DeliverabilityPage'),
     (m) => m.DeliverabilityPage,
