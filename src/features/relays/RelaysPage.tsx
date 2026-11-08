@@ -69,6 +69,7 @@ import {
   RelayUnreachable,
   updateRelay,
   upgradeRelay,
+  UploadNotDelivered,
 } from './api';
 import {
   attention,
@@ -1075,7 +1076,18 @@ function UpgradeDialog({ relay, onClose, onDone }: { relay: Relay; onClose: () =
       });
       onDone();
     } catch (e) {
-      failed(t('relays.upgradeFailed', 'The relay wasn’t upgraded'), e);
+      if (e instanceof UploadNotDelivered) {
+        failed(
+          t('relays.upgradeFailed', 'The relay wasn’t upgraded'),
+          t(
+            'relays.upgradeNotDelivered',
+            'The {{size}} MB upload never reached the server. If a proxy is in front of it, raise its upload limit (nginx: client_max_body_size).',
+            { size: Math.ceil(e.size / 1_000_000) },
+          ),
+        );
+      } else {
+        failed(t('relays.upgradeFailed', 'The relay wasn’t upgraded'), e);
+      }
     } finally {
       setBusy(false);
     }

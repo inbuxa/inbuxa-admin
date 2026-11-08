@@ -23,6 +23,20 @@ export class RelaysUnavailable extends Error {}
 /** This server couldn't reach the relay to read or change its queues. */
 export class RelayUnreachable extends Error {}
 
+/**
+ * A release upload that never got an answer from the server: the
+ * connection was cut, or something in between (a proxy's body-size limit,
+ * typically) refused it without the headers a cross-site reply needs, so
+ * the browser only reports a network error. `size` is the file's, in bytes.
+ */
+export class UploadNotDelivered extends Error {
+  readonly size: number;
+  constructor(size: number) {
+    super('The upload didn’t reach the server.');
+    this.size = size;
+  }
+}
+
 function failure(name: string | undefined, result: unknown): Error {
   const r = result as { type?: string; description?: string } | undefined;
   if (r?.type === 'unknownMethod' || r?.type === 'unknownCapability') return new RelaysUnavailable(r.type);
@@ -143,11 +157,20 @@ async function uploadRelease(file: File): Promise<string> {
   const session = await fetchSession();
   const template = typeof session.uploadUrl === 'string' ? session.uploadUrl : '/jmap/upload/{accountId}/';
   const url = new URL(template.replace('{accountId}', encodeURIComponent(accountId)), 'http://placeholder');
-  const response = await apiFetch(url.pathname + url.search, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/octet-stream' },
-    body: file,
-  });
+  let response: Response;
+  try {
+    response = await apiFetch(url.pathname + url.search, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body: file,
+    });
+  } catch (e) {
+    // fetch rejects with a TypeError when no answer came back
+    if (e instanceof TypeError) throw new UploadNotDelivered(file.size);
+    throw e;
+  }
+  // A proxy on the same site refuses it in the open
+  if (response.status === 413) throw new UploadNotDelivered(file.size);
   if (!response.ok) throw new Error(`The upload failed (${response.status}).`);
   const blobId = ((await response.json()) as { blobId?: string }).blobId;
   if (!blobId) throw new Error('The server gave no blob id.');
