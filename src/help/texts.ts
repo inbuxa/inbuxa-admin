@@ -59,6 +59,8 @@ export const FIELD_HELP: Record<string, string> = {
     'The relay’s public name: what it says when other servers connect, and the name on its certificate. Needs an A record and matching reverse DNS. Where this server publishes a domain’s DNS, it’s in the MX and SPF records.',
   'inbuxa:Relay.smtpCertificate':
     'The certificate the relay offers when other servers start TLS on port 25, with its chain. This server orders and renews it where a domain here manages the public name’s DNS; anything pasted is replaced only once it no longer does.',
+  'inbuxa:Relay.certificateId':
+    'Use one of this server’s certificates instead, a wildcard say. Only those that name the relay’s public name are listed. When this server renews it, the relay gets the renewal, and nothing is ordered for the relay.',
   'inbuxa:Relay.smtpPrivateKey':
     'The key for the certificate. It’s never shown again: leave the box empty to keep the stored one.',
   'inbuxa:Relay.mxPreference':

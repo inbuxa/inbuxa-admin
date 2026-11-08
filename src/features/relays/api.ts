@@ -12,7 +12,8 @@
 
 import { apiFetch } from '@/services/api';
 import { fetchSession, getAccountId, jmapRequest } from '@/services/jmap/client';
-import type { Relay, RelayMessage } from './model';
+import { certRow } from '@/features/certificates/shared';
+import type { Relay, RelayMessage, ServerCertificate } from './model';
 
 const CAPABILITY = 'urn:inbuxa:jmap';
 
@@ -109,6 +110,28 @@ export async function rejoinRelay(id: string, reason?: string): Promise<string> 
   const token = (result.updated as Record<string, { joinToken?: string } | null> | undefined)?.[id]?.joinToken;
   if (!token) throw new Error('The server gave no join token.');
   return token;
+}
+
+/** This server's certificates, for a relay to use one (RL-36). */
+export async function fetchServerCertificates(signal?: AbortSignal): Promise<ServerCertificate[]> {
+  const responses = await jmapRequest(
+    [
+      [
+        'x:Certificate/get',
+        {
+          accountId: getAccountId('x:Certificate'),
+          ids: null,
+          properties: ['subjectAlternativeNames', 'notValidAfter'],
+        },
+        '0',
+      ],
+    ],
+    signal,
+  );
+  const [name, result] = responses[0] ?? [];
+  if (name !== 'x:Certificate/get') throw failure(name, result);
+  const list = (result as { list?: Record<string, unknown>[] }).list ?? [];
+  return list.map(certRow).map(({ id, sans, notValidAfter }) => ({ id, sans, notValidAfter }));
 }
 
 /**

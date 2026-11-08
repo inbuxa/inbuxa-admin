@@ -62,6 +62,7 @@ import {
   destroyRelayMessage,
   fetchRelayMessages,
   fetchRelays,
+  fetchServerCertificates,
   rejoinRelay,
   RelaysUnavailable,
   replaceLinkCa,
@@ -79,12 +80,17 @@ import {
   settingsPatch,
   shutOut,
   toForm,
+  usableServerCertificates,
   waiting,
   type Attention,
   type Relay,
   type RelayMessage,
+  type ServerCertificate,
   type SettingsForm,
 } from './model';
+
+/** The certificate choice for one ordered here or pasted (RL-27). */
+const ORDERED = 'ordered';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; relays: Relay[] } | { kind: 'error'; message: string };
 
@@ -184,6 +190,10 @@ function attentionText(t: TFunction, a: Attention): string {
       );
     case 'certificateFailed':
       return t('relays.att.certFailed', 'Its certificate couldn’t be ordered: {{error}}', { error: a.error });
+    case 'serverCertificateFailed':
+      return t('relays.att.serverCertFailed', 'It can’t get this server’s certificate: {{error}}', {
+        error: a.error,
+      });
     case 'relayError':
       return t('relays.att.relayError', 'The relay reports: {{error}}', { error: a.error });
     case 'olderVersion': {
@@ -422,6 +432,20 @@ function SettingsDialog({
   const [form, setForm] = useState<SettingsForm>(startForm);
   const [chain, setChain] = useState(relay.smtpCertificate ?? '');
   const [key, setKey] = useState('');
+  // One of this server's certificates, on servers that offer it (RL-36)
+  const offersServerCertificates = relay.certificateId !== undefined;
+  const [certificateId, setCertificateId] = useState(relay.certificateId ?? ORDERED);
+  const [serverCertificates, setServerCertificates] = useState<ServerCertificate[]>([]);
+  useEffect(() => {
+    if (!offersServerCertificates) return;
+    const controller = new AbortController();
+    fetchServerCertificates(controller.signal)
+      .then(setServerCertificates)
+      .catch(() => setServerCertificates([]));
+    return () => controller.abort();
+  }, [offersServerCertificates]);
+  const usable = usableServerCertificates(serverCertificates, form.hostname, new Date(), relay.certificateId);
+  const usesServerCertificate = certificateId !== ORDERED;
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
@@ -462,8 +486,11 @@ function SettingsDialog({
       }
       patch.mxPreference = Number(g.mxPreference);
     }
+    if (offersServerCertificates && certificateId !== (relay.certificateId ?? ORDERED)) {
+      patch.certificateId = usesServerCertificate ? certificateId : null;
+    }
     // A certificate uploaded by hand: the chain and its key go together
-    if (chain.trim() !== (relay.smtpCertificate ?? '').trim() || key.trim()) {
+    if (!usesServerCertificate && (chain.trim() !== (relay.smtpCertificate ?? '').trim() || key.trim())) {
       if (!chain.trim()) {
         patch.smtpCertificate = null;
         patch.smtpPrivateKey = null;
@@ -684,39 +711,67 @@ function SettingsDialog({
               : relay.certificateNotAfter
                 ? t('relays.cert.until', 'Good until {{when}}.', { when: when(relay.certificateNotAfter) })
                 : t('relays.cert.none', 'None yet.')}{' '}
-            {t(
-              'relays.cert.how',
-              'Where a domain here manages its public name’s DNS, this server orders and renews it. Otherwise, paste one here.',
-            )}
+            {usesServerCertificate
+              ? t('relays.cert.fromServer', 'It gets a copy of this server’s certificate, and of each renewal.')
+              : t(
+                  'relays.cert.how',
+                  'Where a domain here manages its public name’s DNS, this server orders and renews it. Otherwise, paste one here.',
+                )}
           </p>
-          <Field field="smtpCertificate" label={t('relays.f.smtpCertificate', 'Certificate chain (PEM)')}>
-            <Textarea
-              value={chain}
-              rows={4}
-              disabled={!canChange}
-              spellCheck={false}
-              className="font-mono text-xs"
-              placeholder="-----BEGIN CERTIFICATE-----"
-              onChange={(e) => setChain(e.target.value)}
-            />
-          </Field>
-          <Field field="smtpPrivateKey" label={t('relays.f.smtpPrivateKey', 'Private key (PEM)')}>
-            <Textarea
-              value={key}
-              rows={3}
-              disabled={!canChange}
-              spellCheck={false}
-              autoComplete="off"
-              aria-invalid={invalid === 'smtpPrivateKey'}
-              className="font-mono text-xs"
-              placeholder={
-                relay.smtpPrivateKey
-                  ? t('relays.cert.keepKey', 'Leave empty to keep the stored key')
-                  : '-----BEGIN PRIVATE KEY-----'
-              }
-              onChange={(e) => setKey(e.target.value)}
-            />
-          </Field>
+          {offersServerCertificates && (
+            <Field field="certificateId" label={t('relays.f.certificateId', 'Use')}>
+              <Select value={certificateId} disabled={!canChange} onValueChange={setCertificateId}>
+                <SelectTrigger aria-invalid={invalid === 'certificateId'}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ORDERED}>
+                    {t('relays.cert.ordered', 'One ordered for it, or pasted below')}
+                  </SelectItem>
+                  {usable.map((cert) => (
+                    <SelectItem key={cert.id} value={cert.id}>
+                      {t('relays.cert.serverOne', 'This server’s {{names}}, until {{when}}', {
+                        names: cert.sans.join(', '),
+                        when: new Date(cert.notValidAfter).toLocaleDateString(),
+                      })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          )}
+          {!usesServerCertificate && (
+            <>
+              <Field field="smtpCertificate" label={t('relays.f.smtpCertificate', 'Certificate chain (PEM)')}>
+                <Textarea
+                  value={chain}
+                  rows={4}
+                  disabled={!canChange}
+                  spellCheck={false}
+                  className="font-mono text-xs"
+                  placeholder="-----BEGIN CERTIFICATE-----"
+                  onChange={(e) => setChain(e.target.value)}
+                />
+              </Field>
+              <Field field="smtpPrivateKey" label={t('relays.f.smtpPrivateKey', 'Private key (PEM)')}>
+                <Textarea
+                  value={key}
+                  rows={3}
+                  disabled={!canChange}
+                  spellCheck={false}
+                  autoComplete="off"
+                  aria-invalid={invalid === 'smtpPrivateKey'}
+                  className="font-mono text-xs"
+                  placeholder={
+                    relay.smtpPrivateKey
+                      ? t('relays.cert.keepKey', 'Leave empty to keep the stored key')
+                      : '-----BEGIN PRIVATE KEY-----'
+                  }
+                  onChange={(e) => setKey(e.target.value)}
+                />
+              </Field>
+            </>
+          )}
         </section>
 
         {invalid && (
