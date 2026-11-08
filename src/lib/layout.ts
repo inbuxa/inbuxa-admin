@@ -61,6 +61,7 @@ const PAGES: Record<string, PageRule> = {
   'CustomComponent/Relays': readOnly('sysRelay'),
   'CustomComponent/AccountLocks': readOnly('sysAccountLock'),
   'CustomComponent/SharedMailboxes': readOnly('sysAccountLock'),
+  'CustomComponent/DeletedAccounts': readOnly('sysAccount'),
   'CustomComponent/Deliverability': readOnly('sysDeliverability'),
   'CustomComponent/ScheduledReports': readOnly('sysScheduledReport'),
   // A migration has no read permission of its own: running one is the right

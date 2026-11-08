@@ -2729,5 +2729,27 @@
     "makeDefault": "Make it the default certificate",
     "failedNext": "Fix what the reason says, then use Order again on the Certificates page.",
     "tabTitle": "Order a certificate"
+  },
+  "deletedAccounts": {
+    "unavailable": "This server doesn’t keep deleted accounts.",
+    "title": "Deleted accounts",
+    "subtitle": "With account retention set, a deleted account is kept for that time before it’s destroyed. Its name and addresses stay taken until then. Restore it, or destroy it now to free them.",
+    "none": "No deleted account is being kept.",
+    "dates": "Deleted {{deleted}}. Destroyed for good on {{until}}.",
+    "restoreAction": "Restore…",
+    "destroyAction": "Destroy now…",
+    "restored": "{{name}} is back",
+    "restoreFailed": "The account wasn’t restored",
+    "restoreTitle": "Restore {{name}}",
+    "restoreBody": "The account comes back as it was, with its mail, addresses and shares. A person signs in with the new password below; their other sign-in methods stay as they were. A group needs no password.",
+    "passwordPlaceholder": "New password",
+    "cancel": "Cancel",
+    "restoreGo": "Restore",
+    "destroyed": "{{name}} was destroyed",
+    "destroyFailed": "The account wasn’t destroyed",
+    "destroyTitle": "Destroy {{name}} now",
+    "destroyBody": "Its mail and data are destroyed now instead of when its time runs out, and its name and addresses can be used again. This can’t be undone. An account under a legal hold can’t be destroyed. Type the account’s name to confirm.",
+    "confirmName": "Account name",
+    "destroyGo": "Destroy"
   }
 }
