@@ -79,6 +79,11 @@ export interface Relay {
   certificateNotAfter?: string | null;
   /** Why this server's last order for its certificate failed (RL-27). */
   certificateError?: string | null;
+  /**
+   * Absent from servers before RL-36: one of this server's certificates it
+   * uses instead, followed to each renewal; null when ordered or pasted.
+   */
+  certificateId?: string | null;
   /** Absent from servers before RL-28: a link last heard an older release than the server's. */
   olderThanServer?: boolean | null;
   /**
@@ -147,6 +152,7 @@ export type Attention =
   | { kind: 'certificateExpired'; notAfter: string }
   | { kind: 'noCertificate' }
   | { kind: 'certificateFailed'; error: string }
+  | { kind: 'serverCertificateFailed'; error: string }
   | { kind: 'relayError'; error: string }
   | { kind: 'olderVersion'; version: string | null; selfUpgrade: boolean }
   | { kind: 'recipientsDiffer' }
@@ -197,7 +203,12 @@ export function attention(relay: Relay, now: Date = new Date()): Attention[] {
     // A server that reads certificates says there's none
     out.push({ kind: 'noCertificate' });
   }
-  if (relay.certificateError) out.push({ kind: 'certificateFailed', error: relay.certificateError });
+  if (relay.certificateError) {
+    out.push({
+      kind: relay.certificateId ? 'serverCertificateFailed' : 'certificateFailed',
+      error: relay.certificateError,
+    });
+  }
   if (status?.lastError) out.push({ kind: 'relayError', error: status.lastError });
   if (relay.olderThanServer) {
     out.push({ kind: 'olderVersion', version: status?.relayVersion ?? null, selfUpgrade: status?.selfUpgrade ?? true });
@@ -520,4 +531,45 @@ export function shutOut(list: string, links: RelayLink[]): { known: string[]; ou
   const ranges = entries.map(parseRange);
   if (entries.length === 0 || ranges.some((r) => !r)) return { known, outside: [] };
   return { known, outside: known.filter((a) => !allows(ranges as Range[], a)) };
+}
+
+/** One of this server's certificates, as a relay may use it (RL-36). */
+export interface ServerCertificate {
+  id: string;
+  /** Its names, lower case. */
+  sans: string[];
+  notValidAfter: string;
+}
+
+/** Whether `san` names `hostname`: the same, or a wildcard one level up. */
+function names(san: string, hostname: string): boolean {
+  if (san === hostname) return true;
+  if (!san.startsWith('*.')) return false;
+  const dot = hostname.indexOf('.');
+  return dot > 0 && hostname.slice(dot + 1) === san.slice(2);
+}
+
+/**
+ * The server certificates a relay with public name `hostname` may use, the
+ * latest of each set of names (a renewal is stored as a new certificate,
+ * and the relay follows it anyway), soonest to run out last. `keep` stays
+ * listed whatever it names, so the one in use always shows.
+ */
+export function usableServerCertificates(
+  certs: ServerCertificate[],
+  hostname: string,
+  now: Date,
+  keep?: string | null,
+): ServerCertificate[] {
+  const host = hostname.trim().replace(/\.$/, '').toLowerCase();
+  const latest = new Map<string, ServerCertificate>();
+  for (const cert of certs) {
+    const kept = cert.id === keep;
+    if (!kept && new Date(cert.notValidAfter).getTime() <= now.getTime()) continue;
+    if (!kept && !cert.sans.some((san) => names(san, host))) continue;
+    const key = kept ? `\0${cert.id}` : [...cert.sans].sort().join(' ');
+    const seen = latest.get(key);
+    if (!seen || seen.notValidAfter < cert.notValidAfter) latest.set(key, cert);
+  }
+  return [...latest.values()].sort((a, b) => b.notValidAfter.localeCompare(a.notValidAfter));
 }

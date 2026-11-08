@@ -18,6 +18,7 @@ import {
   settingsPatch,
   shutOut,
   toForm,
+  usableServerCertificates,
   waiting,
   type Relay,
   type RelayLink,
@@ -384,5 +385,38 @@ describe('who may link (RL-33)', () => {
     // A server before RL-33 has no list, and none is sent
     expect(toForm(SETTINGS).linkAllowFrom).toBe('');
     expect(settingsPatch(toForm(SETTINGS), toForm(SETTINGS), SETTINGS)).toEqual({ patch: {} });
+  });
+});
+
+describe('server certificates a relay may use (RL-36)', () => {
+  const now = new Date('2026-11-08T00:00:00Z');
+  const cert = (id: string, sans: string[], notValidAfter: string) => ({ id, sans, notValidAfter });
+
+  it('lists the latest of each set of names that covers the relay', () => {
+    const certs = [
+      cert('w1', ['*.example.com', 'example.com'], '2026-12-01T00:00:00Z'),
+      cert('w2', ['example.com', '*.example.com'], '2027-02-01T00:00:00Z'),
+      cert('m', ['mx1.example.com'], '2027-01-01T00:00:00Z'),
+      cert('o', ['mail.example.org'], '2027-03-01T00:00:00Z'),
+      cert('deep', ['*.mx1.example.com'], '2027-03-01T00:00:00Z'),
+      cert('old', ['mx1.example.com', 'mx2.example.com'], '2026-11-01T00:00:00Z'),
+    ];
+    expect(usableServerCertificates(certs, 'MX1.example.com.', now).map((c) => c.id)).toEqual(['w2', 'm']);
+  });
+
+  it('keeps the one in use listed, whatever it names', () => {
+    const certs = [cert('o', ['mail.example.org'], '2027-03-01T00:00:00Z')];
+    expect(usableServerCertificates(certs, 'mx1.example.com', now, 'o').map((c) => c.id)).toEqual(['o']);
+    expect(usableServerCertificates(certs, 'mx1.example.com', now, null)).toEqual([]);
+  });
+
+  it('says when it can’t get the server’s certificate', () => {
+    const using = relay({
+      links: [link('1')],
+      certificateId: 'w1',
+      certificateNotAfter: '2027-01-01T00:00:00Z',
+      certificateError: 'run out',
+    });
+    expect(attention(using, NOW)).toEqual([{ kind: 'serverCertificateFailed', error: 'run out' }]);
   });
 });

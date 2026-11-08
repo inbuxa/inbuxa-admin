@@ -2370,7 +2370,8 @@
       "older": "It runs {{version}}, older than this server. Upgrade it to this server’s release.",
       "olderImage": "It runs {{version}}, older than this server, from a container image: pull the image that matches this server and restart it.",
       "linkCaOld": "It only trusts a link CA this server has replaced, so no node can link to it. Start a new join.",
-      "linkCaWaiting": "It doesn’t trust the new link CA yet; the replacement waits for it."
+      "linkCaWaiting": "It doesn’t trust the new link CA yet; the replacement waits for it.",
+      "serverCertFailed": "It can’t get this server’s certificate: {{error}}"
     },
     "copied": "Copied",
     "tokenTitle": "Join {{name}}",
@@ -2406,7 +2407,8 @@
       "mxPreference": "MX preference",
       "smtpCertificate": "Certificate chain (PEM)",
       "smtpPrivateKey": "Private key (PEM)",
-      "linkAllowFrom": "Who may link"
+      "linkAllowFrom": "Who may link",
+      "certificateId": "Use"
     },
     "cancel": "Cancel",
     "addGo": "Add",
@@ -2493,7 +2495,10 @@
       "until": "Good until {{when}}.",
       "none": "None yet.",
       "how": "Where a domain here manages its public name’s DNS, this server orders and renews it. Otherwise, paste one here.",
-      "keepKey": "Leave empty to keep the stored key"
+      "keepKey": "Leave empty to keep the stored key",
+      "fromServer": "It gets a copy of this server’s certificate, and of each renewal.",
+      "ordered": "One ordered for it, or pasted below",
+      "serverOne": "This server’s {{names}}, until {{when}}"
     },
     "upgraded": "{{name}} is restarting with {{version}}.",
     "upgradeFailed": "The relay wasn’t upgraded",
