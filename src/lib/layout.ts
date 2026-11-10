@@ -59,6 +59,8 @@ const PAGES: Record<string, PageRule> = {
   'CustomComponent/HeldMail': readOnly('sysDlpReview'),
   'CustomComponent/MailFlowRules': readOnly('sysMailRule'),
   'CustomComponent/Relays': readOnly('sysRelay'),
+  // It reads and rewrites the delivery strategy's TLS rule and its own TLS strategy.
+  'CustomComponent/EncryptedSenders': readOnly('sysMtaOutboundStrategy', 'sysMtaTlsStrategy'),
   'CustomComponent/AccountLocks': readOnly('sysAccountLock'),
   'CustomComponent/SharedMailboxes': readOnly('sysAccountLock'),
   'CustomComponent/DeletedAccounts': readOnly('sysAccount'),

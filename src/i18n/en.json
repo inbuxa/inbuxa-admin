@@ -3019,5 +3019,29 @@
     "finished": "Finished",
     "deleteTitle": "Delete {{name}}?",
     "deleteBody": "Its directory is deleted from the server. A backup that already copied it keeps its copy."
+  },
+  "encryptedSenders": {
+    "failed": "Nothing changed",
+    "kindAddress": "This address",
+    "kindDomain": "Every address at this domain",
+    "title": "Encrypted senders",
+    "subtitle": "Mail from these addresses and domains is only ever delivered over an encrypted connection. Everyone else keeps the normal behavior: encrypted when the other server offers it.",
+    "notFirst": "Another condition in the delivery strategy’s TLS rule now comes before these senders. A retry after a TLS error could then be sent with a lenient strategy.",
+    "reorder": "Put them first",
+    "weakened": "The TLS strategy these senders use no longer requires STARTTLS, so their mail can go out unencrypted.",
+    "require": "Require it",
+    "none": "No sender is required to send encrypted.",
+    "removeLabel": "Remove {{value}}",
+    "addLabel": "Address or domain",
+    "add": "Add",
+    "invalid": "Type an address (name@example.org) or a domain (example.org).",
+    "duplicate": "Already on the list.",
+    "addHint": "A domain covers every address at it, aliases included. This is the envelope sender, which is the address mail is sent as.",
+    "certsTitle": "Check the other server’s certificate",
+    "certsHelp": "On: the connection must be encrypted and the certificate valid for that server. Off: any certificate is accepted, so mail still reaches servers with self-signed certificates, but someone in the middle could read it.",
+    "behavior": "If the other server doesn’t offer encryption at all, the message bounces right away. If it offers it but the encrypted connection fails, the message is retried, and bounces when the queue gives up. Either way nothing is sent unencrypted.",
+    "requireTls": "A mail client can also ask for this one message at a time, with REQUIRETLS. The server honors that for every sender.",
+    "others": "Other conditions in the TLS rule also look at the sender. This page leaves them as they are.",
+    "openStrategy": "Open the delivery strategy"
   }
 }
