@@ -9,6 +9,8 @@ import {
   changeActions,
   changeFromServer,
   checkFromServer,
+  cleanupKept,
+  isBusy,
   checkProblemCount,
   isUnresolved,
   newestFirst,
@@ -132,11 +134,41 @@ describe('blob store change', () => {
   });
 
   it('offers a copy while unresolved, a stop while copying, and a dismissal unless copying (BM-5 to BM-7)', () => {
-    expect(changeActions(change('pending'))).toEqual({ copy: true, stop: false, dismiss: true, apply: false });
-    expect(changeActions(change('incomplete'))).toEqual({ copy: true, stop: false, dismiss: true, apply: false });
-    expect(changeActions(change('copying'))).toEqual({ copy: false, stop: true, dismiss: false, apply: false });
-    expect(changeActions(change('copied'))).toEqual({ copy: false, stop: false, dismiss: true, apply: false });
-    expect(changeActions(change('reverted'))).toEqual({ copy: false, stop: false, dismiss: true, apply: false });
+    expect(changeActions(change('pending'))).toEqual({
+      copy: true,
+      stop: false,
+      dismiss: true,
+      apply: false,
+      cleanUp: false,
+    });
+    expect(changeActions(change('incomplete'))).toEqual({
+      copy: true,
+      stop: false,
+      dismiss: true,
+      apply: false,
+      cleanUp: false,
+    });
+    expect(changeActions(change('copying'))).toEqual({
+      copy: false,
+      stop: true,
+      dismiss: false,
+      apply: false,
+      cleanUp: false,
+    });
+    expect(changeActions(change('copied'))).toEqual({
+      copy: false,
+      stop: false,
+      dismiss: true,
+      apply: false,
+      cleanUp: false,
+    });
+    expect(changeActions(change('reverted'))).toEqual({
+      copy: false,
+      stop: false,
+      dismiss: true,
+      apply: false,
+      cleanUp: false,
+    });
   });
 
   it('reads a change from before copy ahead as changed (CA-1)', () => {
@@ -160,10 +192,22 @@ describe('blob store change', () => {
     const c = planned('pending');
     expect(c).toMatchObject({ stage: 'planned', changedAt: null, node: null });
     expect(isUnresolved(c)).toBe(false);
-    expect(changeActions(c)).toEqual({ copy: true, stop: false, dismiss: true, apply: false });
-    expect(changeActions(planned('copying'))).toEqual({ copy: false, stop: true, dismiss: false, apply: false });
+    expect(changeActions(c)).toEqual({ copy: true, stop: false, dismiss: true, apply: false, cleanUp: false });
+    expect(changeActions(planned('copying'))).toEqual({
+      copy: false,
+      stop: true,
+      dismiss: false,
+      apply: false,
+      cleanUp: false,
+    });
     expect(changeActions(planned('incomplete')).apply).toBe(false);
-    expect(changeActions(planned('copied'))).toEqual({ copy: true, stop: false, dismiss: true, apply: true });
+    expect(changeActions(planned('copied'))).toEqual({
+      copy: true,
+      stop: false,
+      dismiss: true,
+      apply: true,
+      cleanUp: false,
+    });
     expect(changeActions(planned('copied', { appliedAt: '2026-11-10T01:00:00Z', appliedBy: 'admin' })).apply).toBe(
       false,
     );
@@ -185,6 +229,56 @@ describe('blob store change', () => {
       },
     });
     expect(c.copiedAhead).toMatchObject({ status: 'copied', copied: 7, alreadyThere: 2, bytesCopied: 900 });
+  });
+
+  it('offers a cleanup only for a copied change whose old store is kept (OC-1, OC-3)', () => {
+    const copied = (extra: Record<string, unknown>) =>
+      changeFromServer({ id: 'a', from: 'old', to: 'new', status: 'copied', ...extra });
+    expect(changeActions(copied({})).cleanUp).toBe(false);
+    expect(copied({}).oldStoreKept).toBe(false);
+    expect(changeActions(copied({ oldStoreKept: true }))).toEqual({
+      copy: false,
+      stop: false,
+      dismiss: true,
+      apply: false,
+      cleanUp: true,
+    });
+    expect(changeActions(changeFromServer({ id: 'b', status: 'pending', oldStoreKept: true })).cleanUp).toBe(false);
+    expect(changeActions(planned('copied', { oldStoreKept: true })).cleanUp).toBe(false);
+  });
+
+  it('reads a cleanup, and stops rather than dismisses while one runs (OC-4 to OC-6)', () => {
+    const c = changeFromServer({
+      id: 'a',
+      status: 'copied',
+      oldStoreKept: true,
+      problems: [],
+      cleanup: {
+        status: 'running',
+        dryRun: false,
+        startedAt: '2026-11-10T02:00:00Z',
+        startedBy: 'admin',
+        finishedAt: null,
+        node: '1',
+        progress: 0.5,
+        blobsChecked: 40,
+        deleted: 30,
+        bytesFreed: 9000,
+        notThere: 5,
+        missing: 1,
+        damaged: 2,
+        different: 3,
+        unreadable: 0,
+        problems: [{ kind: 'different', blobId: 'ab', holder: 'temporary', detail: 'sizes differ' }],
+        snapshotsBefore: 2,
+        error: null,
+      },
+    });
+    expect(c.cleanup).toMatchObject({ status: 'running', deleted: 30, bytesFreed: 9000, snapshotsBefore: 2 });
+    expect(c.cleanup?.problems[0].kind).toBe('different');
+    expect(cleanupKept(c.cleanup!)).toBe(6);
+    expect(isBusy(c)).toBe(true);
+    expect(changeActions(c)).toEqual({ copy: false, stop: true, dismiss: false, apply: false, cleanUp: false });
   });
 
   it('plans one change at a time, and none while another is unresolved (CA-1)', () => {

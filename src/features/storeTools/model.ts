@@ -7,8 +7,8 @@
 /**
  * INBUXA: the store's own tools as the server sends them (inbuxa-server
  * docs/spec/features/store-check.md, store-snapshot.md,
- * blob-store-change.md): `inbuxa:StoreCheck`, `inbuxa:StoreSnapshot` and
- * `inbuxa:BlobStoreChange`.
+ * blob-store-change.md, blob-store-cleanup.md): `inbuxa:StoreCheck`,
+ * `inbuxa:StoreSnapshot` and `inbuxa:BlobStoreChange`.
  */
 
 const text = (v: unknown): string | null => (typeof v === 'string' ? v : null);
@@ -146,7 +146,9 @@ export const CHANGE_STATUSES = [
   'reverted',
 ] as const;
 export type ChangeStatus = (typeof CHANGE_STATUSES)[number];
-export type ChangeProblemKind = 'missing' | 'damaged' | 'unreadable';
+/** `different` comes only from a cleanup (OC-4). */
+export type ChangeProblemKind = 'missing' | 'damaged' | 'unreadable' | 'different';
+const PROBLEM_KINDS = ['missing', 'damaged', 'unreadable', 'different'] as const;
 
 export interface ChangeProblem {
   kind: ChangeProblemKind;
@@ -166,6 +168,33 @@ export interface CopiedAhead {
   alreadyThere: number;
   bytesCopied: number;
   problems: number;
+}
+
+export const CLEANUP_STATUSES = ['running', 'done', 'incomplete', 'stopped', 'failed', 'interrupted'] as const;
+export type CleanupStatus = (typeof CLEANUP_STATUSES)[number];
+
+/** OC-3 to OC-6: the latest cleanup of a resolved change's old store, or a preview of one. */
+export interface Cleanup {
+  status: CleanupStatus;
+  dryRun: boolean;
+  startedAt: string;
+  startedBy: string;
+  finishedAt: string | null;
+  node: string;
+  progress: number;
+  blobsChecked: number;
+  /** For a preview, what would be deleted. */
+  deleted: number;
+  bytesFreed: number;
+  notThere: number;
+  missing: number;
+  damaged: number;
+  different: number;
+  unreadable: number;
+  problems: ChangeProblem[];
+  /** OC-9: snapshots on disk from before the change, which still hold the old blobs. */
+  snapshotsBefore: number;
+  error: string | null;
 }
 
 export interface BlobStoreChange {
@@ -197,7 +226,48 @@ export interface BlobStoreChange {
   copiedAhead: CopiedAhead | null;
   appliedAt: string | null;
   appliedBy: string | null;
+  /** OC-1: the server keeps the old store's settings, so it can be cleaned up. False before 27.1-rc.19. */
+  oldStoreKept: boolean;
+  cleanup: Cleanup | null;
 }
+
+const problemsFromServer = (v: unknown): ChangeProblem[] =>
+  list(v).map((p) => ({
+    kind: oneOf(p.kind, PROBLEM_KINDS, 'missing'),
+    blobId: text(p.blobId) ?? '',
+    holder: text(p.holder) ?? '',
+    accountId: p.accountId == null ? null : String(p.accountId),
+    objectId: p.objectId == null ? null : String(p.objectId),
+    detail: text(p.detail) ?? '',
+  }));
+
+function cleanupFromServer(v: unknown): Cleanup | null {
+  if (!v || typeof v !== 'object') return null;
+  const c = v as Record<string, unknown>;
+  return {
+    status: oneOf(c.status, CLEANUP_STATUSES, 'running'),
+    dryRun: c.dryRun === true,
+    startedAt: text(c.startedAt) ?? '',
+    startedBy: text(c.startedBy) ?? '',
+    finishedAt: text(c.finishedAt),
+    node: text(c.node) ?? '',
+    progress: share(c.progress),
+    blobsChecked: count(c.blobsChecked),
+    deleted: count(c.deleted),
+    bytesFreed: count(c.bytesFreed),
+    notThere: count(c.notThere),
+    missing: count(c.missing),
+    damaged: count(c.damaged),
+    different: count(c.different),
+    unreadable: count(c.unreadable),
+    problems: problemsFromServer(c.problems),
+    snapshotsBefore: count(c.snapshotsBefore),
+    error: text(c.error),
+  };
+}
+
+/** Blobs a cleanup kept in the old store, past the 1,000 it lists too. */
+export const cleanupKept = (c: Cleanup) => c.missing + c.damaged + c.different + c.unreadable;
 
 function copiedAheadFromServer(v: unknown): CopiedAhead | null {
   if (!v || typeof v !== 'object') return null;
@@ -236,18 +306,13 @@ export function changeFromServer(item: Record<string, unknown>): BlobStoreChange
     missing: count(item.missing),
     damaged: count(item.damaged),
     unreadable: count(item.unreadable),
-    problems: list(item.problems).map((p) => ({
-      kind: oneOf(p.kind, ['missing', 'damaged', 'unreadable'] as const, 'missing'),
-      blobId: text(p.blobId) ?? '',
-      holder: text(p.holder) ?? '',
-      accountId: p.accountId == null ? null : String(p.accountId),
-      objectId: p.objectId == null ? null : String(p.objectId),
-      detail: text(p.detail) ?? '',
-    })),
+    problems: problemsFromServer(item.problems),
     error: text(item.error),
     copiedAhead: copiedAheadFromServer(item.copiedAhead),
     appliedAt: text(item.appliedAt),
     appliedBy: text(item.appliedBy),
+    oldStoreKept: item.oldStoreKept === true,
+    cleanup: cleanupFromServer(item.cleanup),
   };
 }
 
@@ -256,15 +321,28 @@ export const isPlanned = (c: BlobStoreChange) => c.stage === 'planned';
 /** BM-3: the server still reads through to the old store. A planned change isn't read through (CA-3). */
 export const isUnresolved = (c: BlobStoreChange) => !isPlanned(c) && c.status !== 'copied' && c.status !== 'reverted';
 
-/** What may be done to a change now (BM-5 to BM-7, CA-2, CA-7, CA-8). */
-export function changeActions(c: BlobStoreChange): { copy: boolean; stop: boolean; dismiss: boolean; apply: boolean } {
-  const copying = c.status === 'copying';
+/** OC-6: its old store is being cleaned up, or a cleanup previewed. */
+export const isCleaningUp = (c: BlobStoreChange) => c.cleanup?.status === 'running';
+
+/** A copy or a cleanup of it runs, so the page keeps polling. */
+export const isBusy = (c: BlobStoreChange) => c.status === 'copying' || isCleaningUp(c);
+
+/** What may be done to a change now (BM-5 to BM-7, CA-2, CA-7, CA-8, OC-3). */
+export function changeActions(c: BlobStoreChange): {
+  copy: boolean;
+  stop: boolean;
+  dismiss: boolean;
+  apply: boolean;
+  cleanUp: boolean;
+} {
+  const busy = isBusy(c);
   const planned = isPlanned(c);
   return {
-    copy: !copying && (planned || isUnresolved(c)),
-    stop: copying,
-    dismiss: !copying,
+    copy: !busy && (planned || isUnresolved(c)),
+    stop: busy,
+    dismiss: !busy,
     apply: planned && c.status === 'copied' && !c.appliedAt,
+    cleanUp: !busy && !planned && c.status === 'copied' && c.oldStoreKept,
   };
 }
 
