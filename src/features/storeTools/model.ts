@@ -157,12 +157,26 @@ export interface ChangeProblem {
   detail: string;
 }
 
+/** CA-5: what the copy ahead did, kept when a planned change became the change. */
+export interface CopiedAhead {
+  startedAt: string;
+  finishedAt: string | null;
+  status: ChangeStatus;
+  copied: number;
+  alreadyThere: number;
+  bytesCopied: number;
+  problems: number;
+}
+
 export interface BlobStoreChange {
   id: string;
+  /** CA-1: `planned` until the setting moves to it; changes from before 27.1-rc.18 are `changed`. */
+  stage: 'planned' | 'changed';
   from: string;
   to: string;
-  changedAt: string;
-  node: string;
+  /** Null while planned. */
+  changedAt: string | null;
+  node: string | null;
   status: ChangeStatus;
   copyStartedAt: string | null;
   copyFinishedAt: string | null;
@@ -180,15 +194,33 @@ export interface BlobStoreChange {
   unreadable: number;
   problems: ChangeProblem[];
   error: string | null;
+  copiedAhead: CopiedAhead | null;
+  appliedAt: string | null;
+  appliedBy: string | null;
+}
+
+function copiedAheadFromServer(v: unknown): CopiedAhead | null {
+  if (!v || typeof v !== 'object') return null;
+  const a = v as Record<string, unknown>;
+  return {
+    startedAt: text(a.startedAt) ?? '',
+    finishedAt: text(a.finishedAt),
+    status: oneOf(a.status, CHANGE_STATUSES, 'pending'),
+    copied: count(a.copied),
+    alreadyThere: count(a.alreadyThere),
+    bytesCopied: count(a.bytesCopied),
+    problems: count(a.problems),
+  };
 }
 
 export function changeFromServer(item: Record<string, unknown>): BlobStoreChange {
   return {
     id: String(item.id),
+    stage: item.stage === 'planned' ? 'planned' : 'changed',
     from: text(item.from) ?? '',
     to: text(item.to) ?? '',
-    changedAt: text(item.changedAt) ?? '',
-    node: text(item.node) ?? '',
+    changedAt: text(item.changedAt),
+    node: text(item.node),
     status: oneOf(item.status, CHANGE_STATUSES, 'pending'),
     copyStartedAt: text(item.copyStartedAt),
     copyFinishedAt: text(item.copyFinishedAt),
@@ -213,16 +245,34 @@ export function changeFromServer(item: Record<string, unknown>): BlobStoreChange
       detail: text(p.detail) ?? '',
     })),
     error: text(item.error),
+    copiedAhead: copiedAheadFromServer(item.copiedAhead),
+    appliedAt: text(item.appliedAt),
+    appliedBy: text(item.appliedBy),
   };
 }
 
-/** BM-3: the server still reads through to the old store. */
-export const isUnresolved = (c: BlobStoreChange) => c.status !== 'copied' && c.status !== 'reverted';
+export const isPlanned = (c: BlobStoreChange) => c.stage === 'planned';
 
-/** What may be done to a change now (BM-5 to BM-7). */
-export function changeActions(c: BlobStoreChange): { copy: boolean; stop: boolean; dismiss: boolean } {
+/** BM-3: the server still reads through to the old store. A planned change isn't read through (CA-3). */
+export const isUnresolved = (c: BlobStoreChange) => !isPlanned(c) && c.status !== 'copied' && c.status !== 'reverted';
+
+/** What may be done to a change now (BM-5 to BM-7, CA-2, CA-7, CA-8). */
+export function changeActions(c: BlobStoreChange): { copy: boolean; stop: boolean; dismiss: boolean; apply: boolean } {
   const copying = c.status === 'copying';
-  return { copy: !copying && isUnresolved(c), stop: copying, dismiss: !copying };
+  const planned = isPlanned(c);
+  return {
+    copy: !copying && (planned || isUnresolved(c)),
+    stop: copying,
+    dismiss: !copying,
+    apply: planned && c.status === 'copied' && !c.appliedAt,
+  };
+}
+
+/** CA-1: why a change can't be planned now, or null when one can. */
+export function planBlocked(changes: BlobStoreChange[]): 'planned' | 'unresolved' | null {
+  if (changes.some(isPlanned)) return 'planned';
+  if (changes.some(isUnresolved)) return 'unresolved';
+  return null;
 }
 
 /** A limit as sent: a whole number of at least 0, or null for the server's default (SV-6, BM-5). */
