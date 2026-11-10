@@ -267,6 +267,14 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         ],
       },
       {
+        name: 'Health & backups',
+        pages: [
+          p('CustomComponent/StoreCheck', 'Store check'),
+          p('CustomComponent/StoreSnapshots', 'Snapshots'),
+          p('CustomComponent/BlobStoreChanges', 'Blob store changes'),
+        ],
+      },
+      {
         name: 'Performance',
         pages: [p('x:Cache', 'Cache'), p('x:Search', 'Search indexing')],
       },
