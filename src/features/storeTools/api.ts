@@ -115,3 +115,9 @@ export const startCopy = (id: string, blobsPerSecond: number | null, bytesPerSec
 
 export const stopCopy = (id: string) => update(BLOB_STORE_CHANGE, id, { action: 'stop' });
 export const dismissChange = (id: string) => destroy(BLOB_STORE_CHANGE, id);
+
+/** CA-1: plan a change to the store these settings (an `x:BlobStore` value) describe. */
+export const planChange = (target: Record<string, unknown>) => create(BLOB_STORE_CHANGE, { target });
+
+/** CA-7: write a planned change's store to the blob store setting. */
+export const applyChange = (id: string) => update(BLOB_STORE_CHANGE, id, { action: 'apply' });

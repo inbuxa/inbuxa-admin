@@ -12,6 +12,7 @@ import {
   checkProblemCount,
   isUnresolved,
   newestFirst,
+  planBlocked,
   parseLimit,
   snapshotFromServer,
   type ChangeStatus,
@@ -131,11 +132,66 @@ describe('blob store change', () => {
   });
 
   it('offers a copy while unresolved, a stop while copying, and a dismissal unless copying (BM-5 to BM-7)', () => {
-    expect(changeActions(change('pending'))).toEqual({ copy: true, stop: false, dismiss: true });
-    expect(changeActions(change('incomplete'))).toEqual({ copy: true, stop: false, dismiss: true });
-    expect(changeActions(change('copying'))).toEqual({ copy: false, stop: true, dismiss: false });
-    expect(changeActions(change('copied'))).toEqual({ copy: false, stop: false, dismiss: true });
-    expect(changeActions(change('reverted'))).toEqual({ copy: false, stop: false, dismiss: true });
+    expect(changeActions(change('pending'))).toEqual({ copy: true, stop: false, dismiss: true, apply: false });
+    expect(changeActions(change('incomplete'))).toEqual({ copy: true, stop: false, dismiss: true, apply: false });
+    expect(changeActions(change('copying'))).toEqual({ copy: false, stop: true, dismiss: false, apply: false });
+    expect(changeActions(change('copied'))).toEqual({ copy: false, stop: false, dismiss: true, apply: false });
+    expect(changeActions(change('reverted'))).toEqual({ copy: false, stop: false, dismiss: true, apply: false });
+  });
+
+  it('reads a change from before copy ahead as changed (CA-1)', () => {
+    const c = change('pending');
+    expect(c).toMatchObject({ stage: 'changed', copiedAhead: null, appliedAt: null });
+  });
+
+  const planned = (status: ChangeStatus, extra: Record<string, unknown> = {}) =>
+    changeFromServer({
+      id: 'p',
+      stage: 'planned',
+      from: 'data store',
+      to: 'filesystem /srv/new (depth 2)',
+      changedAt: null,
+      node: null,
+      status,
+      ...extra,
+    });
+
+  it('never reads a planned change through, and applies it only once a copy ahead ended copied (CA-3, CA-7)', () => {
+    const c = planned('pending');
+    expect(c).toMatchObject({ stage: 'planned', changedAt: null, node: null });
+    expect(isUnresolved(c)).toBe(false);
+    expect(changeActions(c)).toEqual({ copy: true, stop: false, dismiss: true, apply: false });
+    expect(changeActions(planned('copying'))).toEqual({ copy: false, stop: true, dismiss: false, apply: false });
+    expect(changeActions(planned('incomplete')).apply).toBe(false);
+    expect(changeActions(planned('copied'))).toEqual({ copy: true, stop: false, dismiss: true, apply: true });
+    expect(changeActions(planned('copied', { appliedAt: '2026-11-10T01:00:00Z', appliedBy: 'admin' })).apply).toBe(
+      false,
+    );
+  });
+
+  it('keeps what the copy ahead did (CA-5)', () => {
+    const c = changeFromServer({
+      id: 'p',
+      stage: 'changed',
+      status: 'pending',
+      copiedAhead: {
+        startedAt: '2026-11-10T00:00:00Z',
+        finishedAt: '2026-11-10T00:10:00Z',
+        status: 'copied',
+        copied: 7,
+        alreadyThere: 2,
+        bytesCopied: 900,
+        problems: 0,
+      },
+    });
+    expect(c.copiedAhead).toMatchObject({ status: 'copied', copied: 7, alreadyThere: 2, bytesCopied: 900 });
+  });
+
+  it('plans one change at a time, and none while another is unresolved (CA-1)', () => {
+    expect(planBlocked([])).toBeNull();
+    expect(planBlocked([change('copied'), change('reverted')])).toBeNull();
+    expect(planBlocked([change('pending')])).toBe('unresolved');
+    expect(planBlocked([planned('pending')])).toBe('planned');
   });
 });
 

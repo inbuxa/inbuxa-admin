@@ -9,12 +9,15 @@
  * docs/spec/features/blob-store-change.md). Each time the blob store setting
  * moved, the server recorded it and reads through to the old store until the
  * rest is copied. Copy, stop a copy, read what it couldn't copy, or dismiss.
+ * A change can also be planned ahead, copied ahead while the current store
+ * stays the blob store, and then written to the setting
+ * (blob-store-copy-ahead.md).
  */
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { ArrowRight, Copy as CopyIcon, Square, X } from 'lucide-react';
+import { ArrowRight, CalendarClock, Check, Copy as CopyIcon, Square, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,17 +33,20 @@ import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { formatSize } from '@/lib/durationFormat';
 import { useAccountStore } from '@/stores/accountStore';
 import { toast } from '@/hooks/use-toast';
-import { dismissChange, fetchChanges, startCopy, stopCopy } from './api';
+import { applyChange, dismissChange, fetchChanges, startCopy, stopCopy } from './api';
 import {
   changeActions,
+  isPlanned,
   isUnresolved,
   newestFirst,
   parseLimit,
+  planBlocked,
   type BlobStoreChange,
   type ChangeProblem,
 } from './model';
 import { BlobId, Confirm, Empty, Facts, LimitFields, ProblemTable, ProgressBar } from './parts';
 import { number, percentOf, useAction, usePolledList, when } from './hooks';
+import { PlanChangeDialog } from './PlanChangeDialog';
 
 const copying = (changes: BlobStoreChange[]) => changes.some((c) => c.status === 'copying');
 
@@ -55,7 +61,10 @@ export function BlobStoreChangesPage() {
       'This server doesn’t track blob store changes. It needs inbuxa 27.1-rc.16 or 2026.11.9.1 or newer.',
     ),
   );
-  const changes = load.kind === 'ready' ? newestFirst(load.items, (c) => c.changedAt) : [];
+  // A planned change hasn't happened yet, so it heads the list.
+  const changes = load.kind === 'ready' ? newestFirst(load.items, (c) => c.changedAt ?? '~') : [];
+  const blocked = planBlocked(changes);
+  const [planning, setPlanning] = useState(false);
 
   return (
     <div className="mx-auto max-w-5xl space-y-5">
@@ -66,7 +75,38 @@ export function BlobStoreChangesPage() {
           'blobStoreChange.subtitle',
           'Changing the blob store setting moves nothing. Until what’s in the old store is copied over, the server reads anything it can’t find from there.',
         )}
+        actions={
+          canAct &&
+          load.kind === 'ready' && (
+            <Button size="sm" onClick={() => setPlanning(true)} disabled={blocked !== null}>
+              <CalendarClock className="mr-2 h-4 w-4" />
+              {t('blobStoreChange.plan', 'Plan a change…')}
+            </Button>
+          )
+        }
       />
+      {canAct && load.kind === 'ready' && blocked && (
+        <p className="text-sm text-muted-foreground">
+          {blocked === 'planned'
+            ? t(
+                'blobStoreChange.planBlockedPlanned',
+                'A change is planned already. Another can be planned once the nodes run on it, or once it’s dismissed.',
+              )
+            : t(
+                'blobStoreChange.planBlockedUnresolved',
+                'A change can be planned once the last one is copied or dismissed: copying ahead reads the current store only.',
+              )}
+        </p>
+      )}
+      {planning && (
+        <PlanChangeDialog
+          onClose={() => setPlanning(false)}
+          onPlanned={() => {
+            setPlanning(false);
+            refetch();
+          }}
+        />
+      )}
 
       {load.kind === 'loading' && <LoadingFallback />}
       {load.kind === 'error' && <Empty>{load.message}</Empty>}
@@ -82,6 +122,19 @@ export function BlobStoreChangesPage() {
 
 function StatusBadge({ change }: { change: BlobStoreChange }) {
   const { t } = useTranslation();
+  if (isPlanned(change)) {
+    // CA-2: nothing reads from a planned store, so an unfinished copy ahead isn't a problem yet.
+    switch (change.status) {
+      case 'copying':
+        return <Badge variant="outline">{t('blobStoreChange.status.copyingAhead', 'Copying ahead')}</Badge>;
+      case 'copied':
+        return <Badge variant="secondary">{t('blobStoreChange.status.copiedAhead', 'Copied ahead')}</Badge>;
+      case 'pending':
+        return <Badge variant="outline">{t('blobStoreChange.status.planned', 'Planned')}</Badge>;
+      default:
+        break;
+    }
+  }
   switch (change.status) {
     case 'pending':
       return <Badge variant="destructive">{t('blobStoreChange.status.pending', 'Not copied yet')}</Badge>;
@@ -131,10 +184,11 @@ function ChangeCard({
 }) {
   const { t } = useTranslation();
   const { busy, run } = useAction();
-  const [dialog, setDialog] = useState<'copy' | 'stop' | 'dismiss' | null>(null);
+  const [dialog, setDialog] = useState<'copy' | 'stop' | 'dismiss' | 'apply' | null>(null);
   const [showProblems, setShowProblems] = useState(false);
   const may = changeActions(change);
   const unresolved = isUnresolved(change);
+  const planned = isPlanned(change);
   const problemCount = change.missing + change.damaged + change.unreadable;
   const done = () => {
     setDialog(null);
@@ -152,20 +206,32 @@ function ChangeCard({
             <StatusBadge change={change} />
           </div>
           <div className="text-sm text-muted-foreground">
-            {t('blobStoreChange.changedAt', 'Noticed {{when}} by node {{node}}', {
-              when: when(change.changedAt),
-              node: change.node,
-            })}
+            {planned
+              ? t('blobStoreChange.plannedNote', 'Planned. The current store stays the blob store until this one is.')
+              : t('blobStoreChange.changedAt', 'Noticed {{when}} by node {{node}}', {
+                  when: when(change.changedAt),
+                  node: change.node ?? '',
+                })}
           </div>
         </div>
         {canAct && (
           <div className="flex flex-wrap gap-2">
+            {may.apply && (
+              <Button size="sm" onClick={() => setDialog('apply')}>
+                <Check className="mr-2 h-4 w-4" />
+                {t('blobStoreChange.apply', 'Make it the blob store…')}
+              </Button>
+            )}
             {may.copy && (
-              <Button size="sm" onClick={() => setDialog('copy')}>
+              <Button size="sm" variant={may.apply ? 'outline' : 'default'} onClick={() => setDialog('copy')}>
                 <CopyIcon className="mr-2 h-4 w-4" />
-                {change.copyStartedAt
-                  ? t('blobStoreChange.copyAgain', 'Copy again…')
-                  : t('blobStoreChange.copy', 'Copy…')}
+                {planned
+                  ? change.copyStartedAt
+                    ? t('blobStoreChange.copyAheadAgain', 'Copy ahead again…')
+                    : t('blobStoreChange.copyAhead', 'Copy ahead…')
+                  : change.copyStartedAt
+                    ? t('blobStoreChange.copyAgain', 'Copy again…')
+                    : t('blobStoreChange.copy', 'Copy…')}
               </Button>
             )}
             {may.stop && (
@@ -192,6 +258,45 @@ function ChangeCard({
           )}
         </p>
       )}
+      {planned && !change.appliedAt && change.status !== 'copying' && (
+        <p className="text-sm">
+          {change.status === 'copied'
+            ? t(
+                'blobStoreChange.plannedCopied',
+                'Everything is copied ahead. Make it the blob store, then restart the nodes; the copy after that picks up only what arrived since.',
+              )
+            : t(
+                'blobStoreChange.plannedHint',
+                'Copy ahead into the new store. Mail keeps going to the current store meanwhile, and what’s deleted there is deleted here too.',
+              )}
+        </p>
+      )}
+      {change.appliedAt && (
+        <p className="text-sm">
+          {t(
+            'blobStoreChange.appliedNote',
+            'Written to the blob store setting {{when}} by {{who}}. It takes effect as each node restarts.',
+            { when: when(change.appliedAt), who: change.appliedBy ?? '' },
+          )}
+        </p>
+      )}
+      {change.copiedAhead && (
+        <div className="text-sm text-muted-foreground">
+          {t(
+            'blobStoreChange.copiedAheadNote',
+            'Copied ahead before the change: {{copied}} copied, {{already}} already there, {{size}} ({{status}}).',
+            {
+              copied: number(change.copiedAhead.copied),
+              already: number(change.copiedAhead.alreadyThere),
+              size: formatSize(change.copiedAhead.bytesCopied),
+              status:
+                change.copiedAhead.status === 'copied'
+                  ? t('blobStoreChange.copiedAheadDone', 'finished')
+                  : t('blobStoreChange.copiedAheadUnfinished', 'unfinished'),
+            },
+          )}
+        </div>
+      )}
       {change.status === 'reverted' && (
         <p className="text-sm text-muted-foreground">
           {t(
@@ -203,7 +308,14 @@ function ChangeCard({
 
       {change.status === 'copying' && (
         <div className="space-y-1">
-          <ProgressBar share={change.progress} label={t('blobStoreChange.progress', 'Copy progress')} />
+          <ProgressBar
+            share={change.progress}
+            label={
+              planned
+                ? t('blobStoreChange.progressAhead', 'Copy ahead progress')
+                : t('blobStoreChange.progress', 'Copy progress')
+            }
+          />
           <div className="text-xs text-muted-foreground">{percentOf(change.progress)}</div>
         </div>
       )}
@@ -300,6 +412,36 @@ function ChangeCard({
       )}
 
       {dialog === 'copy' && <CopyDialog change={change} onClose={() => setDialog(null)} onStarted={done} />}
+      {dialog === 'apply' && (
+        <Confirm
+          title={t('blobStoreChange.applyTitle', 'Make it the blob store?')}
+          body={
+            <>
+              <p>
+                {t(
+                  'blobStoreChange.applyBody',
+                  'The blob store setting becomes {{to}}, with the settings given when it was planned. It takes effect as each node restarts.',
+                  { to: change.to },
+                )}
+              </p>
+              <p>
+                {t(
+                  'blobStoreChange.applyAfter',
+                  'Once every node runs on it, copy again: the last pass copies only what arrived after the copy ahead.',
+                )}
+              </p>
+            </>
+          }
+          action={t('blobStoreChange.applyGo', 'Make it the blob store')}
+          busy={busy}
+          onConfirm={() =>
+            void run(t('blobStoreChange.applyFailed', 'The blob store setting wasn’t changed'), () =>
+              applyChange(change.id),
+            ).then((ok) => ok && done())
+          }
+          onClose={() => setDialog(null)}
+        />
+      )}
       {dialog === 'stop' && (
         <Confirm
           title={t('blobStoreChange.stopTitle', 'Stop the copy?')}
@@ -322,7 +464,12 @@ function ChangeCard({
           title={t('blobStoreChange.dismissTitle', 'Dismiss this change?')}
           destructive={unresolved}
           body={
-            unresolved ? (
+            planned ? (
+              t(
+                'blobStoreChange.dismissPlanned',
+                'The plan and the new store’s settings are forgotten, and the blob store setting stays as it is. What was copied ahead stays in the new store; clearing it out is up to you.',
+              )
+            ) : unresolved ? (
               <>
                 <p>
                   {t(
@@ -390,13 +537,23 @@ function CopyDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('blobStoreChange.copyTitle', 'Copy to the new blob store')}</DialogTitle>
+          <DialogTitle>
+            {isPlanned(change)
+              ? t('blobStoreChange.copyAheadTitle', 'Copy ahead to the planned store')
+              : t('blobStoreChange.copyTitle', 'Copy to the new blob store')}
+          </DialogTitle>
           <DialogDescription>
-            {t(
-              'blobStoreChange.copyBody',
-              'Copies every blob the server still needs from {{from}} to {{to}}, checking each message’s content as it goes. What’s already there is skipped. Start it once every node runs the new setting. One copy runs at a time.',
-              { from: change.from, to: change.to },
-            )}
+            {isPlanned(change)
+              ? t(
+                  'blobStoreChange.copyAheadBody',
+                  'Copies every blob the server needs from {{from}} to {{to}}, checking each message’s content as it goes, while {{from}} stays the blob store. What’s already there is skipped. One copy runs at a time.',
+                  { from: change.from, to: change.to },
+                )
+              : t(
+                  'blobStoreChange.copyBody',
+                  'Copies every blob the server still needs from {{from}} to {{to}}, checking each message’s content as it goes. What’s already there is skipped. Start it once every node runs the new setting. One copy runs at a time.',
+                  { from: change.from, to: change.to },
+                )}
           </DialogDescription>
         </DialogHeader>
         <LimitFields blobs={blobs} bytes={bytes} onBlobs={setBlobs} onBytes={setBytes} />
