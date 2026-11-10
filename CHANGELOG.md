@@ -14,6 +14,19 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.13] - 2026-11-10
+
+Pairs with inbuxa-server 27.1-rc.19.
+
+### Added
+- Encrypted senders, under Settings › Mail flow › Sending: addresses and
+  domains whose outgoing mail is only ever delivered encrypted. Each entry is
+  a condition at the top of the delivery strategy's TLS rule, pointing at a
+  `sender-tls` strategy that requires STARTTLS. Other conditions are left as
+  they are. The page warns, with a fix, if its conditions are moved down or
+  the strategy stops requiring STARTTLS, and has a switch for whether the
+  other server's certificate must be valid. (#190, fixes #187)
+
 ## [27.1-rc.12] - 2026-11-10
 
 Pairs with inbuxa-server 27.1-rc.19.
