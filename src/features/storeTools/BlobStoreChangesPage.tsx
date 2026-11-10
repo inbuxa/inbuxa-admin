@@ -11,13 +11,14 @@
  * rest is copied. Copy, stop a copy, read what it couldn't copy, or dismiss.
  * A change can also be planned ahead, copied ahead while the current store
  * stays the blob store, and then written to the setting
- * (blob-store-copy-ahead.md).
+ * (blob-store-copy-ahead.md). Once a change is resolved, the blobs left in the
+ * old store can be previewed and cleaned up (blob-store-cleanup.md).
  */
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { ArrowRight, CalendarClock, Check, Copy as CopyIcon, Square, X } from 'lucide-react';
+import { ArrowRight, CalendarClock, Check, Copy as CopyIcon, Eraser, Square, X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,9 +34,12 @@ import { LoadingFallback } from '@/components/common/LoadingFallback';
 import { formatSize } from '@/lib/durationFormat';
 import { useAccountStore } from '@/stores/accountStore';
 import { toast } from '@/hooks/use-toast';
-import { applyChange, dismissChange, fetchChanges, startCopy, stopCopy } from './api';
+import { applyChange, cleanUpOldStore, dismissChange, fetchChanges, startCopy, stopCopy } from './api';
 import {
   changeActions,
+  cleanupKept,
+  isBusy,
+  isCleaningUp,
   isPlanned,
   isUnresolved,
   newestFirst,
@@ -43,19 +47,20 @@ import {
   planBlocked,
   type BlobStoreChange,
   type ChangeProblem,
+  type Cleanup,
 } from './model';
 import { BlobId, Confirm, Empty, Facts, LimitFields, ProblemTable, ProgressBar } from './parts';
 import { number, percentOf, useAction, usePolledList, when } from './hooks';
 import { PlanChangeDialog } from './PlanChangeDialog';
 
-const copying = (changes: BlobStoreChange[]) => changes.some((c) => c.status === 'copying');
+const running = (changes: BlobStoreChange[]) => changes.some(isBusy);
 
 export function BlobStoreChangesPage() {
   const { t } = useTranslation();
   const canAct = useAccountStore((s) => s.hasPermission('sysBlobStoreChange'));
   const { load, refetch } = usePolledList(
     fetchChanges,
-    copying,
+    running,
     t(
       'blobStoreChange.unavailable',
       'This server doesn’t track blob store changes. It needs inbuxa 27.1-rc.16 or 2026.11.9.1 or newer.',
@@ -171,6 +176,16 @@ const kindLabel = (t: TFunction, kind: ChangeProblem['kind']) =>
     missing: t('blobStoreChange.kind.missing', 'In neither store'),
     damaged: t('blobStoreChange.kind.damaged', 'Damaged in the old store'),
     unreadable: t('blobStoreChange.kind.unreadable', 'Unreadable'),
+    different: t('blobStoreChange.cleanupKind.different', 'Different in the current store'),
+  })[kind];
+
+/** OC-4: why a cleanup kept a blob in the old store. */
+const cleanupKindLabel = (t: TFunction, kind: ChangeProblem['kind']) =>
+  ({
+    missing: t('blobStoreChange.cleanupKind.missing', 'Not in the current store'),
+    damaged: t('blobStoreChange.cleanupKind.damaged', 'Damaged in the current store'),
+    different: t('blobStoreChange.cleanupKind.different', 'Different in the current store'),
+    unreadable: t('blobStoreChange.kind.unreadable', 'Unreadable'),
   })[kind];
 
 function ChangeCard({
@@ -184,12 +199,13 @@ function ChangeCard({
 }) {
   const { t } = useTranslation();
   const { busy, run } = useAction();
-  const [dialog, setDialog] = useState<'copy' | 'stop' | 'dismiss' | 'apply' | null>(null);
+  const [dialog, setDialog] = useState<'copy' | 'stop' | 'dismiss' | 'apply' | 'cleanUp' | null>(null);
   const [showProblems, setShowProblems] = useState(false);
   const may = changeActions(change);
   const unresolved = isUnresolved(change);
   const planned = isPlanned(change);
   const problemCount = change.missing + change.damaged + change.unreadable;
+  const cleaning = isCleaningUp(change);
   const done = () => {
     setDialog(null);
     onChanged();
@@ -220,6 +236,12 @@ function ChangeCard({
               <Button size="sm" onClick={() => setDialog('apply')}>
                 <Check className="mr-2 h-4 w-4" />
                 {t('blobStoreChange.apply', 'Make it the blob store…')}
+              </Button>
+            )}
+            {may.cleanUp && (
+              <Button size="sm" variant="outline" onClick={() => setDialog('cleanUp')}>
+                <Eraser className="mr-2 h-4 w-4" />
+                {t('blobStoreChange.cleanUp', 'Clean up the old store…')}
               </Button>
             )}
             {may.copy && (
@@ -297,6 +319,15 @@ function ChangeCard({
           )}
         </div>
       )}
+      {change.status === 'copied' && !planned && change.oldStoreKept && !change.cleanup && (
+        <p className="text-sm text-muted-foreground">
+          {t(
+            'blobStoreChange.oldStoreKept',
+            'The old store still has a copy of every blob it held. Clean it up once backups of the data store taken before this change have aged out: they need those blobs to restore.',
+          )}
+        </p>
+      )}
+      {change.cleanup && <CleanupSummary cleanup={change.cleanup} oldStoreKept={change.oldStoreKept} />}
       {change.status === 'reverted' && (
         <p className="text-sm text-muted-foreground">
           {t(
@@ -357,7 +388,7 @@ function ChangeCard({
         </p>
       )}
 
-      {problemCount > 0 && (
+      {problemCount > 0 && !change.cleanup && (
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2 text-sm">
             {(
@@ -412,6 +443,7 @@ function ChangeCard({
       )}
 
       {dialog === 'copy' && <CopyDialog change={change} onClose={() => setDialog(null)} onStarted={done} />}
+      {dialog === 'cleanUp' && <CleanupDialog change={change} onClose={() => setDialog(null)} onStarted={done} />}
       {dialog === 'apply' && (
         <Confirm
           title={t('blobStoreChange.applyTitle', 'Make it the blob store?')}
@@ -444,11 +476,22 @@ function ChangeCard({
       )}
       {dialog === 'stop' && (
         <Confirm
-          title={t('blobStoreChange.stopTitle', 'Stop the copy?')}
-          body={t(
-            'blobStoreChange.stopBody',
-            'It stops within about ten seconds. What it copied stays copied, and the server keeps reading the rest from the old store.',
-          )}
+          title={
+            cleaning
+              ? t('blobStoreChange.stopCleanupTitle', 'Stop the cleanup?')
+              : t('blobStoreChange.stopTitle', 'Stop the copy?')
+          }
+          body={
+            cleaning
+              ? t(
+                  'blobStoreChange.stopCleanupBody',
+                  'It stops within about ten seconds. What it deleted stays deleted; the rest stays in the old store, and it can run again.',
+                )
+              : t(
+                  'blobStoreChange.stopBody',
+                  'It stops within about ten seconds. What it copied stays copied, and the server keeps reading the rest from the old store.',
+                )
+          }
           action={t('blobStoreChange.stop', 'Stop')}
           busy={busy}
           onConfirm={() =>
@@ -484,6 +527,11 @@ function ChangeCard({
                   )}
                 </p>
               </>
+            ) : change.oldStoreKept ? (
+              t(
+                'blobStoreChange.dismissKept',
+                'It’s forgotten, and so is the old store: it can’t be cleaned up from here afterwards. Nothing is deleted from either store.',
+              )
             ) : (
               t(
                 'blobStoreChange.dismissResolved',
@@ -567,6 +615,272 @@ function CopyDialog({
           <Button onClick={() => void start()} disabled={busy || invalid}>
             <CopyIcon className="mr-2 h-4 w-4" />
             {t('blobStoreChange.copyGo', 'Start copying')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** OC-5, OC-6: the latest cleanup or preview, and what it left. */
+function CleanupSummary({ cleanup, oldStoreKept }: { cleanup: Cleanup; oldStoreKept: boolean }) {
+  const { t } = useTranslation();
+  const [showProblems, setShowProblems] = useState(false);
+  const kept = cleanupKept(cleanup);
+  const facts = {
+    deleted: number(cleanup.deleted),
+    size: formatSize(cleanup.bytesFreed),
+    kept: number(kept),
+  };
+  return (
+    <div className="space-y-2 rounded-lg border border-dashed p-3">
+      <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+        {cleanup.dryRun
+          ? t('blobStoreChange.cleanupPreview', 'Cleanup preview')
+          : t('blobStoreChange.cleanupRun', 'Cleanup of the old store')}
+        <CleanupBadge cleanup={cleanup} />
+      </div>
+      <div className="text-sm text-muted-foreground">
+        {cleanup.finishedAt
+          ? t('blobStoreChange.cleanupRan', '{{start}} to {{end}}, by {{who}} on node {{node}}', {
+              start: when(cleanup.startedAt),
+              end: when(cleanup.finishedAt),
+              who: cleanup.startedBy,
+              node: cleanup.node,
+            })
+          : t('blobStoreChange.cleanupStarted', 'Started {{start}} by {{who}} on node {{node}}', {
+              start: when(cleanup.startedAt),
+              who: cleanup.startedBy,
+              node: cleanup.node,
+            })}
+      </div>
+      {cleanup.status === 'running' && (
+        <div className="space-y-1">
+          <ProgressBar share={cleanup.progress} label={t('blobStoreChange.cleanupProgress', 'Cleanup progress')} />
+          <div className="text-xs text-muted-foreground">{percentOf(cleanup.progress)}</div>
+        </div>
+      )}
+      <Facts
+        items={[
+          [t('blobStoreChange.checked', 'Blobs looked at'), number(cleanup.blobsChecked)],
+          [
+            cleanup.dryRun
+              ? t('blobStoreChange.wouldDelete', 'Would be deleted')
+              : t('blobStoreChange.deleted', 'Deleted'),
+            facts.deleted,
+          ],
+          [
+            cleanup.dryRun
+              ? t('blobStoreChange.wouldFree', 'Space it would free')
+              : t('blobStoreChange.freed', 'Freed'),
+            facts.size,
+          ],
+          [t('blobStoreChange.keptInOld', 'Kept in the old store'), facts.kept],
+          [t('blobStoreChange.notThere', 'Not in the old store'), number(cleanup.notThere)],
+        ]}
+      />
+      {cleanup.status === 'done' && !cleanup.dryRun && (
+        <p className="text-sm">
+          {t(
+            'blobStoreChange.cleanupDone',
+            'None of the server’s blobs are in the old store any more, and the server has forgotten its settings. Anything still in it isn’t the server’s: for a directory or bucket of its own, you can delete what’s left. The space comes back as that store reclaims it (a compaction, a vacuum, or the bucket’s own rules).',
+          )}
+        </p>
+      )}
+      {cleanup.status === 'done' && cleanup.dryRun && oldStoreKept && (
+        <p className="text-sm">
+          {t(
+            'blobStoreChange.previewDone',
+            'Nothing was deleted. Clean up for real once backups of the data store taken before this change have aged out.',
+          )}
+        </p>
+      )}
+      {kept > 0 && (
+        <p className="text-sm">
+          {t(
+            'blobStoreChange.cleanupKeptHint',
+            'These stay in the old store because the current store’s copy didn’t check out. Run a full store check, put them right, and clean up again.',
+          )}
+        </p>
+      )}
+      {cleanup.snapshotsBefore > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {t(
+            'blobStoreChange.snapshotsBefore',
+            '{{count}} snapshots from before the change still hold the old blobs; their space comes back when they’re deleted.',
+            { count: cleanup.snapshotsBefore },
+          )}
+        </p>
+      )}
+      {cleanup.status === 'failed' && cleanup.error && <div className="text-sm text-destructive">{cleanup.error}</div>}
+      {cleanup.status === 'interrupted' && (
+        <p className="text-sm text-muted-foreground">
+          {t(
+            'blobStoreChange.cleanupInterruptedHint',
+            'Its node restarted or stopped answering. Run it again; what’s already deleted is skipped.',
+          )}
+        </p>
+      )}
+      {cleanup.problems.length > 0 && (
+        <div className="space-y-2">
+          <Button variant="link" size="sm" className="h-auto p-0" onClick={() => setShowProblems((v) => !v)}>
+            {showProblems
+              ? t('blobStoreChange.hideKept', 'Hide what was kept')
+              : t('blobStoreChange.showKept', 'Show what was kept')}
+          </Button>
+          {showProblems && (
+            <ProblemTable
+              heads={[
+                t('blobStoreChange.col.kind', 'Problem'),
+                t('blobStoreChange.col.holder', 'Held by'),
+                t('blobStoreChange.col.blob', 'Blob'),
+                t('blobStoreChange.col.detail', 'Detail'),
+              ]}
+              rows={cleanup.problems.map((p, i) => ({
+                key: `${p.blobId}-${i}`,
+                cells: [
+                  cleanupKindLabel(t, p.kind),
+                  [
+                    holderLabel(t, p.holder),
+                    p.objectId ?? '',
+                    p.accountId ? t('blobStoreChange.inAccount', 'in account {{id}}', { id: p.accountId }) : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' '),
+                  <BlobId key="b" id={p.blobId} />,
+                  p.detail,
+                ],
+              }))}
+              kept={cleanup.problems.length}
+              total={kept}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CleanupBadge({ cleanup }: { cleanup: Cleanup }) {
+  const { t } = useTranslation();
+  switch (cleanup.status) {
+    case 'running':
+      return <Badge variant="outline">{t('blobStoreChange.cleanupStatus.running', 'Running')}</Badge>;
+    case 'done':
+      return <Badge variant="secondary">{t('blobStoreChange.cleanupStatus.done', 'Done')}</Badge>;
+    case 'incomplete':
+      return <Badge variant="destructive">{t('blobStoreChange.cleanupStatus.incomplete', 'Some kept')}</Badge>;
+    case 'stopped':
+      return <Badge variant="outline">{t('blobStoreChange.cleanupStatus.stopped', 'Stopped')}</Badge>;
+    case 'failed':
+      return <Badge variant="destructive">{t('blobStoreChange.cleanupStatus.failed', 'Failed')}</Badge>;
+    case 'interrupted':
+      return <Badge variant="outline">{t('blobStoreChange.cleanupStatus.interrupted', 'Interrupted')}</Badge>;
+  }
+}
+
+/**
+ * OC-5, OC-8: preview a cleanup, or run one. Deleting asks the administrator
+ * to say backups from before the change are no longer needed.
+ */
+function CleanupDialog({
+  change,
+  onClose,
+  onStarted,
+}: {
+  change: BlobStoreChange;
+  onClose: () => void;
+  onStarted: () => void;
+}) {
+  const { t } = useTranslation();
+  const [blobs, setBlobs] = useState('');
+  const [bytes, setBytes] = useState('');
+  const [backupsAged, setBackupsAged] = useState(false);
+  const { busy, run } = useAction();
+  const blobsLimit = parseLimit(blobs);
+  const bytesLimit = parseLimit(bytes);
+  const invalid = blobsLimit === 'invalid' || bytesLimit === 'invalid';
+  const preview = change.cleanup?.dryRun && change.cleanup.status === 'done' ? change.cleanup : null;
+
+  const start = async (dryRun: boolean) => {
+    if (invalid || (!dryRun && !backupsAged)) return;
+    const ok = await run(t('blobStoreChange.cleanupNotStarted', 'The cleanup didn’t start'), () =>
+      cleanUpOldStore(change.id, dryRun, blobsLimit, bytesLimit),
+    );
+    if (ok) {
+      toast({
+        title: dryRun
+          ? t('blobStoreChange.previewStarted', 'Preview started')
+          : t('blobStoreChange.cleanupStartedToast', 'Cleanup started'),
+      });
+      onStarted();
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('blobStoreChange.cleanupTitle', 'Clean up the old store')}</DialogTitle>
+          <DialogDescription>
+            {t(
+              'blobStoreChange.cleanupBody',
+              'Deletes from {{from}} each blob the server holds, once its copy in {{to}} is read back and checks out. A blob that doesn’t check out stays in {{from}} and is listed. Preview first: it counts and deletes nothing.',
+              { from: change.from, to: change.to },
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        {preview && (
+          <p className="text-sm">
+            {t(
+              'blobStoreChange.previewSays',
+              'The last preview ({{when}}) found {{deleted}} blobs ({{size}}) to delete and {{kept}} to keep.',
+              {
+                when: when(preview.finishedAt ?? preview.startedAt),
+                deleted: number(preview.deleted),
+                size: formatSize(preview.bytesFreed),
+                kept: number(cleanupKept(preview)),
+              },
+            )}
+          </p>
+        )}
+        <div className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
+          <p>
+            {t(
+              'blobStoreChange.cleanupBackups',
+              'Backups of the data store taken before this change (noticed {{when}}) read their blobs from {{from}}. Once it’s cleaned up, those backups won’t restore in full.',
+              { when: when(change.changedAt), from: change.from },
+            )}
+          </p>
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={backupsAged}
+              onChange={(e) => setBackupsAged(e.target.checked)}
+            />
+            <span>
+              {t(
+                'blobStoreChange.cleanupBackupsConfirm',
+                'Backups from before this change have aged out, or I don’t need them to restore in full.',
+              )}
+            </span>
+          </label>
+        </div>
+        <LimitFields blobs={blobs} bytes={bytes} onBlobs={setBlobs} onBytes={setBytes} />
+        {invalid && (
+          <p className="text-sm text-destructive">{t('storeTools.limitInvalid', 'A limit is a whole number.')}</p>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={busy}>
+            {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button variant="outline" onClick={() => void start(true)} disabled={busy || invalid}>
+            {t('blobStoreChange.previewGo', 'Preview')}
+          </Button>
+          <Button variant="destructive" onClick={() => void start(false)} disabled={busy || invalid || !backupsAged}>
+            <Eraser className="mr-2 h-4 w-4" />
+            {t('blobStoreChange.cleanupGo', 'Delete from the old store')}
           </Button>
         </DialogFooter>
       </DialogContent>

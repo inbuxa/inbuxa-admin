@@ -121,3 +121,19 @@ export const planChange = (target: Record<string, unknown>) => create(BLOB_STORE
 
 /** CA-7: write a planned change's store to the blob store setting. */
 export const applyChange = (id: string) => update(BLOB_STORE_CHANGE, id, { action: 'apply' });
+
+/**
+ * OC-3 to OC-8: delete from a resolved change's old store what the current one
+ * has, or with `dryRun` only count it. Deleting is confirmed with the change's id.
+ */
+export const cleanUpOldStore = (
+  id: string,
+  dryRun: boolean,
+  blobsPerSecond: number | null,
+  bytesPerSecond: number | null,
+) =>
+  update(BLOB_STORE_CHANGE, id, {
+    action: 'cleanUp',
+    ...(dryRun ? { dryRun: true } : { confirm: id }),
+    ...limits(blobsPerSecond, bytesPerSecond),
+  });
