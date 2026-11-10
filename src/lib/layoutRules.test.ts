@@ -129,6 +129,7 @@ describe('isLinkVisible for the console’s own pages', () => {
     ['Wizard/certificates', ['sysDomain', 'sysAcmeProvider', 'sysCertificate']],
     ['Wizard/certificate-order', ['sysDomain', 'sysAcmeProvider', 'sysCertificate']],
     ['Wizard/sending', ['sysMtaRoute', 'sysMtaOutboundStrategy']],
+    ['CustomComponent/EncryptedSenders', ['sysMtaOutboundStrategy', 'sysMtaTlsStrategy']],
     ['Wizard/directory', ['sysDirectory', 'sysDomain', 'sysAuthentication']],
     ['Wizard/limits', ['sysMtaInboundThrottle', 'sysMtaOutboundThrottle', 'sysMtaQueueQuota']],
   ];

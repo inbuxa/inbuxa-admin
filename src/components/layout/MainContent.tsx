@@ -141,6 +141,10 @@ const CUSTOM_PAGES: Record<string, ComponentType> = {
     () => import('@/features/relays/RelaysPage'),
     (m) => m.RelaysPage,
   ),
+  EncryptedSenders: onDemand(
+    () => import('@/features/encryptedSenders/EncryptedSendersPage'),
+    (m) => m.EncryptedSendersPage,
+  ),
   Migrations: onDemand(
     () => import('@/features/migrations/MigrationsPage'),
     (m) => m.MigrationsPage,
