@@ -13,6 +13,7 @@ import { ErrorBoundary } from '@/components/layout/ErrorBoundary';
 import { MainContent } from '@/components/layout/MainContent';
 import { SectionNav } from '@/components/layout/SectionNav';
 import { SettingsApplyBanner } from '@/components/layout/SettingsApplyBanner';
+import { BlobStoreChangeBanner } from '@/features/storeTools/BlobStoreBanners';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { TopBar } from '@/components/layout/TopBar';
 import { KeyboardShortcuts } from '@/components/common/KeyboardShortcuts';
@@ -209,6 +210,7 @@ export default function AdminPanel() {
         >
           <ConnectionBanner />
           <SettingsApplyBanner />
+          <BlobStoreChangeBanner />
           <ErrorBoundary key={activeAccountId ?? 'none'}>
             <MainContent viewName={viewName} id={id} section={section} />
           </ErrorBoundary>

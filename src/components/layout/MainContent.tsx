@@ -17,6 +17,7 @@ import { DirectorySetupCard } from '@/features/directory/DirectorySetupCard';
 import { WebhooksPage } from '@/features/events/WebhooksPage';
 import { WebhookTestCard } from '@/features/events/WebhookTestCard';
 import { LegacyProtocolsBanner } from '@/features/hardening/LegacyProtocolsBanner';
+import { BlobStoreSettingsNote } from '@/features/storeTools/BlobStoreBanners';
 import { DmarcSummaryCard } from '@/features/incomingReports/DmarcSummaryCard';
 import { TlsSummaryCard } from '@/features/incomingReports/TlsSummaryCard';
 import { LimitsSummary } from '@/features/limits/LimitsSummary';
@@ -156,6 +157,18 @@ const CUSTOM_PAGES: Record<string, ComponentType> = {
     () => import('@/features/compliance/DataInventoryPage'),
     (m) => m.DataInventoryPage,
   ),
+  StoreCheck: onDemand(
+    () => import('@/features/storeTools/StoreCheckPage'),
+    (m) => m.StoreCheckPage,
+  ),
+  StoreSnapshots: onDemand(
+    () => import('@/features/storeTools/StoreSnapshotsPage'),
+    (m) => m.StoreSnapshotsPage,
+  ),
+  BlobStoreChanges: onDemand(
+    () => import('@/features/storeTools/BlobStoreChangesPage'),
+    (m) => m.BlobStoreChangesPage,
+  ),
 };
 
 /** Guided jobs, by the name after `Wizard/`; always reached by choosing "Guide me", never by default. */
@@ -206,6 +219,8 @@ const SINGLETON_PAGES: Record<string, (viewName: string) => ReactNode> = {
   'x:SpamSettings': (v) => <SpamSettingsPage viewName={v} />,
   'x:Sharing': (v) => stacked(<SharingSwitches />, settingsForm(v)),
   'x:Security': (v) => stacked(<LegacyProtocolsBanner />, settingsForm(v)),
+  // Changing where blobs are kept moves nothing (BM-1).
+  'x:BlobStore': (v) => stacked(<BlobStoreSettingsNote />, settingsForm(v)),
   'x:MtaOutboundStrategy': (v) => stacked(<SendingSetupCard className="mx-auto max-w-4xl" />, settingsForm(v)),
 };
 

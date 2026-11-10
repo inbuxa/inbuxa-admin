@@ -76,6 +76,18 @@ describe('isLinkVisible for the console’s own pages', () => {
     expect(isLinkEnterprise(schema, view)).toBe(false);
   });
 
+  it('shows the store check, snapshots and blob store changes to whoever holds each permission', () => {
+    for (const [view, perm] of [
+      ['CustomComponent/StoreCheck', 'sysStoreCheck'],
+      ['CustomComponent/StoreSnapshots', 'sysStoreSnapshot'],
+      ['CustomComponent/BlobStoreChanges', 'sysBlobStoreChange'],
+    ]) {
+      expect(isLinkVisible(schema, view, 'oss', none, hasPermFrom([perm])), view).toBe(true);
+      expect(isLinkVisible(schema, view, 'oss', all, hasPermFrom([])), view).toBe(false);
+      expect(isLinkEnterprise(schema, view)).toBe(false);
+    }
+  });
+
   it('shows the live delivery test and live tracing to whoever holds their permission', () => {
     expect(isLinkVisible(schema, 'CustomComponent/LiveDelivery', 'oss', none, hasPermFrom(['liveDeliveryTest']))).toBe(
       true,

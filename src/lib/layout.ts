@@ -66,6 +66,10 @@ const PAGES: Record<string, PageRule> = {
   'CustomComponent/ScheduledReports': readOnly('sysScheduledReport'),
   // A migration has no read permission of its own: running one is the right
   'CustomComponent/Migrations': { enterprise: false, visible: (c) => holds('sysMigrationRun', c) },
+  // The store's own tools: one permission each, server administrators only.
+  'CustomComponent/StoreCheck': { enterprise: false, visible: (c) => holds('sysStoreCheck', c) },
+  'CustomComponent/StoreSnapshots': { enterprise: false, visible: (c) => holds('sysStoreSnapshot', c) },
+  'CustomComponent/BlobStoreChanges': { enterprise: false, visible: (c) => holds('sysBlobStoreChange', c) },
   // Guided jobs are for whoever may read everything they change.
   'Wizard/certificates': readOnly('sysDomain', 'sysAcmeProvider', 'sysCertificate'),
   'Wizard/certificate-order': readOnly('sysDomain', 'sysAcmeProvider', 'sysCertificate'),
