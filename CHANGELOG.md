@@ -14,6 +14,20 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.14] - 2026-11-11
+
+Pairs with inbuxa-server 27.1-rc.21.
+
+### Changed
+- Sign-in asks the server's sign-in page for the console's light or dark
+  look, so the page no longer switches to the device's setting in between.
+  Servers before 27.1-rc.21 ignore it. (#194, inbuxa-server #375)
+
+### Fixed
+- Search (Ctrl+K) finds the console's own pages, such as Deleted Accounts,
+  Legal Holds and Store Check. It shows a page exactly when the sidebar does,
+  with the same permission checks. (#193, fixes #192)
+
 ## [27.1-rc.13] - 2026-11-10
 
 Pairs with inbuxa-server 27.1-rc.19.
