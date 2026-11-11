@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { entryPath, getObjectKind, groupByType, searchEntries } from '@/lib/globalSearch';
+import { isLinkVisible } from '@/lib/layout';
 import { useAccountStore } from '@/stores/accountStore';
 import { useSchemaStore, type SearchIndexEntry } from '@/stores/schemaStore';
 
@@ -22,6 +23,8 @@ export function useGlobalSearch(onAfterSelect?: () => void) {
   const schema = useSchemaStore((s) => s.schema);
   const searchIndex = useSchemaStore((s) => s.searchIndex);
   const hasObjectPermission = useAccountStore((s) => s.hasObjectPermission);
+  const hasPermission = useAccountStore((s) => s.hasPermission);
+  const edition = useAccountStore((s) => s.edition);
 
   const type = useCallback((value: string) => {
     setQuery(value);
@@ -31,11 +34,18 @@ export function useGlobalSearch(onAfterSelect?: () => void) {
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const groups = useMemo(
-    () =>
-      groupByType(searchEntries(searchIndex, debouncedQuery, schema, (prefix) => hasObjectPermission(prefix, 'Get'))),
-    [debouncedQuery, searchIndex, schema, hasObjectPermission],
-  );
+  const groups = useMemo(() => {
+    const canOpen = (viewName: string) =>
+      !!schema &&
+      isLinkVisible(
+        schema,
+        viewName,
+        edition,
+        (prefix) => hasObjectPermission(prefix, 'Get'),
+        (permission) => hasPermission(permission),
+      );
+    return groupByType(searchEntries(searchIndex, debouncedQuery, schema, canOpen));
+  }, [debouncedQuery, searchIndex, schema, edition, hasObjectPermission, hasPermission]);
 
   const selectEntry = useCallback(
     (entry: SearchIndexEntry) => {

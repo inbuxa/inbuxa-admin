@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { List, Plus, Settings } from 'lucide-react';
+import { ArrowRight, List, Plus, Settings } from 'lucide-react';
 import {
   MAX_RESULTS,
   entryPath,
@@ -15,6 +15,7 @@ import {
   groupByType,
   searchEntries,
 } from './globalSearch';
+import { isLinkVisible } from './layout';
 import type { SearchIndexEntry } from '@/stores/schemaStore';
 import type { Schema } from '@/types/schema';
 
@@ -37,8 +38,15 @@ const index = [
   entry('People', 'link', 'x:Account/User', ['users']),
   entry('Security', 'link', 'x:Security'),
   entry('Gone', 'link', 'x:Missing'),
+  entry('Deleted Accounts', 'link', 'CustomComponent/DeletedAccounts'),
+  entry('Someday', 'link', 'CustomComponent/NotInThisConsole'),
 ];
-const all = () => true;
+// The sidebar's check, as the command bar uses it.
+const openFor =
+  (canGet: (prefix: string) => boolean) =>
+  (viewName: string) =>
+    isLinkVisible(schema, viewName, 'enterprise', canGet, () => true);
+const all = openFor(() => true);
 
 describe('searchEntries', () => {
   it('needs every word, in the text or the keywords, ignoring case', () => {
@@ -49,12 +57,20 @@ describe('searchEntries', () => {
 
   it('puts pages first, then sections, then fields', () => {
     const results = searchEntries(index, 'd', schema, all);
-    expect(results.map((e) => e.type)).toEqual(['link', 'form', 'field']);
+    expect(results.map((e) => e.type)).toEqual(['link', 'link', 'form', 'field']);
   });
 
   it('leaves out what the account may not read, and unknown views', () => {
-    expect(searchEntries(index, 'people', schema, (p) => p !== 'sysAccount')).toEqual([]);
+    expect(searchEntries(index, 'people', schema, openFor((p) => p !== 'sysAccount'))).toEqual([]);
     expect(searchEntries(index, 'gone', schema, all)).toEqual([]);
+  });
+
+  it("finds the console's own pages when the sidebar would show them (#192)", () => {
+    expect(searchEntries(index, 'deleted', schema, all).map((e) => e.viewName)).toEqual([
+      'CustomComponent/DeletedAccounts',
+    ]);
+    expect(searchEntries(index, 'deleted', schema, openFor((p) => p !== 'sysAccount'))).toEqual([]);
+    expect(searchEntries(index, 'someday', schema, all)).toEqual([]);
   });
 
   it('finds nothing without a query or a schema', () => {
@@ -91,6 +107,7 @@ describe('where a result leads', () => {
     expect(getActionInfo('field', 'singleton', t)).toEqual({ label: 'Settings', Icon: Settings });
     expect(getActionInfo('link', 'object', t)).toEqual({ label: 'List', Icon: List });
     expect(getActionInfo('form', null, t)).toEqual({ label: 'Create', Icon: Plus });
+    expect(getActionInfo('link', null, t)).toEqual({ label: 'Open', Icon: ArrowRight });
   });
 
   it('names a view after its last part', () => {

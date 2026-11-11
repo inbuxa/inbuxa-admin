@@ -5,7 +5,7 @@
  */
 
 /** Searching the schema's pages, sections and fields, and where a result leads. */
-import { List, Plus, Settings } from 'lucide-react';
+import { ArrowRight, List, Plus, Settings } from 'lucide-react';
 import { resolveObject } from '@/lib/schemaResolver';
 import type { SearchIndexEntry } from '@/stores/schemaStore';
 import type { Schema } from '@/types/schema';
@@ -23,13 +23,15 @@ export function getObjectKind(schema: Schema, viewName: string): ObjectKind {
   return resolved.objectType.type === 'singleton' ? 'singleton' : 'object';
 }
 
-/** What choosing a result does: open settings, open a list, or create a record. */
+/** What choosing a result does: open settings, a list or one of the console's own pages, or create a record. */
 export function getActionInfo(
   entryType: SearchIndexEntry['type'],
   objectKind: ObjectKind,
   t: (key: string, fallback: string) => string,
 ): { label: string; Icon: typeof List } {
   if (objectKind === 'singleton') return { label: t('globalSearch.settings', 'Settings'), Icon: Settings };
+  // A page that isn't a schema object, such as Deleted Accounts.
+  if (objectKind === null && entryType === 'link') return { label: t('globalSearch.open', 'Open'), Icon: ArrowRight };
   return entryType === 'link'
     ? { label: t('globalSearch.list', 'List'), Icon: List }
     : { label: t('globalSearch.create', 'Create'), Icon: Plus };
@@ -49,22 +51,22 @@ export function friendlyName(viewName: string): string {
 
 /**
  * The entries holding every word of the query, in their text or keywords,
- * that the account may read; pages first, at most fifteen.
+ * whose page the account may open; pages first, at most fifteen. `canOpen`
+ * is the sidebar's own check (`isLinkVisible`), so the console's own pages,
+ * such as Deleted Accounts, are found when the sidebar shows them.
  */
 export function searchEntries(
   index: SearchIndexEntry[],
   query: string,
   schema: Schema | null,
-  canGet: (permissionPrefix: string) => boolean,
+  canOpen: (viewName: string) => boolean,
 ): SearchIndexEntry[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0 || !schema) return [];
   return index
     .filter((entry) => {
       const text = `${entry.text} ${entry.keywords?.join(' ') ?? ''}`.toLowerCase();
-      if (!words.every((word) => text.includes(word))) return false;
-      const resolved = resolveObject(schema, entry.viewName);
-      return resolved !== null && canGet(resolved.permissionPrefix);
+      return words.every((word) => text.includes(word)) && canOpen(entry.viewName);
     })
     .sort((a, b) => TYPE_ORDER[a.type] - TYPE_ORDER[b.type])
     .slice(0, MAX_RESULTS);
