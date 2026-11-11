@@ -247,7 +247,8 @@
     "title": "Search",
     "typeToSearch": "Type to search the admin panel.",
     "placeholderActions": "Search pages and settings, or run an action...",
-    "actions": "Actions"
+    "actions": "Actions",
+    "open": "Open"
   },
   "jmapErrors": {
     "addressBookHasContents": "This address book has contacts. Remove them first.",
