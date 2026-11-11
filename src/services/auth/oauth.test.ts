@@ -167,6 +167,7 @@ describe('startAuthFlow', () => {
       code_challenge_method: 'S256',
       state: stored.state,
       prompt: 'login',
+      theme: 'light',
       scope: 'openid profile offline_access',
     });
     expect(stored.state).toMatch(/^[0-9a-f]{32}$/);
@@ -175,6 +176,15 @@ describe('startAuthFlow', () => {
       endSessionEndpoint: `${SERVER}/logout`,
       returnUrl: '/Settings/x:Domain',
     });
+  });
+
+  it("asks the sign-in page for the console's dark look when it shows one", async () => {
+    document.documentElement.classList.add('dark');
+    try {
+      expect((await signIn(null)).searchParams.get('theme')).toBe('dark');
+    } finally {
+      document.documentElement.classList.remove('dark');
+    }
   });
 
   it('prefills the account when given one', async () => {

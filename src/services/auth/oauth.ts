@@ -192,6 +192,8 @@ export async function startAuthFlow(username: string | null, returnUrl?: string 
     state,
     // Always ask for the password: a console session should never start silently.
     prompt: 'login',
+    // The sign-in page shows the console's own light or dark look (inbuxa-server #375).
+    theme: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
   });
   if (username) query.set('login_hint', username);
   const scope = scopesFor(endpoints.scopes_supported);
