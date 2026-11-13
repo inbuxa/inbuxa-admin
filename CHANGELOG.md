@@ -14,6 +14,24 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.15] - 2026-11-13
+
+Pairs with inbuxa-server 27.1-rc.22.
+
+### Added
+- "Stay signed in on this device" in the account menu. With it on, the
+  console keeps its sign-in after the tab or the installed app is closed;
+  with it off (the default), closing it signs you out, as before. (#199,
+  fixes #197)
+
+### Fixed
+- Who uses the space (the storage chart) includes groups, which have their
+  own mailboxes and quota, and each block opens that user's or group's
+  account. (#198, fixes #196)
+- Field explanations in record views, such as a DMARC report, and the (?)
+  beside a choice's explanation open on a tap, like the form fields' help
+  tips, and can be reached from the keyboard. (#201, fixes #200)
+
 ## [27.1-rc.14] - 2026-11-11
 
 Pairs with inbuxa-server 27.1-rc.21.
