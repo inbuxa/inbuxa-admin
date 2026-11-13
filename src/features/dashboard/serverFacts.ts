@@ -7,7 +7,8 @@
 /**
  * What the dashboard can know from the server's ordinary objects, with no
  * metrics at all: how many people, domains, queued messages, blocked
- * addresses, failed tasks and reports there are, who uses how much storage,
+ * addresses, failed tasks and reports there are, which people and groups use
+ * how much storage,
  * and where queued mail is stuck. One JMAP request, refreshed every minute.
  * A query the viewer isn't allowed to run just leaves that fact out.
  */
@@ -17,6 +18,8 @@ import type { JmapMethodCall } from '@/types/jmap';
 
 export interface StorageUse {
   id: string;
+  /** A person, or a group with its own shared mailbox and quota (#196). */
+  kind: 'User' | 'Group';
   name: string;
   used: number;
   /** The account's disk quota in bytes, when it has one. */
@@ -59,6 +62,18 @@ const COUNTS: [keyof ServerFacts, string, Record<string, unknown>?][] = [
 ];
 
 const DETAIL_LIMIT = 250;
+
+const STORAGE_KINDS: StorageUse['kind'][] = ['User', 'Group'];
+
+export function storageRows(kind: StorageUse['kind'], list: Record<string, unknown>[]): StorageUse[] {
+  return list.map((a) => ({
+    id: String(a.id),
+    kind,
+    name: String(a.emailAddress ?? a.name ?? a.id),
+    used: typeof a.usedDiskQuota === 'number' ? a.usedDiskQuota : 0,
+    quota: quotaOf(a.quotas),
+  }));
+}
 
 function quotaOf(quotas: unknown): number | null {
   if (!quotas || typeof quotas !== 'object') return null;
@@ -112,20 +127,25 @@ async function fetchFacts(): Promise<ServerFacts> {
   });
   const accountAcct = accountFor('x:Account');
   if (accountAcct) {
-    calls.push([
-      'x:Account/query',
-      { accountId: accountAcct, filter: { '@type': 'User' }, limit: DETAIL_LIMIT },
-      'q:storage',
-    ]);
-    calls.push([
-      'x:Account/get',
-      {
-        accountId: accountAcct,
-        '#ids': { resultOf: 'q:storage', name: 'x:Account/query', path: '/ids' },
-        properties: ['emailAddress', 'name', 'usedDiskQuota', 'quotas'],
-      },
-      'g:storage',
-    ]);
+    // Groups too: their shared mailboxes take space and have quotas of their
+    // own (#196). Mailing lists store nothing, so they have none to show. One
+    // query per kind, so each tile knows which page it opens.
+    for (const kind of STORAGE_KINDS) {
+      calls.push([
+        'x:Account/query',
+        { accountId: accountAcct, filter: { '@type': kind }, limit: DETAIL_LIMIT },
+        `q:storage:${kind}`,
+      ]);
+      calls.push([
+        'x:Account/get',
+        {
+          accountId: accountAcct,
+          '#ids': { resultOf: `q:storage:${kind}`, name: 'x:Account/query', path: '/ids' },
+          properties: ['emailAddress', 'name', 'usedDiskQuota', 'quotas'],
+        },
+        `g:storage:${kind}`,
+      ]);
+    }
   }
   const queueAcct = accountFor('x:QueuedMessage');
   if (queueAcct) {
@@ -148,13 +168,12 @@ async function fetchFacts(): Promise<ServerFacts> {
     const b = body as Record<string, unknown>;
     if (tag.startsWith('c:') && typeof b.total === 'number') {
       (facts as Record<string, unknown>)[tag.slice(2)] = b.total;
-    } else if (tag === 'g:storage') {
-      facts.storage = ((b.list as Record<string, unknown>[]) ?? []).map((a) => ({
-        id: String(a.id),
-        name: String(a.emailAddress ?? a.name ?? a.id),
-        used: typeof a.usedDiskQuota === 'number' ? a.usedDiskQuota : 0,
-        quota: quotaOf(a.quotas),
-      }));
+    } else if (tag.startsWith('g:storage:')) {
+      const kind = tag.slice('g:storage:'.length) as StorageUse['kind'];
+      facts.storage = [
+        ...(facts.storage ?? []),
+        ...storageRows(kind, (b.list as Record<string, unknown>[]) ?? []),
+      ];
     } else if (tag === 'g:queue') {
       Object.assign(facts, summarizeQueue((b.list as QueuedRow[]) ?? []));
     }
