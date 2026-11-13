@@ -2,15 +2,16 @@
  * SPDX-FileCopyrightText: 2020 Stalwart Labs LLC <hello@stalw.art>
  *
  * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-SEL
+ *
+ * Modified by Coffey Labs in 2026 for INBUXA.
  */
 
 import { useMemo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { Check, X, HelpCircle, ChevronRight, Loader2 } from 'lucide-react';
+import { Check, X, ChevronRight, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { jmapMapToArray, SECRET_MASK } from '@/lib/jmapUtils';
 import { Badge } from '@/components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { HelpTip } from '@/help/HelpTip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { resolveSchema, resolveVariantForm, resolveForm } from '@/lib/schemaResolver';
 import { useObjectList, useObjectLabel } from '@/lib/objectOptions';
@@ -129,20 +130,7 @@ function ViewField({ label, field, value, schema }: { label: string; field: Fiel
     <div className={isBlock ? 'space-y-1' : 'flex items-baseline gap-2'}>
       <dt className="flex items-center gap-1 text-sm text-muted-foreground shrink-0 min-w-[140px]">
         {label}
-        {field.description && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help shrink-0" />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs">
-                <div className="text-xs prose prose-sm dark:prose-invert">
-                  <ReactMarkdown>{field.description.replace(/\\n/g, '\n')}</ReactMarkdown>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        )}
+        <HelpTip text={field.description} />
       </dt>
       <dd className="text-sm min-w-0">
         <ViewValue type={field.type} value={value} schema={schema} />
@@ -328,7 +316,7 @@ function ObjectValue({
               <div key={key} className={block ? 'space-y-1' : 'flex items-baseline gap-2'}>
                 <span className="flex items-center gap-1 text-sm text-muted-foreground shrink-0 min-w-[120px]">
                   {label}
-                  {field.description && <FieldTooltip description={field.description} />}
+                  <HelpTip text={field.description} />
                 </span>
                 <span className="text-sm min-w-0">
                   <ViewValue type={field.type} value={val} schema={schema} />
@@ -463,23 +451,6 @@ function ObjectIdKeyLabel({ objectName, keyValue, schema }: { objectName: string
     return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
   }
   return <>{display ?? keyValue}</>;
-}
-
-function FieldTooltip({ description }: { description: string }) {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <HelpCircle className="h-3.5 w-3.5 text-muted-foreground/50 cursor-help shrink-0" />
-        </TooltipTrigger>
-        <TooltipContent side="top" className="max-w-xs">
-          <div className="text-xs prose prose-sm dark:prose-invert">
-            <ReactMarkdown>{description.replace(/\\n/g, '\n')}</ReactMarkdown>
-          </div>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
 }
 
 interface ViewEntry {

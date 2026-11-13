@@ -1863,18 +1863,7 @@ function EnumMultiSelect({ enumName, items, onChange, readOnly, schema, minItems
           {v.label}
         </div>
       </Label>
-      {v.explanation && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="text-xs text-muted-foreground cursor-help">(?)</span>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p className="max-w-xs text-xs">{v.explanation}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
+      <HelpTip text={v.explanation} />
     </div>
   );
 
