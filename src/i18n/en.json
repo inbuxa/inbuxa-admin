@@ -799,7 +799,11 @@
     "nearFull_other": "{{count}} nearly full",
     "seePeople": "See people",
     "emptyHint": "Tiles appear here as people store mail and files.",
-    "topOnly": "The {{count}} biggest are shown on their own."
+    "topOnly": "The {{count}} biggest are shown on their own.",
+    "subtitleGroups_one": "{{total}} across {{people}} people and {{count}} group",
+    "subtitleGroups_other": "{{total}} across {{people}} people and {{count}} groups",
+    "groupName": "{{name}} (group)",
+    "group": "Group"
   },
   "rhythm": {
     "title": "Your mail’s weekly rhythm",

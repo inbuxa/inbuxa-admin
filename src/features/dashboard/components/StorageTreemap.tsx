@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ArrowUpRight, HardDrive } from 'lucide-react';
+import { ArrowUpRight, HardDrive, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Corners } from './Panel';
 import { cn } from '@/lib/utils';
@@ -28,9 +28,11 @@ function fillClass(u: StorageUse): string {
 }
 
 /**
- * Who uses the storage, as a map: every person is a tile sized by the space
- * their mail, files and calendars take, and colored by how close they are to
- * their quota. The biggest users are the biggest tiles; a click opens them.
+ * Who uses the storage, as a map: every person, and every group with its own
+ * shared mailbox, is a tile sized by the space their mail, files and calendars
+ * take, and colored by how close they are to their quota. The biggest users are
+ * the biggest tiles; a click opens them. Mailing lists store nothing of their
+ * own, so they're not here (#196).
  */
 export function StorageTreemap({ storage }: { storage: StorageUse[] }) {
   const { t } = useTranslation();
@@ -53,7 +55,13 @@ export function StorageTreemap({ storage }: { storage: StorageUse[] }) {
     const items: StorageUse[] = restUse
       ? [
           ...top,
-          { id: '', name: t('storage.others', '{{count}} others', { count: rest.length }), used: restUse, quota: null },
+          {
+            id: '',
+            kind: 'User' as const,
+            name: t('storage.others', '{{count}} others', { count: rest.length }),
+            used: restUse,
+            quota: null,
+          },
         ]
       : top;
     return {
@@ -64,6 +72,8 @@ export function StorageTreemap({ storage }: { storage: StorageUse[] }) {
   }, [storage, width, t]);
 
   const nearFull = storage.filter((s) => s.quota && s.used / s.quota >= 0.9).length;
+  const groups = storage.filter((s) => s.kind === 'Group').length;
+  const people = storage.length - groups;
 
   return (
     <Card className="relative flex h-full flex-col">
@@ -74,12 +84,20 @@ export function StorageTreemap({ storage }: { storage: StorageUse[] }) {
             {t('storage.title', 'Who uses the space')}
           </CardTitle>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {total > 0
-              ? t('storage.subtitle', '{{total}} across {{count}} people', {
-                  total: formatValue(total, 'bytes'),
-                  count: storage.length,
-                })
-              : t('storage.empty', 'No one has stored anything yet.')}
+            {total === 0
+              ? t('storage.empty', 'No one has stored anything yet.')
+              : groups > 0
+                ? t('storage.subtitleGroups', {
+                    total: formatValue(total, 'bytes'),
+                    people,
+                    count: groups,
+                    defaultValue_one: '{{total}} across {{people}} people and {{count}} group',
+                    defaultValue_other: '{{total}} across {{people}} people and {{count}} groups',
+                  })
+                : t('storage.subtitle', '{{total}} across {{count}} people', {
+                    total: formatValue(total, 'bytes'),
+                    count: people,
+                  })}
             {nearFull > 0 && (
               <span className="ml-2 font-medium text-rose-600 dark:text-rose-400">
                 {t('storage.nearFull', {
@@ -109,14 +127,19 @@ export function StorageTreemap({ storage }: { storage: StorageUse[] }) {
           )}
           {tiles.map(({ item, x, y, w, h }) => {
             const pct = item.quota ? Math.round((item.used / item.quota) * 100) : null;
-            const label = `${item.name}: ${formatValue(item.used, 'bytes')}${pct !== null ? ` (${pct}%)` : ''}`;
+            const isGroup = item.kind === 'Group';
+            const name = isGroup ? t('storage.groupName', '{{name}} (group)', { name: item.name }) : item.name;
+            const label = `${name}: ${formatValue(item.used, 'bytes')}${pct !== null ? ` (${pct}%)` : ''}`;
             const roomy = w > 90 && h > 44;
             const style = { left: x + 1, top: y + 1, width: Math.max(0, w - 2), height: Math.max(0, h - 2) };
             const body = (
               <>
                 {roomy && (
                   <>
-                    <span className="block truncate text-xs font-medium">{item.name}</span>
+                    <span className="flex items-center gap-1 truncate text-xs font-medium">
+                      {isGroup && <Users className="h-3 w-3 shrink-0" aria-label={t('storage.group', 'Group')} />}
+                      <span className="truncate">{item.name}</span>
+                    </span>
                     <span className="block text-[11px] opacity-80">
                       {formatValue(item.used, 'bytes')}
                       {pct !== null && ` · ${pct}%`}
@@ -132,7 +155,7 @@ export function StorageTreemap({ storage }: { storage: StorageUse[] }) {
             return item.id ? (
               <Link
                 key={item.id}
-                to={`/Management/x:Account/User/${item.id}`}
+                to={`/Management/x:Account/${item.kind}/${item.id}`}
                 title={label}
                 className={cls}
                 style={style}
