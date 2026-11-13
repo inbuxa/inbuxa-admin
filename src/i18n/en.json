@@ -3048,5 +3048,9 @@
     "requireTls": "A mail client can also ask for this one message at a time, with REQUIRETLS. The server honors that for every sender.",
     "others": "Other conditions in the TLS rule also look at the sender. This page leaves them as they are.",
     "openStrategy": "Open the delivery strategy"
+  },
+  "staySignedIn": {
+    "hint": "Stay signed in when the app or browser closes. Leave this off on a shared computer.",
+    "label": "Stay signed in on this device"
   }
 }

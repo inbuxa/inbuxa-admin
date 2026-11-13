@@ -5,7 +5,7 @@
  */
 
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useCacheStore } from '@/stores/cacheStore';
 
 /** An account in the JMAP session. */
@@ -75,6 +75,44 @@ const signedOut: Signin = {
 
 const REFRESH_AHEAD_MS = 60_000;
 
+/*
+ * Where the sign-in is kept. By default in session storage: it lasts as long
+ * as the tab, and other tabs sign in for themselves. On a device the admin
+ * calls their own, "Stay signed in on this device" keeps it in local storage
+ * instead, so closing the installed app or the browser doesn't sign them out
+ * (#197). The choice belongs to the device and outlives a sign-out; signing
+ * out still forgets the tokens wherever they are.
+ */
+const STAY_KEY = 'inbuxa-stay-signed-in';
+
+function tryStorage<T>(fn: () => T, fallback: T): T {
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
+}
+
+/** Whether this device keeps the sign-in after the tab closes. */
+export function staysSignedIn(): boolean {
+  return tryStorage(() => localStorage.getItem(STAY_KEY) === '1', false);
+}
+
+const signinStorage: StateStorage = {
+  getItem: (name) => tryStorage(() => (staysSignedIn() ? localStorage : sessionStorage).getItem(name), null),
+  setItem: (name, value) =>
+    tryStorage(() => {
+      const [keep, drop] = staysSignedIn() ? [localStorage, sessionStorage] : [sessionStorage, localStorage];
+      keep.setItem(name, value);
+      drop.removeItem(name);
+    }, undefined),
+  removeItem: (name) =>
+    tryStorage(() => {
+      sessionStorage.removeItem(name);
+      localStorage.removeItem(name);
+    }, undefined),
+};
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -127,9 +165,8 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      // Session storage: a sign-in lasts as long as the tab, and other tabs sign in for themselves.
       name: 'inbuxa-auth',
-      storage: createJSONStorage(() => sessionStorage),
+      storage: createJSONStorage(() => signinStorage),
       partialize: ({ accessToken, refreshToken, tokenExpiresAt, tokenEndpoint, endSessionEndpoint, activeAccountId }) =>
         ({
           accessToken,
@@ -142,3 +179,10 @@ export const useAuthStore = create<AuthState>()(
     },
   ),
 );
+
+/** Turns "Stay signed in on this device" on or off, and moves the current sign-in to match. */
+export function setStaySignedIn(on: boolean): void {
+  tryStorage(() => (on ? localStorage.setItem(STAY_KEY, '1') : localStorage.removeItem(STAY_KEY)), undefined);
+  // Any set writes the sign-in through signinStorage, which now picks the other side.
+  useAuthStore.setState({});
+}
