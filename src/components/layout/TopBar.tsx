@@ -50,7 +50,7 @@ import { SOURCE_URL } from '@/lib/sourceDownload';
 import { cn } from '@/lib/utils';
 import { signOut } from '@/services/auth/signOut';
 import { useAccountStore } from '@/stores/accountStore';
-import { useAuthStore } from '@/stores/authStore';
+import { setStaySignedIn, staysSignedIn, useAuthStore } from '@/stores/authStore';
 import { useSchemaStore } from '@/stores/schemaStore';
 import { isAdminLayout, useUIStore } from '@/stores/uiStore';
 import type { Layout } from '@/types/schema';
@@ -135,6 +135,7 @@ function AccountMenu() {
   const accounts = useAuthStore((s) => s.accounts);
   const activeAccountId = useAuthStore((s) => s.activeAccountId);
   const switchAccount = useAuthStore((s) => s.switchAccount);
+  const [stay, setStay] = useState(staysSignedIn);
   const { sections, open } = useSections();
   const followSystem = t('a11y.followSystem', 'Follow the system');
 
@@ -264,6 +265,23 @@ function AccountMenu() {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
 
+        <DropdownMenuItem
+          // #197: closing the installed app or the browser keeps the sign-in.
+          role="menuitemcheckbox"
+          aria-checked={stay}
+          title={t(
+            'staySignedIn.hint',
+            'Stay signed in when the app or browser closes. Leave this off on a shared computer.',
+          )}
+          onSelect={(e) => {
+            e.preventDefault();
+            setStaySignedIn(!stay);
+            setStay(!stay);
+          }}
+        >
+          <Check className={cn('mr-2 h-4 w-4', !stay && 'invisible')} />
+          {t('staySignedIn.label', 'Stay signed in on this device')}
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => signOut(navigate)}>
           <LogOut className="mr-2 h-4 w-4" />
           {t('logout', 'Logout')}
