@@ -2139,7 +2139,12 @@
     "range_other": "From {{count}} reports covering {{from}} to {{until}}.",
     "title": "Who sends as your domains",
     "hint": "Other mail servers report every message they got with your domain in From, and whether it proved it was really you.",
-    "empty": "No reports yet. Large providers send one a day for each domain whose DMARC record asks for them (rua=)."
+    "empty": "No reports yet. Large providers send one a day for each domain whose DMARC record asks for them (rua=).",
+    "partialSpf": "SPF failed on {{count}}",
+    "partialDkim": "DKIM failed on {{count}}",
+    "partialCount_one": "{{count}} of them with SPF or DKIM failing",
+    "partialCount_other": "{{count}} of them with SPF or DKIM failing",
+    "partialHint": "These still passed DMARC, because one passing check is enough. SPF failing is usual for forwarded mail, which keeps its DKIM signature. A sender of yours that always fails SPF may be missing from your SPF record, and DKIM failing on one route can mean a key that doesn’t match or a service that changes messages."
   },
   "inTls": {
     "startTlsNotSupported": "Your server didn’t offer encryption (STARTTLS).",
