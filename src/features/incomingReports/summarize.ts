@@ -23,6 +23,12 @@ export interface Source {
   messages: number;
   /** Messages that passed DMARC (an aligned DKIM or SPF pass). */
   passed: number;
+  /**
+   * inbuxa #395: of those that passed, how many had the other check fail,
+   * by which one failed. Forwarding fails SPF and keeps DKIM; a sender
+   * missing from SPF, or a DKIM key failing on one path, shows here too.
+   */
+  partial: Record<'spf' | 'dkim', number>;
   /** What receivers did with the messages that failed. */
   failedHandling: Record<'delivered' | 'quarantined' | 'rejected', number>;
   reporters: string[];
@@ -32,6 +38,8 @@ export interface DomainSummary {
   domain: string;
   messages: number;
   passed: number;
+  /** inbuxa #395: messages that passed DMARC with SPF or DKIM failing. Not failures. */
+  partial: number;
   failed: number;
   /** The policy the newest report saw published. */
   policy: 'none' | 'quarantine' | 'reject' | 'unknown';
@@ -77,6 +85,7 @@ export function summarizeDmarc(reports: DmarcExternalReport[]): DomainSummary[] 
         domain: name,
         messages: 0,
         passed: 0,
+        partial: 0,
         failed: 0,
         policy: 'unknown',
         testing: false,
@@ -110,6 +119,7 @@ export function summarizeDmarc(reports: DmarcExternalReport[]): DomainSummary[] 
           ips: [],
           messages: 0,
           passed: 0,
+          partial: { spf: 0, dkim: 0 },
           failedHandling: { delivered: 0, quarantined: 0, rejected: 0 },
           reporters: [],
         };
@@ -120,6 +130,11 @@ export function summarizeDmarc(reports: DmarcExternalReport[]): DomainSummary[] 
       if (ok) {
         s.passed += count;
         d.passed += count;
+        const spfFailed = r.evaluatedSpf !== 'pass';
+        const dkimFailed = r.evaluatedDkim !== 'pass';
+        if (spfFailed) s.partial.spf += count;
+        if (dkimFailed) s.partial.dkim += count;
+        if (spfFailed || dkimFailed) d.partial += count;
       } else {
         s.failedHandling[handling(r.evaluatedDisposition)] += count;
         d.failed += count;

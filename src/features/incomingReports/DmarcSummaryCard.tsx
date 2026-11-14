@@ -66,6 +66,18 @@ function SourceRow({ source }: { source: Source }) {
             {source.provedBy === 'spf'
               ? t('inReports.passedSpf', 'Passed (SPF)')
               : t('inReports.passedDkim', 'Passed (DKIM)')}
+            {(source.partial.spf > 0 || source.partial.dkim > 0) && (
+              <span className="block text-xs">
+                {[
+                  source.partial.spf > 0 &&
+                    t('inReports.partialSpf', 'SPF failed on {{count}}', { count: source.partial.spf }),
+                  source.partial.dkim > 0 &&
+                    t('inReports.partialDkim', 'DKIM failed on {{count}}', { count: source.partial.dkim }),
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+              </span>
+            )}
           </span>
         ) : (
           <span className="text-destructive">
@@ -116,6 +128,15 @@ function DomainBlock({ summary }: { summary: DomainSummary }) {
             messages: num(summary.messages),
           })}
         </span>
+        {summary.partial > 0 && (
+          <span className="text-sm text-muted-foreground">
+            {t('inReports.partialCount', {
+              count: summary.partial,
+              defaultValue_one: '{{count}} of them with SPF or DKIM failing',
+              defaultValue_other: '{{count}} of them with SPF or DKIM failing',
+            })}
+          </span>
+        )}
         {summary.failed > 0 && (
           <span className="inline-flex items-center gap-1 text-sm text-destructive">
             <AlertTriangle className="h-3.5 w-3.5" />
@@ -161,6 +182,14 @@ function DomainBlock({ summary }: { summary: DomainSummary }) {
                   )}`}
               </p>
             </div>
+          )}
+          {summary.partial > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {t(
+                'inReports.partialHint',
+                'These still passed DMARC, because one passing check is enough. SPF failing is usual for forwarded mail, which keeps its DKIM signature. A sender of yours that always fails SPF may be missing from your SPF record, and DKIM failing on one route can mean a key that doesn’t match or a service that changes messages.',
+              )}
+            </p>
           )}
           <div className="overflow-x-auto">
             <table className="w-full table-fixed text-sm">

@@ -97,6 +97,38 @@ describe('summarizeDmarc', () => {
     expect(d.sources[0].provedBy).toBeNull();
   });
 
+  it('counts passes with SPF or DKIM failing apart from failures (#395)', () => {
+    const [d] = summarizeDmarc([
+      dmarc([
+        // Forwarded: SPF fails, DKIM survives.
+        record({ count: 6, evaluatedSpf: 'fail', spfResults: [{ domain: 'forwarder.example', result: 'fail' }] }),
+        record({ count: 4 }),
+        // A service passing on SPF whose DKIM fails.
+        record({
+          sourceIp: '198.51.100.7',
+          count: 3,
+          evaluatedDkim: 'fail',
+          dkimResults: [{ domain: 'example.org', result: 'fail' }],
+          spfResults: [{ domain: 'bounces.mailer.example', result: 'pass' }],
+        }),
+        // A real failure is not a partial pass.
+        record({
+          sourceIp: '203.0.113.5',
+          count: 2,
+          evaluatedDkim: 'fail',
+          evaluatedSpf: 'fail',
+          dkimResults: [],
+          spfResults: [],
+        }),
+      ]),
+    ]);
+    expect(d).toMatchObject({ messages: 15, passed: 13, partial: 9, failed: 2 });
+    const by = Object.fromEntries(d.sources.map((s) => [s.label, s.partial]));
+    expect(by['example.org']).toEqual({ spf: 6, dkim: 0 });
+    expect(by['bounces.mailer.example']).toEqual({ spf: 0, dkim: 3 });
+    expect(by['203.0.113.5']).toEqual({ spf: 0, dkim: 0 });
+  });
+
   it('takes the policy from the newest report', () => {
     const [d] = summarizeDmarc([
       dmarc([record()], { policyDisposition: 'reject', dateRangeEnd: '2026-10-05T00:00:00Z' }, 'new'),
