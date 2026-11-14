@@ -14,6 +14,17 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.16] - 2026-11-14
+
+Pairs with inbuxa-server 27.1-rc.22.
+
+### Added
+- Who sends as your domains (Inbound DMARC Reports) shows how many of a
+  domain's passing messages had SPF or DKIM failing, and each passing
+  sender says which check failed on how many. They still count as passes,
+  so the failure count and the dashboard are unchanged. Reports received
+  before the upgrade show it too. (#203, fixes inbuxa-server#395)
+
 ## [27.1-rc.15] - 2026-11-13
 
 Pairs with inbuxa-server 27.1-rc.22.
