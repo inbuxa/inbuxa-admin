@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to inbuxa Admin's 2026 series, the dated releases
-(`2026.10.26.5`) kept on this branch. It holds `:latest` until the 27.1
+(`2026.10.26.6`) kept on this branch. It holds `:latest` until the 27.1
 series ships; `main` carries 27.1 and its changelog lists both.
 
 Each release's page has its container image and files:
@@ -9,6 +9,17 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
+
+## [2026.10.26.6] - 2026-11-15
+
+A fix to the certificates guide for the 2026 series, the same as in
+27.1-rc.8.
+
+### Fixed
+- Certificates guide: adding a Let's Encrypt account no longer fails with
+  "Cannot modify server set property". The guide sent the account's
+  description, which only the server may set, so it could only switch domains
+  on servers that already had a matching account.
 
 ## [2026.10.26.5] - 2026-11-06
 
