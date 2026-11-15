@@ -132,8 +132,8 @@ function DomainBlock({ summary }: { summary: DomainSummary }) {
           <span className="text-sm text-muted-foreground">
             {t('inReports.partialCount', {
               count: summary.partial,
-              defaultValue_one: '{{count}} of them with SPF or DKIM failing',
-              defaultValue_other: '{{count}} of them with SPF or DKIM failing',
+              defaultValue_one: '{{count}} passed on one check alone',
+              defaultValue_other: '{{count}} passed on one check alone',
             })}
           </span>
         )}
