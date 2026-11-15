@@ -76,7 +76,7 @@ import {
 import { isPendingDelete, usePendingDeletes } from '@/lib/pendingDeletes';
 import { friendlySetError } from '@/lib/jmapErrors';
 import { coerceLabel } from '@/lib/objectOptions';
-import { buildJmapFilter } from '@/lib/listFilter';
+import { buildJmapFilter, staticFilterValue } from '@/lib/listFilter';
 import { useResetOnChange } from '@/hooks/useBufferedValue';
 
 import { useSchemaStore } from '@/stores/schemaStore';
@@ -973,14 +973,13 @@ export function DynamicList({ viewName }: DynamicListProps) {
 
       case 'enum': {
         const enumVariants = schema!.enums[filterDef.enumName] ?? [];
+        const fixed = staticFilterValue(resolved?.list?.filtersStatic, filterDef.field);
+        const allOption = fixed ? [] : [{ value: '__all__', label: t('filters.all', 'All') }];
         if (enumVariants.length > ENUM_FILTER_COMBOBOX_THRESHOLD) {
           return wrapper(
             <Combobox
-              options={[
-                { value: '__all__', label: t('filters.all', 'All') },
-                ...enumVariants.map((v) => ({ value: v.name, label: v.label })),
-              ]}
-              value={value || '__all__'}
+              options={[...allOption, ...enumVariants.map((v) => ({ value: v.name, label: v.label }))]}
+              value={value || fixed || '__all__'}
               onValueChange={(v) => handleFilterSelectChange(filterDef.field, v)}
               searchPlaceholder={t('common.searchPlaceholder', 'Search...')}
               emptyText={t('field.noMatches', 'No matches')}
@@ -988,12 +987,15 @@ export function DynamicList({ viewName }: DynamicListProps) {
           );
         }
         return wrapper(
-          <Select value={value || '__all__'} onValueChange={(v) => handleFilterSelectChange(filterDef.field, v)}>
+          <Select
+            value={value || fixed || '__all__'}
+            onValueChange={(v) => handleFilterSelectChange(filterDef.field, v)}
+          >
             <SelectTrigger>
               <SelectValue placeholder={filterDef.label} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">{t('filters.all', 'All')}</SelectItem>
+              {!fixed && <SelectItem value="__all__">{t('filters.all', 'All')}</SelectItem>}
               {enumVariants.map((v) => (
                 <SelectItem key={v.name} value={v.name}>
                   {v.label}
