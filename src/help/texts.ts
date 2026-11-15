@@ -96,6 +96,8 @@ export const FIELD_HELP: Record<string, string> = {
     'Forward mail for unknown people to another server, for domains split between two systems. Leave off otherwise.',
   'x:Domain.dkimManagement':
     'Signing keys that prove mail from this domain is really yours. Automatic creates and rotates them for you.',
+  'x:DkimManagementProperties.algorithms':
+    'The kinds of key the domain signs with, each kept and rotated on its own. Tick DKIM2 next to DKIM1 to sign with both while receivers start checking DKIM2; its key is made as soon as you save.',
   'x:Domain.certificateManagement':
     'The TLS certificate for this domain’s mail and web addresses. Automatic gets and renews one for you.',
   'x:Domain.dnsManagement':
@@ -181,7 +183,10 @@ const MANAGEMENT_PAGE_HELP: Record<string, PageHelp> = {
   },
   'x:DkimSignature': {
     about: 'The keys that sign outgoing mail so receivers can check it really came from you.',
-    tasks: ['Let domains manage their own keys: set DKIM to automatic on the domain.'],
+    tasks: [
+      'Let domains manage their own keys: set DKIM to automatic on the domain.',
+      'Sign with DKIM2 alongside DKIM1: tick a DKIM2 algorithm in the domain’s automatic DKIM. Its key shows up here, next to the DKIM1 ones.',
+    ],
   },
   'x:QueuedMessage': {
     about:
