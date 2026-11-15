@@ -8,7 +8,8 @@
  * inbuxa: guided setup, "Certificates, automatically" (settings-reorg, first
  * wave). Picks domains, checks every name the certificate will cover before
  * anything is ordered, chooses how Let's Encrypt checks them (through DNS
- * when the domain's DNS is connected, otherwise on port 443), switches the
+ * when the domain's DNS is connected, otherwise on port 80 or 443: an
+ * existing HTTP-01 account, as the installer makes, picks port 80), switches the
  * domains to automatic, and watches the certificates arrive.
  */
 
@@ -30,10 +31,11 @@ import { dohQuery, RESOLVER_NAME } from '@/features/dns/liveCheck';
 import { parseZone } from '@/features/dns/zone';
 import { cn } from '@/lib/utils';
 import { classify, orderNames, type Method, type NameState } from './names';
+import { challengeOf, defaultDirect, type Direct, PORT } from './direct';
+import { DirectChoice } from './DirectChoice';
 
 const LE_PRODUCTION = 'https://acme-v02.api.letsencrypt.org/directory';
 const LE_STAGING = 'https://acme-staging-v02.api.letsencrypt.org/directory';
-const CHALLENGE: Record<Method, string> = { dns: 'Dns01', tls: 'TlsAlpn01' };
 const WATCH_MS = 5 * 60_000;
 
 interface DomainRow {
@@ -174,6 +176,7 @@ export function CertificateSetupPage() {
   const [anyway, setAnyway] = useState<Set<string>>(new Set());
   const [staging, setStaging] = useState(false);
   const [contact, setContact] = useState('');
+  const [direct, setDirect] = useState<Direct>('TlsAlpn01');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -189,6 +192,7 @@ export function CertificateSetupPage() {
         setData(d);
         setPicked(new Set(d.domains.filter((x) => !x.automatic).map((x) => x.id)));
         setContact(d.providers.find((p) => p.contact.length > 0)?.contact[0] ?? '');
+        setDirect(defaultDirect(d.providers));
       })
       .catch((e: unknown) => live && setLoadError(e instanceof Error ? e.message : String(e)));
     return () => {
@@ -260,8 +264,9 @@ export function CertificateSetupPage() {
   const directory = staging ? LE_STAGING : LE_PRODUCTION;
   const methodsNeeded = [...new Set(going.map(methodOf))];
   const providerFor = (m: Method) =>
-    data?.providers.find((p) => p.directory === directory && p.challengeType === CHALLENGE[m]);
+    data?.providers.find((p) => p.directory === directory && p.challengeType === challengeOf(m, direct));
   const needsNewProvider = methodsNeeded.some((m) => !providerFor(m));
+  const port = PORT[direct];
 
   const poll = useCallback(async () => {
     const [certRes] = await jmapRequest([
@@ -328,7 +333,7 @@ export function CertificateSetupPage() {
           create: {
             acme: {
               directory,
-              challengeType: CHALLENGE[m],
+              challengeType: challengeOf(m, direct),
               contact: { [contact.trim()]: true },
               // No description: the server writes it, and refuses one from a client.
             },
@@ -417,7 +422,8 @@ export function CertificateSetupPage() {
             <p>
               {t(
                 'certSetup.howTls',
-                'Otherwise Let’s Encrypt connects to this server on port 443 for each name. Those names must point straight at this server, not through a proxy.',
+                'Otherwise Let’s Encrypt connects to this server on port {{port}} for each name. Those names must point straight at this server, not through a proxy.',
+                { port },
               )}
             </p>
           </WizardNote>
@@ -461,7 +467,7 @@ export function CertificateSetupPage() {
                         : t('certSetup.noCert', 'No certificate yet.')}{' '}
                       {methodOf(d) === 'dns'
                         ? t('certSetup.viaDns', 'Checked through DNS.')
-                        : t('certSetup.viaTls', 'Checked on port 443.')}
+                        : t('certSetup.viaTls', 'Checked on port {{port}}.', { port })}
                     </span>
                   </label>
                 </li>
@@ -612,6 +618,7 @@ export function CertificateSetupPage() {
           </WizardNote>
         }
       >
+        {methodsNeeded.includes('tls') && <DirectChoice value={direct} onChange={setDirect} />}
         {needsNewProvider ? (
           <div className="space-y-1.5">
             <Label htmlFor="acme-contact">{t('certSetup.contact', 'Your email address')}</Label>
@@ -698,7 +705,7 @@ export function CertificateSetupPage() {
                     how:
                       methodOf(d) === 'dns'
                         ? t('certSetup.howDnsWord', 'through DNS')
-                        : t('certSetup.howTlsWord', 'on port 443'),
+                        : t('certSetup.howTlsWord', 'on port {{port}}', { port }),
                     names: namesOf(d).join(', '),
                   },
                 )}
