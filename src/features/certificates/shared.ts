@@ -14,7 +14,37 @@ import type { Method, NameState } from './names';
 
 export const LE_PRODUCTION = 'https://acme-v02.api.letsencrypt.org/directory';
 export const LE_STAGING = 'https://acme-staging-v02.api.letsencrypt.org/directory';
-export const CHALLENGE: Record<Method, string> = { dns: 'Dns01', tls: 'TlsAlpn01' };
+
+/**
+ * How Let’s Encrypt reaches this server for names checked without DNS:
+ * HTTP-01 on port 80, or TLS-ALPN-01 on port 443. The server answers either.
+ * Behind a web server that holds 443, only HTTP-01 works: the installer's
+ * Caddy forwards /.well-known/acme-challenge/ on port 80 to the server, and
+ * the installer makes an HTTP-01 account for it (#206).
+ */
+export type Direct = 'Http01' | 'TlsAlpn01';
+
+export const PORT: Record<Direct, number> = { Http01: 80, TlsAlpn01: 443 };
+
+/** HTTP-01 when the server already has an account for it, as an installer setup does; otherwise TLS-ALPN-01. */
+export function defaultDirect(providers: ProviderRow[]): Direct {
+  return providers.some((p) => p.challengeType === 'Http01') ? 'Http01' : 'TlsAlpn01';
+}
+
+/** The challenge type an account needs for one way of checking names. */
+export function challengeOf(method: Method, direct: Direct): string {
+  return method === 'dns' ? 'Dns01' : direct;
+}
+
+/** The existing Let’s Encrypt account for one way of checking names, if there is one. */
+export function providerFor(
+  providers: ProviderRow[],
+  directory: string,
+  method: Method,
+  direct: Direct,
+): ProviderRow | undefined {
+  return providers.find((p) => p.directory === directory && p.challengeType === challengeOf(method, direct));
+}
 
 export interface DomainRow {
   id: string;
@@ -163,12 +193,17 @@ export async function pollOrders(): Promise<{ certs: CertRow[]; tasks: Record<st
  * Adds a Let’s Encrypt account for one way of checking names, and returns its
  * id. The server writes the description itself, and refuses one from a client.
  */
-export async function addProvider(method: Method, contact: string, staging: boolean): Promise<string> {
+export async function addProvider(
+  method: Method,
+  direct: Direct,
+  contact: string,
+  staging: boolean,
+): Promise<string> {
   const [res] = await jmapSet('x:AcmeProvider', getAccountId('x:AcmeProvider'), {
     create: {
       acme: {
         directory: staging ? LE_STAGING : LE_PRODUCTION,
-        challengeType: CHALLENGE[method],
+        challengeType: challengeOf(method, direct),
         contact: { [contact.trim()]: true },
       },
     },
