@@ -14,6 +14,19 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [2026.10.26.7] - 2026-11-15
+
+A fix to the certificates guide for the 2026 series; 27.1 gets it in its
+next release candidate (#209).
+
+### Fixed
+- Certificates guide: on a server set up by the installer, the guide now
+  reuses the installer's Let's Encrypt account (HTTP-01, on port 80) instead
+  of adding one that checks names on port 443, which can't work while the
+  installer's web server holds that port. The Account step asks how Let's
+  Encrypt reaches the server, port 80 or port 443, and starts on port 80
+  when such an account exists. (#206, #210)
+
 ## [2026.10.26.6] - 2026-11-15
 
 A fix to the certificates guide for the 2026 series, the same as in
