@@ -14,6 +14,26 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.17] - 2026-11-15
+
+Pairs with inbuxa-server 27.1-rc.23.
+
+### Added
+- Help on a domain's automatic DKIM signing algorithms explains ticking DKIM2
+  next to DKIM1 to sign with both, and the DKIM Signatures page points to it.
+  With inbuxa-server 27.1-rc.23 the new key is made as soon as you save.
+  (#212)
+
+### Fixed
+- Certificates guide: on a server set up by the installer, the guide reuses
+  the installer's Let's Encrypt account (HTTP-01, on port 80) instead of
+  adding one that checks names on port 443. The Account step asks how Let's
+  Encrypt reaches the server, port 80 or port 443. The same fix as
+  2026.10.26.7. (#206, #209)
+- Delivery history: a list filter that the list sets itself, such as Inbound
+  showing received mail, shows that value as its default instead of "All".
+  (#208, with inbuxa-server#398)
+
 ## [2026.10.26.7] - 2026-11-15
 
 A fix to the certificates guide for the 2026 series; 27.1 gets it in its
