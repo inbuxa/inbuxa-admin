@@ -41,12 +41,14 @@ import {
   sameNames,
   suggestDomain,
 } from './orders';
+import { DirectChoice } from './DirectChoice';
 import {
   addProvider,
-  CHALLENGE,
   type CertRow,
   type Check,
   coveringCert,
+  defaultDirect,
+  type Direct,
   type DomainRow,
   fmtDate,
   LE_PRODUCTION,
@@ -54,6 +56,8 @@ import {
   type Loaded,
   load,
   pollOrders,
+  PORT,
+  providerFor,
   refusal,
   resolveAddresses,
 } from './shared';
@@ -79,6 +83,7 @@ export function OrderCertificatePage() {
   const [anyway, setAnyway] = useState(false);
   const [staging, setStaging] = useState(false);
   const [contact, setContact] = useState('');
+  const [direct, setDirect] = useState<Direct>('TlsAlpn01');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -101,6 +106,7 @@ export function OrderCertificatePage() {
         if (!live) return;
         setData(d);
         setContact(d.providers.find((p) => p.contact.length > 0)?.contact[0] ?? '');
+        setDirect(defaultDirect(d.providers));
       })
       .catch((e: unknown) => live && setLoadError(e instanceof Error ? e.message : String(e)));
     return () => {
@@ -135,7 +141,8 @@ export function OrderCertificatePage() {
   const replaced = domain?.automatic && !unchanged ? currentNames.filter((n) => !names.includes(n)) : [];
 
   const directory = staging ? LE_STAGING : LE_PRODUCTION;
-  const provider = data?.providers.find((p) => p.directory === directory && p.challengeType === CHALLENGE[method]);
+  const provider = data ? providerFor(data.providers, directory, method, direct) : undefined;
+  const port = PORT[direct];
 
   const runChecks = useCallback(async () => {
     if (!data || method !== 'tls') return;
@@ -223,7 +230,7 @@ export function OrderCertificatePage() {
     try {
       let providerId = provider?.id;
       if (!providerId) {
-        providerId = await addProvider(method, contact, staging);
+        providerId = await addProvider(method, direct, contact, staging);
         made = providerId;
       }
       const [res] = await jmapSet('x:Domain', getAccountId('x:Domain'), {
@@ -290,7 +297,8 @@ export function OrderCertificatePage() {
       {error}
     </p>
   );
-  const how = method === 'dns' ? t('certSetup.howDnsWord', 'through DNS') : t('certSetup.howTlsWord', 'on port 443');
+  const how =
+    method === 'dns' ? t('certSetup.howDnsWord', 'through DNS') : t('certSetup.howTlsWord', 'on port {{port}}', { port });
 
   // ── Step 1: names (also where it goes back to if the domain stops fitting) ──
   if (step === 0 || !domain) {
@@ -319,7 +327,8 @@ export function OrderCertificatePage() {
               <p>
                 {t(
                   'certOrder.howDns',
-                  'When the domain’s DNS is connected, the names are checked through DNS, and wildcards work. Otherwise Let’s Encrypt connects to this server on port 443 for each name.',
+                  'When the domain’s DNS is connected, the names are checked through DNS, and wildcards work. Otherwise Let’s Encrypt connects to this server on port {{port}} for each name.',
+                  { port },
                 )}
               </p>
             </WizardNote>
@@ -371,7 +380,7 @@ export function OrderCertificatePage() {
               <p className="text-xs text-muted-foreground">
                 {method === 'dns'
                   ? t('certSetup.viaDns', 'Checked through DNS.')
-                  : t('certSetup.viaTls', 'Checked on port 443.')}
+                  : t('certSetup.viaTls', 'Checked on port {{port}}.', { port })}
               </p>
             </div>
             {wildcardBlocked && (
@@ -575,6 +584,7 @@ export function OrderCertificatePage() {
           </WizardNote>
         }
       >
+        {method === 'tls' && <DirectChoice value={direct} onChange={setDirect} />}
         {provider ? (
           <p className="text-sm">
             {t('certSetup.reuse', 'The Let’s Encrypt account already set up on this server will be used.')}
