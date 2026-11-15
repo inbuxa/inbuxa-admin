@@ -72,3 +72,13 @@ export function buildJmapFilter({
   }
   return out;
 }
+
+/**
+ * The value a list's static filters already give a field, when it's a plain
+ * string (delivery history's `kind`). An enum filter on that field shows it as
+ * the default and offers no "All", since clearing the filter brings it back.
+ */
+export function staticFilterValue(filtersStatic: Record<string, unknown> | undefined, field: string): string | undefined {
+  const value = filtersStatic?.[field];
+  return typeof value === 'string' ? value : undefined;
+}

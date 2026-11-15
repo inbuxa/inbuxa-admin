@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Filter } from '@/types/schema';
-import { buildJmapFilter } from './listFilter';
+import { buildJmapFilter, staticFilterValue } from './listFilter';
 
 const dateFilter = [{ field: 'created', type: 'date' }] as Filter[];
 const x = (appliedFilters: Record<string, string>) =>
@@ -82,5 +82,21 @@ describe('buildJmapFilter', () => {
         created: '2026-03-14T08:30:00Z',
       });
     });
+  });
+});
+
+describe('staticFilterValue', () => {
+  it('gives the string a static filter sets, and nothing otherwise', () => {
+    const statics = { event: 'delivery.attempt-start', kind: 'remote', limit: 5 };
+    expect(staticFilterValue(statics, 'kind')).toBe('remote');
+    expect(staticFilterValue(statics, 'limit')).toBeUndefined();
+    expect(staticFilterValue(statics, 'text')).toBeUndefined();
+    expect(staticFilterValue(undefined, 'kind')).toBeUndefined();
+  });
+
+  it('lets the reader override it in the query', () => {
+    expect(
+      buildJmapFilter({ appliedFilters: { kind: 'any' }, filtersStatic: { kind: 'remote' }, isXPrefixed: true }),
+    ).toEqual({ kind: 'any' });
   });
 });
