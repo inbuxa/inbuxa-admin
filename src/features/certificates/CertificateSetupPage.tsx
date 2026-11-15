@@ -330,7 +330,7 @@ export function CertificateSetupPage() {
               directory,
               challengeType: CHALLENGE[m],
               contact: { [contact.trim()]: true },
-              description: `${staging ? 'Let’s Encrypt (staging)' : 'Let’s Encrypt'}, ${m === 'dns' ? 'DNS-01' : 'TLS-ALPN-01'}, ${contact.trim()}`,
+              // No description: the server writes it, and refuses one from a client.
             },
           },
         });
