@@ -3062,5 +3062,13 @@
   "staySignedIn": {
     "hint": "Stay signed in when the app or browser closes. Leave this off on a shared computer.",
     "label": "Stay signed in on this device"
+  },
+  "logs": {
+    "noTracerTitle": "This server isn’t writing log files yet",
+    "noTracerJournal": "This page reads log files, and the server is only sending its log to the system journal. On a server set up by the installer, you can follow it with:",
+    "onHost": "Installed on the host:",
+    "inContainers": "In containers, from the install folder:",
+    "noTracerAdd": "To read the log here, add a tracer of type Log with a folder the server can write to.",
+    "openTracers": "Open Tracers"
   }
 }
