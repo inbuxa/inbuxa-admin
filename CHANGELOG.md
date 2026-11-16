@@ -14,6 +14,17 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.19] - 2026-11-16
+
+Pairs with inbuxa-server 27.1-rc.25.
+
+### Fixed
+- Branding: a logo set as an https URL under Settings › System › Branding
+  showed on the server's sign-in page but not in the console, which fell
+  back to the inbuxa logo unless the image's host allowed cross-site
+  requests. The console now loads the logo the way the sign-in page does.
+  Thanks to alligatoraxe. (#226, fixes #225)
+
 ## [27.1-rc.18] - 2026-11-16
 
 Pairs with inbuxa-server 27.1-rc.24.
