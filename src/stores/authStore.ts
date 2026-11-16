@@ -56,6 +56,11 @@ interface AuthState extends Signin {
   setUsername: (username: string | null) => void;
   logout: () => void;
   isAuthenticated: () => boolean;
+  /**
+   * Signed in, or able to renew the sign-in without asking: an access token
+   * that has run out still comes with a refresh token that lasts far longer.
+   */
+  hasSession: () => boolean;
   /** Under a minute left, so the next request refreshes first. */
   isTokenExpiringSoon: () => boolean;
 }
@@ -157,6 +162,11 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: () => {
         const { accessToken, tokenExpiresAt } = get();
         return accessToken !== null && tokenExpiresAt !== null && Date.now() < tokenExpiresAt;
+      },
+
+      hasSession: () => {
+        const { refreshToken, tokenEndpoint } = get();
+        return get().isAuthenticated() || (refreshToken !== null && tokenEndpoint !== null);
       },
 
       isTokenExpiringSoon: () => {
