@@ -7,7 +7,7 @@
 import { ArrowRight, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 
 import Logo from '@/components/common/Logo';
 import { SourceLink } from '@/components/common/SourceLink';
@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { startAuthFlow } from '@/services/auth/oauth';
 import { clearReturnPath, readReturnPath } from '@/services/auth/session';
+import { useAuthStore } from '@/stores/authStore';
 
 /**
  * Goes straight on to the server's own sign-in page, which asks for the
@@ -24,6 +25,18 @@ import { clearReturnPath, readReturnPath } from '@/services/auth/session';
  * or when getting there failed, with a button to try again.
  */
 export default function LoginPage() {
+  const { state } = useLocation();
+  // Reached with a sign-in already in hand (Back, or a bookmark): go on into
+  // the console rather than start another (#215).
+  const [signedIn] = useState(() => useAuthStore.getState().hasSession());
+  if (signedIn) {
+    const to = (state as { from?: string } | null)?.from ?? readReturnPath() ?? '/';
+    return <Navigate to={to} replace />;
+  }
+  return <StartSignIn />;
+}
+
+function StartSignIn() {
   const { t } = useTranslation();
   const { state } = useLocation();
   // The page to come back to: from the route guard, or kept when the server ended the session (endSession).

@@ -52,7 +52,7 @@ function serve(routes: Record<string, unknown>) {
 /** Stands in for window.location, capturing where the browser is sent. */
 function pretendLocation(pathname = '/Settings/x:Domain', search = '') {
   const original = window.location;
-  const sentTo = { href: '' };
+  const sentTo = { href: '', replaced: false };
   Object.defineProperty(window, 'location', {
     configurable: true,
     value: {
@@ -64,6 +64,10 @@ function pretendLocation(pathname = '/Settings/x:Domain', search = '') {
       },
       set href(v: string) {
         sentTo.href = v;
+      },
+      replace(v: string) {
+        sentTo.href = v;
+        sentTo.replaced = true;
       },
     },
   });
@@ -154,6 +158,20 @@ describe('startAuthFlow', () => {
     }
     return new URL(loc.sentTo.href);
   }
+
+  it('replaces the console page in the history rather than adding to it (#215)', async () => {
+    serve({
+      [`${SERVER}/.well-known/openid-configuration`]: config,
+      [`${SERVER}/api/discover/`]: config,
+    });
+    const loc = pretendLocation();
+    try {
+      await startAuthFlow(null);
+    } finally {
+      loc.restore();
+    }
+    expect(loc.sentTo.replaced).toBe(true);
+  });
 
   it("sends the browser to the server's sign-in page with a PKCE challenge it can check", async () => {
     const to = await signIn(null);
