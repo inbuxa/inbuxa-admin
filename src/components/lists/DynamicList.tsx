@@ -9,6 +9,8 @@
 
 import { pageAbout } from '@/help/texts';
 import { ListEmptyState } from '@/components/lists/ListEmptyState';
+import { listErrorOf } from '@/components/lists/listError';
+import { NoLogTracerNote } from '@/components/lists/NoLogTracerNote';
 import { PageHeader } from '@/components/common/PageHeader';
 import { HelpPanel } from '@/help/HelpPanel';
 import { ObjectHoverCard } from '@/features/hovercards/ObjectHoverCard';
@@ -418,6 +420,8 @@ export function DynamicList({ viewName }: DynamicListProps) {
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // inbuxa: the Logs list on a server with no log files (#217)
+  const [noLogTracer, setNoLogTracer] = useState(false);
 
   const displayNames = useCacheStore((s) => s.displayNames);
   const setDisplayNames = useCacheStore((s) => s.setDisplayNames);
@@ -477,6 +481,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
       const { obj, list } = resolved;
       setLoading(true);
       setError(null);
+      setNoLogTracer(false);
 
       try {
         const accountId = getAccountId(obj.objectName);
@@ -509,7 +514,13 @@ export function DynamicList({ viewName }: DynamicListProps) {
 
         if (queryResp[0].includes('/error') || getResp[0].includes('/error')) {
           const errData = queryResp[0].includes('/error') ? queryResp[1] : getResp[1];
-          setError(String((errData as Record<string, unknown>).type ?? t('list.unknownError', 'Unknown error')));
+          const listError = listErrorOf(
+            obj.objectName,
+            errData as Record<string, unknown>,
+            t('list.unknownError', 'Unknown error'),
+          );
+          if (listError.kind === 'noLogTracer') setNoLogTracer(true);
+          else setError(listError.message);
           return;
         }
 
@@ -1354,6 +1365,8 @@ export function DynamicList({ viewName }: DynamicListProps) {
         </div>
       )}
 
+      {noLogTracer && <NoLogTracerNote />}
+
       {hasMassActions &&
         selectedIds.size === items.length &&
         items.length > 0 &&
@@ -1388,7 +1401,9 @@ export function DynamicList({ viewName }: DynamicListProps) {
             <Loader2 className="mx-auto h-6 w-6 animate-spin" />
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-xl border bg-card shadow-soft">{emptyState}</div>
+          error || noLogTracer ? null : (
+            <div className="rounded-xl border bg-card shadow-soft">{emptyState}</div>
+          )
         ) : (
           <div className="space-y-3">
             {hasMassActions && (
@@ -1477,7 +1492,7 @@ export function DynamicList({ viewName }: DynamicListProps) {
                       colSpan={list.columns.length + (hasMassActions ? 1 : 0) + (hasRowCell ? 1 : 0)}
                       className="px-3"
                     >
-                      {emptyState}
+                      {error || noLogTracer ? null : emptyState}
                     </td>
                   </tr>
                 ) : (
