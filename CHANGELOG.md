@@ -14,6 +14,30 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.18] - 2026-11-16
+
+Pairs with inbuxa-server 27.1-rc.24.
+
+### Fixed
+- Signing in: reopening the console more than an hour after it was last
+  used asked for the password again, even though the sign-in could be
+  renewed quietly. On a phone, where an installed app is reloaded whenever
+  it comes back, that was nearly every time. Thanks to khashmeshab. (#219,
+  fixes #214)
+- Back in the installed app: starting sign-in, an ended session and
+  signing out replace the page instead of adding to the history, and
+  /login with a sign-in in hand goes on into the console. With
+  inbuxa-server 27.1-rc.24, Back from the dashboard leaves the app. (#222,
+  fixes #215)
+- Account menu: menus scroll when they're taller than the screen, so
+  "Stay signed in on this device" and Logout can be reached on a phone held
+  sideways, and the explanation for "Stay signed in" is a line of text
+  instead of a tooltip a phone never shows. (#221, fixes #216)
+- Logs: on a server that writes no log files, the page says the log is
+  going to the system journal, gives the commands to follow it and links to
+  Tracers, instead of "No log entries yet". Lists show the server's
+  description of an error rather than its type. (#220, fixes #217)
+
 ## [27.1-rc.17] - 2026-11-15
 
 Pairs with inbuxa-server 27.1-rc.23.
