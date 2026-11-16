@@ -5,9 +5,14 @@
  */
 
 /**
- * The server's own logo, if an admin set one: fetched once per page load
- * from `/logo` and kept as an object URL. Anything but an image (no logo, an
+ * The server's own logo, if an admin set one: probed once per page load by
+ * loading `/logo` as an image. Anything that isn't an image (no logo, an
  * error page, no answer) means the inbuxa logo.
+ *
+ * An image, not a fetch: a logo set as an https URL makes `/logo` redirect to
+ * that URL, and a fetch only follows a redirect to another site when that
+ * site allows it (CORS), which most image hosts don't (inbuxa-admin#225). An
+ * image needs no such permission, the same as the server's sign-in page.
  */
 import { getApiBaseUrl } from '@/services/api';
 
@@ -24,22 +29,23 @@ export function subscribeToLogo(watch: () => void): () => void {
   return () => void watchers.delete(watch);
 }
 
-async function fetchLogo(): Promise<string | null> {
-  try {
-    const res = await fetch(`${getApiBaseUrl()}/logo`);
-    if (!res.ok || !res.headers.get('content-type')?.startsWith('image/')) return null;
-    return URL.createObjectURL(await res.blob());
-  } catch {
-    return null;
-  }
+/** Whether `src` loads as an image; the browser caches it for the `<img>`. */
+function loadsAsImage(src: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(true);
+    image.onerror = () => resolve(false);
+    image.src = src;
+  });
 }
 
-/** Starts the fetch; later calls do nothing. */
+/** Starts the probe; later calls do nothing. */
 export function loadLogoOnce(): void {
   if (requested) return;
   requested = true;
-  void fetchLogo().then((url) => {
-    logo = url ? { status: 'custom', url } : { status: 'default' };
+  const url = `${getApiBaseUrl()}/logo`;
+  void loadsAsImage(url).then((loaded) => {
+    logo = loaded ? { status: 'custom', url } : { status: 'default' };
     for (const watch of watchers) watch();
   });
 }

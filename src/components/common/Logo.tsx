@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import inbuxaMark from '@/assets/inbuxa-mark.png';
@@ -63,10 +63,22 @@ export function DefaultLogo() {
 export default function Logo() {
   const { t } = useTranslation();
   const logo = useSyncExternalStore(subscribeToLogo, getLogoState, getLogoState);
+  const [broken, setBroken] = useState(false);
   useEffect(loadLogoOnce, []);
   switch (logo.status) {
     case 'custom':
-      return <img src={logo.url} alt={t('logo.alt', 'Logo')} className="h-7 w-auto max-w-[220px] object-contain" />;
+      // A logo that loaded once can still fail later (its host goes away
+      // after the cache runs out); the inbuxa logo beats a broken image.
+      return broken ? (
+        <DefaultLogo />
+      ) : (
+        <img
+          src={logo.url}
+          alt={t('logo.alt', 'Logo')}
+          className="h-7 w-auto max-w-[220px] object-contain"
+          onError={() => setBroken(true)}
+        />
+      );
     case 'loading':
       return <span aria-hidden="true" className="block h-7 w-[140px]" />;
     default:
