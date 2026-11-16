@@ -199,7 +199,10 @@ export async function startAuthFlow(username: string | null, returnUrl?: string 
   const scope = scopesFor(endpoints.scopes_supported);
   if (scope) query.set('scope', scope);
 
-  window.location.href = `${endpoints.authorization_endpoint}?${query}`;
+  // Replace, not push: the console page that started this has done its job,
+  // and Back from the console after signing in shouldn't land on it, or on a
+  // sign-in that has already been used (#215).
+  window.location.replace(`${endpoints.authorization_endpoint}?${query}`);
 }
 
 /** Trades the code from the callback for tokens. */

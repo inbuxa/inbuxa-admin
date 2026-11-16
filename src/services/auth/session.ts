@@ -25,8 +25,9 @@ function isAuthPath(path: string): boolean {
 
 /** Sign out because the server ended the session, coming back here after signing in again. */
 export function endSession(
+  // Replace, not push: the page whose session ended isn't one to go Back to (#215).
   go: (url: string) => void = (url) => {
-    window.location.href = url;
+    window.location.replace(url);
   },
 ): void {
   const basePath = getBasePath();
