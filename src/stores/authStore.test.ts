@@ -65,6 +65,25 @@ describe('tokens', () => {
     expect(auth().isAuthenticated()).toBe(false);
   });
 
+  it('keeps the session past the access token while it can be renewed (#214)', () => {
+    vi.useFakeTimers({ now: 0 });
+    expect(auth().hasSession()).toBe(false);
+    auth().setTokens('acc', 'ref', 10, '/token');
+    vi.setSystemTime(3_600_000);
+    expect(auth().isAuthenticated()).toBe(false);
+    expect(auth().hasSession()).toBe(true);
+    auth().logout();
+    expect(auth().hasSession()).toBe(false);
+  });
+
+  it('has no session from an expired access token without a refresh token', () => {
+    vi.useFakeTimers({ now: 0 });
+    useAuthStore.setState({ accessToken: 'acc', refreshToken: null, tokenExpiresAt: 10_000, tokenEndpoint: '/token' });
+    expect(auth().hasSession()).toBe(true);
+    vi.setSystemTime(10_000);
+    expect(auth().hasSession()).toBe(false);
+  });
+
   it('counts a token as expiring inside its last minute', () => {
     vi.useFakeTimers({ now: 0 });
     expect(auth().isTokenExpiringSoon()).toBe(false);
