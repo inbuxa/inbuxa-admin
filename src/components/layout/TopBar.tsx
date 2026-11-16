@@ -269,18 +269,24 @@ function AccountMenu() {
           // #197: closing the installed app or the browser keeps the sign-in.
           role="menuitemcheckbox"
           aria-checked={stay}
-          title={t(
-            'staySignedIn.hint',
-            'Stay signed in when the app or browser closes. Leave this off on a shared computer.',
-          )}
+          className="items-start"
           onSelect={(e) => {
             e.preventDefault();
             setStaySignedIn(!stay);
             setStay(!stay);
           }}
         >
-          <Check className={cn('mr-2 h-4 w-4', !stay && 'invisible')} />
-          {t('staySignedIn.label', 'Stay signed in on this device')}
+          <Check className={cn('mr-2 mt-0.5 h-4 w-4 shrink-0', !stay && 'invisible')} />
+          {/* The explanation is written out, not a tooltip: a phone never shows a tooltip (#216). */}
+          <span className="flex flex-col">
+            {t('staySignedIn.label', 'Stay signed in on this device')}
+            <span className="text-xs text-muted-foreground">
+              {t(
+                'staySignedIn.hint',
+                'Stay signed in when the app or browser closes. Leave this off on a shared computer.',
+              )}
+            </span>
+          </span>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => signOut(navigate)}>
           <LogOut className="mr-2 h-4 w-4" />
