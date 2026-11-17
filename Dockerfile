@@ -29,13 +29,23 @@ RUN npm run build
 FROM mirror.gcr.io/nginxinc/nginx-unprivileged:1.29-alpine
 # Unprivileged nginx, which runs as uid 101 and cannot bind 80. 8080 is the
 # port it listens on and the one to publish.
+#
+# Nothing in the image is written at start: the scripts below write what they
+# make (index.html with the server's address, the Content-Security-Policy that
+# names it, the IPv6 listener) to /tmp/inbuxa-admin, and nginx keeps its pid
+# and temp files in /tmp. So the container can run locked down:
+#   docker run --read-only --tmpfs /tmp --cap-drop ALL \
+#     --security-opt no-new-privileges -p 8080:8080 \
+#     -e API_BASE_URL=https://mail.example.com <image>
+# or in compose: read_only: true, tmpfs: [/tmp], cap_drop: [ALL],
+# security_opt: [no-new-privileges:true].
 EXPOSE 8080
-# Owned by the nginx user (uid 101 in this image), not root: the entrypoint
-# below rewrites index.html, and cannot if the file is root's. The directory
-# stays root's, which is why the entrypoint writes through the file rather
-# than replacing it.
-COPY --from=build --chown=101:101 /build/dist /usr/share/nginx/html
-# The nginx user's too, so listen-ipv6.sh can add the IPv6 listener at start.
-COPY --chown=101:101 docker/nginx.conf /etc/nginx/conf.d/default.conf
+# Owned by root, so the server that serves these files cannot change them.
+COPY --from=build /build/dist /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/security-headers.conf docker/playground-csp.conf /etc/nginx/inbuxa/
 COPY --chmod=0755 docker/listen-ipv6.sh /docker-entrypoint.d/11-listen-ipv6.sh
 COPY --chmod=0755 docker/entrypoint.sh /docker-entrypoint.d/40-api-base-url.sh
+# The base image's user already; said here so the image never runs as root
+# if that changes.
+USER 101
