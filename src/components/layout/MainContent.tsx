@@ -23,6 +23,7 @@ import { TlsSummaryCard } from '@/features/incomingReports/TlsSummaryCard';
 import { LimitsSummary } from '@/features/limits/LimitsSummary';
 import type { LimitObject } from '@/features/limits/rules';
 import { MetricsPage } from '@/features/metricsConnect/MetricsPage';
+import { LogsPage } from '@/features/logs/LogsPage';
 import { ListenersPage } from '@/features/ports/ListenersPage';
 import { ReportsPage } from '@/features/reports/ReportsPage';
 import { RetentionPage } from '@/features/retention/RetentionPage';
@@ -247,6 +248,8 @@ const LIST_PAGES: Record<string, (viewName: string) => ReactNode> = {
   'x:Alert': (v) => <AlertsPage viewName={v} />,
   'x:NetworkListener': (v) => <ListenersPage viewName={v} />,
   'x:WebHook': (v) => <WebhooksPage viewName={v} />,
+  // Fields split out, filters, live and export (#229)
+  'x:Log': () => <LogsPage />,
 };
 
 const unknown = (text: string) => (
