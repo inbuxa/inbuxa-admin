@@ -1080,7 +1080,9 @@
     "connectedOnly": "{{domain}} is connected.",
     "nothingPublished": "No records are written. The server uses your DNS host only to answer DNS-01 challenges when it orders a certificate.",
     "connectOnlyButton": "Connect",
-    "happensNoRecords": "{{domain}} switches to automatic DNS, and nothing is written. The server uses the connection only for DNS-01 certificate orders."
+    "happensNoRecords": "{{domain}} switches to automatic DNS, and nothing is written. The server uses the connection only for DNS-01 certificate orders.",
+    "ownValidHelp": "A green badge means the domain already has a valid record of its own there, so it counts as done. Use the value shown only if you want to change it.",
+    "ownValid": "Your own record, valid"
   },
   "dnsCopy": {
     "copied": "Copied",

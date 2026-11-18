@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
+  BadgeCheck,
   ChevronDown,
   ClipboardCopy,
   ClipboardList,
@@ -37,7 +38,8 @@ import type { JmapSetError, JmapSetResponse } from '@/types/jmap';
 import { ADVANCED_FIELDS, FEATURED, HIDDEN_VARIANTS, type ProviderGuide } from './providers';
 import { DEFAULT_KINDS, RECORD_GROUPS } from './records';
 import { parseZone, summarizeFailure, type RecordKind, type ZoneRecord } from './zone';
-import { RESOLVER_NAME, type LiveState } from './liveCheck';
+import { RESOLVER_NAME } from './liveCheck';
+import type { RecordState } from './recordState';
 import { detectHosting, type DnsHosting } from './detect';
 import { useRecordChecks } from './useRecordChecks';
 import { CopyStep } from './CopyStep';
@@ -917,7 +919,7 @@ function CredentialField({
   );
 }
 
-function RecordTable({ records, states }: { records: ZoneRecord[]; states?: Map<ZoneRecord, LiveState> }) {
+function RecordTable({ records, states }: { records: ZoneRecord[]; states?: Map<ZoneRecord, RecordState> }) {
   return (
     <div className="mt-3 overflow-x-auto rounded-xl border">
       <table className="w-full table-fixed text-left text-xs">
@@ -1062,6 +1064,15 @@ function LiveStep({
         </div>
       )}
       {!nothingToPublish && <RecordTable records={records} states={states} />}
+      {records.some((r) => states.get(r) === 'valid') && (
+        <p className="text-xs text-muted-foreground">
+          <BadgeCheck className="mr-1 inline h-3.5 w-3.5 text-emerald-500" />
+          {t(
+            'dnsWizard.ownValidHelp',
+            'A green badge means the domain already has a valid record of its own there, so it counts as done. Use the value shown only if you want to change it.',
+          )}
+        </p>
+      )}
       {records.some((r) => states.get(r) === 'different') && (
         <p className="text-xs text-muted-foreground">
           <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-highlight" />
