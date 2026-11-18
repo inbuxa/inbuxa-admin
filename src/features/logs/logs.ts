@@ -9,7 +9,8 @@
  * `x:Log`, which reads the files a Log tracer writes on the node that
  * answers. Each line is `<time> <LEVEL> <description> (<event id>) <fields>`,
  * and the server hands the fields back as one string; `parseFields` splits
- * it into the key = value pairs the tracer wrote.
+ * it into the key = value pairs the tracer wrote. A tracer writing JSON lines
+ * (inbuxa-server #456) hands them back as a JSON object instead, read as is.
  */
 
 import { getAccountId, jmapQueryAndGet } from '@/services/jmap/client';
@@ -165,7 +166,7 @@ export function toJsonLines(entries: LogEntry[]): string {
         timestamp: e.timestamp,
         level: e.level,
         event: e.event,
-        fields: Object.fromEntries(parseFields(e.details).map((f) => [f.key, f.value])),
+        fields: jsonFields(e.details) ?? Object.fromEntries(parseFields(e.details).map((f) => [f.key, f.value])),
         details: e.details,
       }),
     )
@@ -204,6 +205,22 @@ function unquote(value: string): string {
 }
 
 /**
+ * The fields of an entry from a tracer writing JSON lines: the server hands
+ * them back as a JSON object, typed as written. Null for any other details.
+ */
+export function jsonFields(details: string): Record<string, unknown> | null {
+  if (!details.startsWith('{')) return null;
+  try {
+    const value: unknown = JSON.parse(details);
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The `key = value, key = value` pairs of a log line's details. Strings are
  * quoted, nested events sit in `{ }` and lists in `[ ]`, so a comma only
  * separates two fields outside all three. The tracer doesn't escape a quote
@@ -211,6 +228,13 @@ function unquote(value: string): string {
  * value: the end, `, `, ` }`, `]` or `}`. Details that aren't pairs at all come back as no fields.
  */
 export function parseFields(details: string): LogField[] {
+  const json = jsonFields(details);
+  if (json) {
+    return Object.entries(json).map(([key, value]) => ({
+      key,
+      value: typeof value === 'string' ? value : JSON.stringify(value),
+    }));
+  }
   const parts: string[] = [];
   let depth = 0;
   let inString = false;
