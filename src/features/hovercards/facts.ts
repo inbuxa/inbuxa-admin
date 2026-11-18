@@ -10,7 +10,7 @@
  */
 import { getAccountId, jmapRequest } from '@/services/jmap/client';
 import { parseZone, type RecordKind, type ZoneRecord } from '@/features/dns/zone';
-import { checkRecords } from '@/features/dns/liveCheck';
+import { checkRecordValues, type LiveResult } from '@/features/dns/liveCheck';
 import i18n from '@/i18n';
 import { useAccountStore } from '@/stores/accountStore';
 import { fetchReports, fetchSettings } from '@/features/deliverability/api';
@@ -25,7 +25,7 @@ export interface DomainFacts {
   dkim: string;
   certs: string;
   /** The core records, and which are live in public DNS. */
-  checks: { kind: RecordKind; live: boolean }[];
+  checks: CoreCheck[];
   /** inbuxa: DL-19, the domain's worst deliverability failure, if any. */
   deliverability?: string;
 }
@@ -53,15 +53,56 @@ function mode(value: unknown): string {
   return ((value as { '@type'?: string } | undefined)?.['@type'] ?? 'Manual').toString();
 }
 
-/** Of the domain's core records, which are live. Kinds with no records (DKIM before keys exist) are left out. */
-export async function coreChecks(zone: ZoneRecord[], domain: string): Promise<{ kind: RecordKind; live: boolean }[]> {
+/**
+ * Where a core record stands in public DNS:
+ * - `live`: exactly what the server suggests is published;
+ * - `valid`: a DMARC or SPF record of the domain's own is published instead, and it is well formed (#236);
+ * - `different`: something else is published (MX elsewhere, another DKIM key, two SPF records);
+ * - `missing`: nothing is;
+ * - `error`: public DNS couldn't be asked.
+ */
+export type CoreState = 'live' | 'valid' | 'different' | 'missing' | 'error';
+
+export interface CoreCheck {
+  kind: RecordKind;
+  state: CoreState;
+  /** Published and usable: `live` or `valid`. */
+  live: boolean;
+}
+
+const DMARC_RECORD = /^v=DMARC1\s*(;|$)/i;
+const DMARC_POLICY = /;\s*p\s*=\s*(none|quarantine|reject)\s*(;|$)/i;
+const SPF_RECORD = /^v=spf1(\s|$)/i;
+
+/** One kind's state, from each of its suggested records' results. */
+export function coreState(kind: RecordKind, results: LiveResult[]): CoreState {
+  if (results.some((r) => r.state === 'error')) return 'error';
+  if (results.every((r) => r.state === 'live')) return 'live';
+  if (kind === 'dmarc' || kind === 'spf') {
+    // The name may hold other TXT records (site verifications); only the ones of this kind count.
+    const own = [...new Set(results.flatMap((r) => r.found))].filter((v) =>
+      (kind === 'dmarc' ? DMARC_RECORD : SPF_RECORD).test(v),
+    );
+    if (own.length === 0) return 'missing';
+    // More than one is a permanent error for receivers, so only a single well-formed one passes.
+    if (own.length === 1 && (kind === 'spf' || DMARC_POLICY.test(own[0]))) return 'valid';
+    return 'different';
+  }
+  return results.some((r) => r.state === 'missing') ? 'missing' : 'different';
+}
+
+/** Of the domain's core records, where each kind stands. Kinds with no records (DKIM before keys exist) are left out. */
+export async function coreChecks(zone: ZoneRecord[], domain: string): Promise<CoreCheck[]> {
   const apex = domain.toLowerCase();
   const core = zone.filter((r) => CORE_KINDS.includes(r.kind) && (r.kind !== 'spf' || r.name.toLowerCase() === apex));
-  const states = await checkRecords(core);
-  return CORE_KINDS.filter((k) => core.some((r) => r.kind === k)).map((kind) => ({
-    kind,
-    live: core.filter((r) => r.kind === kind).every((r) => states.get(r) === 'live'),
-  }));
+  const results = await checkRecordValues(core);
+  return CORE_KINDS.filter((k) => core.some((r) => r.kind === k)).map((kind) => {
+    const state = coreState(
+      kind,
+      core.filter((r) => r.kind === kind).map((r) => results.get(r) ?? { state: 'error', found: [] }),
+    );
+    return { kind, state, live: state === 'live' || state === 'valid' };
+  });
 }
 
 /** DL-19: the worst failing deliverability finding for a domain, for whoever may read the reports. */
