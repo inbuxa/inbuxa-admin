@@ -66,12 +66,27 @@ async function lookup(name: string, type: string, signal?: AbortSignal): Promise
  * and `missing` when there is nothing.
  */
 export async function checkRecords(records: ZoneRecord[], signal?: AbortSignal): Promise<Map<ZoneRecord, LiveState>> {
+  const detailed = await checkRecordValues(records, signal);
+  return new Map([...detailed].map(([r, v]) => [r, v.state]));
+}
+
+/** A record's state, with what that name and type has published instead (normalized), for a caller that judges it. */
+export interface LiveResult {
+  state: LiveState;
+  found: string[];
+}
+
+/** checkRecords, keeping the values found, so a `different` record can be told apart from a broken one (#236). */
+export async function checkRecordValues(
+  records: ZoneRecord[],
+  signal?: AbortSignal,
+): Promise<Map<ZoneRecord, LiveResult>> {
   const groups = new Map<string, ZoneRecord[]>();
   for (const r of records) {
     const key = `${r.name.toLowerCase()}|${r.type}`;
     groups.set(key, [...(groups.get(key) ?? []), r]);
   }
-  const out = new Map<ZoneRecord, LiveState>();
+  const out = new Map<ZoneRecord, LiveResult>();
   await Promise.all(
     [...groups.values()].map(async (group) => {
       const { name, type } = group[0];
@@ -79,10 +94,10 @@ export async function checkRecords(records: ZoneRecord[], signal?: AbortSignal):
         const found = (await lookup(name, type, signal)).map((d) => normalizeValue(type, d));
         for (const r of group) {
           const want = normalizeValue(type, r.value);
-          out.set(r, found.includes(want) ? 'live' : found.length > 0 ? 'different' : 'missing');
+          out.set(r, { state: found.includes(want) ? 'live' : found.length > 0 ? 'different' : 'missing', found });
         }
       } catch {
-        for (const r of group) out.set(r, 'error');
+        for (const r of group) out.set(r, { state: 'error', found: [] });
       }
     }),
   );

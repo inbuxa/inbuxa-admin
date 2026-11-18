@@ -82,6 +82,8 @@ export interface DomainSnapshot {
   allowRelaying: boolean;
   /** Core records missing from public DNS (SS-13), or null if not checked. */
   missing: string[] | null;
+  /** Core records published with something else than the server's (an MX elsewhere, another DKIM key, a malformed SPF or DMARC), or null if not checked. A valid DMARC or SPF of the domain's own is neither (#236). */
+  different?: string[] | null;
   /** The live DMARC policy (SS-18), or null if there's none or it wasn't checked. */
   dmarcPolicy: string | null;
 }
@@ -550,16 +552,21 @@ export function evaluate(s: Snapshot, defaults: Defaults): Result {
 
   check('SS-13', 'Mail records in DNS', ['domains', 'dns'], () =>
     (s.domains ?? [])
-      .filter((d) => d.enabled && d.missing && d.missing.length > 0)
-      .map((d) => ({
-        check: 'SS-13',
-        severity: 'important' as const,
-        subject: d.name,
-        value: [...(d.missing ?? [])].sort(),
-        title: `${d.name} is missing ${listWords((d.missing ?? []).map((k) => k.toUpperCase()))} in public DNS`,
-        why: 'Without them, other servers can’t find where to deliver, or can’t tell real mail from forged mail, so more of it lands in spam.',
-        action: { kind: 'review' as const, viewName: 'x:Domain', id: d.id },
-      })),
+      .filter((d) => d.enabled && ((d.missing?.length ?? 0) > 0 || (d.different?.length ?? 0) > 0))
+      .map((d) => {
+        const missing = [...(d.missing ?? [])].sort();
+        const different = [...(d.different ?? [])].sort();
+        return {
+          check: 'SS-13',
+          severity: 'important' as const,
+          subject: d.name,
+          // Missing kinds alone, as before, so an earlier acceptance still holds.
+          value: [...missing, ...different.map((k) => `${k}:different`)],
+          title: recordsTitle(d.name, missing, different),
+          why: recordsWhy(missing, different),
+          action: { kind: 'review' as const, viewName: 'x:Domain', id: d.id },
+        };
+      }),
   );
 
   check('SS-14', 'Certificates expiring within 30 days', ['certificates'], certItems(30 * DAY, 'important', 'SS-14'));
@@ -668,6 +675,32 @@ export function evaluate(s: Snapshot, defaults: Defaults): Result {
   );
 
   return { items: sortItems(items), passed };
+}
+
+const upper = (kinds: string[]) => listWords(kinds.map((k) => k.toUpperCase()));
+
+/** SS-13's title: what is missing, what doesn't match, or both. */
+function recordsTitle(name: string, missing: string[], different: string[]): string {
+  const match = `${different.length > 1 ? 'don’t' : 'doesn’t'} match this server`;
+  if (different.length === 0) return `${name} is missing ${upper(missing)} in public DNS`;
+  if (missing.length === 0) return `${name}’s ${upper(different)} in public DNS ${match}`;
+  return `${name} is missing ${upper(missing)} in public DNS, and its ${upper(different)} ${match}`;
+}
+
+const DIFFERENT_WHY: Record<string, string> = {
+  mx: 'Its MX sends other servers’ mail for it somewhere else.',
+  dkim: 'The published DKIM key isn’t the one the server signs with, so its signed mail fails DKIM.',
+  spf: 'Its SPF isn’t one valid record, so receivers treat it as an error.',
+  dmarc: 'Its DMARC record isn’t valid, so receivers ignore it.',
+};
+
+function recordsWhy(missing: string[], different: string[]): string {
+  const parts = missing.length
+    ? [
+        'Without them, other servers can’t find where to deliver, or can’t tell real mail from forged mail, so more of it lands in spam.',
+      ]
+    : [];
+  return [...parts, ...different.map((k) => DIFFERENT_WHY[k] ?? '')].filter(Boolean).join(' ');
 }
 
 function listWords(parts: string[]): string {
