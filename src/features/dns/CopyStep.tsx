@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AlertTriangle, Check, Copy, RefreshCw } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, Check, Copy, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { WizardNote, WizardShell } from '@/components/wizard/WizardShell';
@@ -190,6 +190,15 @@ export function CopyStep({
         );
       })}
 
+      {records.some((r) => states.get(r) === 'valid') && (
+        <p className="text-xs text-muted-foreground">
+          <BadgeCheck className="mr-1 inline h-3.5 w-3.5 text-emerald-500" />
+          {t(
+            'dnsWizard.ownValidHelp',
+            'A green badge means the domain already has a valid record of its own there, so it counts as done. Use the value shown only if you want to change it.',
+          )}
+        </p>
+      )}
       {records.some((r) => states.get(r) === 'different') && (
         <p className="text-xs text-muted-foreground">
           <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-highlight" />

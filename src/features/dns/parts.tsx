@@ -4,15 +4,25 @@
  * SPDX-License-Identifier: AGPL-3.0-only
  */
 
-import { AlertTriangle, CheckCircle2, CircleDashed, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, BadgeCheck, CheckCircle2, CircleDashed, Loader2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { LiveState } from './liveCheck';
+import { useTranslation } from 'react-i18next';
+import type { RecordState } from './recordState';
 
 /** One record's state in public DNS, as an icon. */
-export function StateIcon({ state }: { state?: LiveState }) {
+export function StateIcon({ state }: { state?: RecordState }) {
+  const { t } = useTranslation();
   switch (state) {
     case 'live':
       return <CheckCircle2 className="h-4 w-4 text-emerald-500 animate-in zoom-in" />;
+    case 'valid': {
+      const label = t('dnsWizard.ownValid', 'Your own record, valid');
+      return (
+        <span role="img" aria-label={label} title={label}>
+          <BadgeCheck className="h-4 w-4 text-emerald-500" />
+        </span>
+      );
+    }
     case 'different':
       return <AlertTriangle className="h-4 w-4 text-highlight" />;
     case 'error':
