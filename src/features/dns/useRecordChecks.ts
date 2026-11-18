@@ -6,7 +6,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAccountId, jmapQueryAndGet } from '@/services/jmap/client';
-import { checkRecords, type LiveState } from './liveCheck';
+import { checkRecordValues } from './liveCheck';
+import { isDone, recordStates, type RecordState } from './recordState';
 import type { ZoneRecord } from './zone';
 
 export interface DnsTask {
@@ -25,7 +26,7 @@ const GIVE_UP_MS = 10 * 60_000;
  * domain. `task` is undefined until first read, null when none is queued.
  */
 export function useRecordChecks(records: ZoneRecord[], domainId: string, watchTask: boolean) {
-  const [states, setStates] = useState<Map<ZoneRecord, LiveState>>(new Map());
+  const [states, setStates] = useState<Map<ZoneRecord, RecordState>>(new Map());
   const [task, setTask] = useState<DnsTask | null | undefined>(undefined);
   const [checking, setChecking] = useState(false);
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
@@ -44,7 +45,7 @@ export function useRecordChecks(records: ZoneRecord[], domainId: string, watchTa
         setTask(null);
       }
     }
-    setStates(await checkRecords(records));
+    setStates(recordStates(records, await checkRecordValues(records)));
     setLastChecked(new Date());
     setChecking(false);
   }, [domainId, records, watchTask]);
@@ -66,7 +67,8 @@ export function useRecordChecks(records: ZoneRecord[], domainId: string, watchTa
     };
   }, [check]);
 
-  const liveCount = records.filter((r) => states.get(r) === 'live').length;
+  // A valid DMARC or SPF of the domain's own counts as done (#239).
+  const liveCount = records.filter((r) => isDone(states.get(r))).length;
   return {
     states,
     task,

@@ -1068,7 +1068,9 @@
     "failedSaid": "Your DNS host said:",
     "failedHelp": "Check that the credential can edit this zone, then fix it on the DNS provider’s page. The server retries on its own.",
     "differentHelp": "An amber mark means that name has a different value right now, often an old record that hasn’t expired from caches yet.",
-    "tabTitle": "Publish DNS"
+    "tabTitle": "Publish DNS",
+    "ownValidHelp": "A green badge means the domain already has a valid record of its own there, so it counts as done. Use the value shown only if you want to change it.",
+    "ownValid": "Your own record, valid"
   },
   "dnsCopy": {
     "copied": "Copied",
