@@ -70,6 +70,8 @@ export const FIELD_HELP: Record<string, string> = {
   'inbuxa:Relay.maxRecipients': 'How many recipients one message may have at the relay.',
   'inbuxa:Relay.rateLimits':
     'How fast one sending address may connect and send to the relay, so a flood stops at the edge.',
+  'inbuxa:Relay.maxSmtpSessions':
+    'How many servers may be connected to the relay on port 25 at once, from all addresses together. Past it, the next one is asked to try again later. 1000 unless you change it.',
   'inbuxa:Relay.dnsbl':
     'Blocklists the relay checks connecting servers against while this server is unreachable. Empty checks none.',
   'inbuxa:Relay.liveVerdictTimeout':

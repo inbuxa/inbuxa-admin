@@ -661,6 +661,11 @@ function SettingsDialog({
               </span>
             </div>
           </Field>
+          {relay.settings.maxSmtpSessions !== undefined && (
+            <Field field="maxSmtpSessions" label={t('relays.f.maxSmtpSessions', 'Connections at once, all senders')}>
+              {input('maxSmtpSessions', { inputMode: 'numeric' })}
+            </Field>
+          )}
           <Field field="dnsbl" label={t('relays.f.dnsbl', 'Blocklists while this server is unreachable')}>
             {input('dnsbl', { placeholder: 'zen.example.org' })}
           </Field>

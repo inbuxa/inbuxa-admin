@@ -58,6 +58,8 @@ export interface RelaySettings {
   outboundTls: 'opportunistic' | 'required';
   /** Absent from servers before RL-33: who may dial the link; empty is anyone. */
   linkAllowFrom?: string[];
+  /** Absent from servers before 27.1-rc.28: port 25 sessions at once, relay-wide. */
+  maxSmtpSessions?: number;
 }
 
 export interface Relay {
@@ -317,6 +319,7 @@ export interface SettingsForm {
   connectionsPerMinute: string;
   messagesPerMinute: string;
   concurrentSessions: string;
+  maxSmtpSessions: string;
   dnsbl: string;
   liveVerdictTimeout: string;
   heldMaxAge: string;
@@ -340,6 +343,7 @@ export function toForm(s: RelaySettings): SettingsForm {
     connectionsPerMinute: String(s.rateLimits.connectionsPerMinute),
     messagesPerMinute: String(s.rateLimits.messagesPerMinute),
     concurrentSessions: String(s.rateLimits.concurrentSessions),
+    maxSmtpSessions: s.maxSmtpSessions === undefined ? '' : String(s.maxSmtpSessions),
     dnsbl: s.dnsbl.join(', '),
     liveVerdictTimeout: formatDuration(s.liveVerdictTimeout),
     heldMaxAge: String(s.heldMaxAge),
@@ -389,6 +393,11 @@ export function settingsPatch(
         messagesPerMinute: read('messagesPerMinute', whole(after.messagesPerMinute)),
         concurrentSessions: read('concurrentSessions', whole(after.concurrentSessions)),
       };
+    }
+    if (changed('maxSmtpSessions')) {
+      const cap = read('maxSmtpSessions', whole(after.maxSmtpSessions));
+      if (!cap) throw 'maxSmtpSessions';
+      patch['settings/maxSmtpSessions'] = cap;
     }
     if (changed('dnsbl')) patch['settings/dnsbl'] = parseList(after.dnsbl);
     if (changed('liveVerdictTimeout'))

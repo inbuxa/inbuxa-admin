@@ -294,6 +294,23 @@ describe('plain forms', () => {
     });
   });
 
+  it('reads and sends the relay-wide session cap, and leaves it alone on an older relay', () => {
+    const withCap = { ...SETTINGS, maxSmtpSessions: 1000 };
+    const before = toForm(withCap);
+    expect(before.maxSmtpSessions).toBe('1000');
+    expect(settingsPatch(before, before, withCap)).toEqual({ patch: {} });
+    expect(settingsPatch(before, { ...before, maxSmtpSessions: ' 250 ' }, withCap)).toEqual({
+      patch: { 'settings/maxSmtpSessions': 250 },
+    });
+    expect(settingsPatch(before, { ...before, maxSmtpSessions: '0' }, withCap)).toEqual({ invalid: 'maxSmtpSessions' });
+    expect(settingsPatch(before, { ...before, maxSmtpSessions: 'lots' }, withCap)).toEqual({ invalid: 'maxSmtpSessions' });
+    const old = toForm(SETTINGS);
+    expect(old.maxSmtpSessions).toBe('');
+    expect(settingsPatch(old, { ...old, hostname: 'mx2.example.com' }, SETTINGS)).toEqual({
+      patch: { 'settings/hostname': 'mx2.example.com' },
+    });
+  });
+
   it('names the field that doesn’t read', () => {
     const before = toForm(SETTINGS);
     expect(settingsPatch(before, { ...before, maxRecipients: 'many' }, SETTINGS)).toEqual({
