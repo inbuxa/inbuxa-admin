@@ -2423,7 +2423,8 @@
       "smtpCertificate": "Certificate chain (PEM)",
       "smtpPrivateKey": "Private key (PEM)",
       "linkAllowFrom": "Who may link",
-      "certificateId": "Use"
+      "certificateId": "Use",
+      "maxSmtpSessions": "Connections at once, all senders"
     },
     "cancel": "Cancel",
     "addGo": "Add",
