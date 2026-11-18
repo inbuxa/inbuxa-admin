@@ -147,6 +147,22 @@ describe('the checks (acceptance tests 1-8)', () => {
     expect(dns[0].title).toContain('DKIM');
   });
 
+  it('7b: a record that doesn’t match is named as such, not as missing (#236)', () => {
+    const domain = { id: 'd1', name: 'example.org', enabled: true, allowRelaying: false, dmarcPolicy: 'reject' };
+    const one = (missing: string[], different: string[]) =>
+      evaluate({ ...fresh(), domains: [{ ...domain, missing, different }] }, defaults).items.filter(
+        (i) => i.check === 'SS-13',
+      );
+    expect(one([], [])).toHaveLength(0);
+    const mx = one([], ['mx']);
+    expect(mx[0].title).toBe('example.org’s MX in public DNS doesn’t match this server');
+    expect(mx[0].why).toContain('somewhere else');
+    expect(mx[0].value).toEqual(['mx:different']);
+    const both = one(['dkim'], ['mx']);
+    expect(both[0].title).toBe('example.org is missing DKIM in public DNS, and its MX doesn’t match this server');
+    expect(one(['dkim'], [])[0].value).toEqual(['dkim']);
+  });
+
   it('8: legacy protocols on point to the switch, with no Fix', () => {
     const item = evaluate(fresh(), defaults).items.find((i) => i.check === 'SS-15');
     expect(item?.action).toEqual({ kind: 'hardening' });

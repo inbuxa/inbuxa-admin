@@ -95,14 +95,13 @@ export function dmarcPolicyOf(txt: string[]): string | null {
   return p ? p[1].toLowerCase() : null;
 }
 
+type DnsFacts = Pick<DomainSnapshot, 'missing' | 'different' | 'dmarcPolicy'>;
+
 const DNS_TTL_MS = 60_000;
-const dnsCache = new Map<string, { at: number; result: Promise<Pick<DomainSnapshot, 'missing' | 'dmarcPolicy'>> }>();
+const dnsCache = new Map<string, { at: number; result: Promise<DnsFacts> }>();
 
 /** A domain's DNS, kept for a minute as the hover cards keep theirs (SS-28), so a Fix doesn't ask again. */
-function domainDns(
-  name: string,
-  zoneFile: string | undefined,
-): Promise<Pick<DomainSnapshot, 'missing' | 'dmarcPolicy'>> {
+function domainDns(name: string, zoneFile: string | undefined): Promise<DnsFacts> {
   const key = `${name}\n${zoneFile ?? ''}`;
   const hit = dnsCache.get(key);
   if (hit && Date.now() - hit.at < DNS_TTL_MS) return hit.result;
@@ -112,13 +111,13 @@ function domainDns(
   return result;
 }
 
-async function askDns(
-  name: string,
-  zoneFile: string | undefined,
-): Promise<Pick<DomainSnapshot, 'missing' | 'dmarcPolicy'>> {
+async function askDns(name: string, zoneFile: string | undefined): Promise<DnsFacts> {
   const [checks, dmarc] = await Promise.all([coreChecks(parseZone(zoneFile), name), dohQuery(`_dmarc.${name}`, 'TXT')]);
+  // Every record's lookup failed: not checked, rather than passed (#236).
+  if (checks.length > 0 && checks.every((c) => c.state === 'error')) throw new Error('public DNS couldn’t be asked');
   return {
-    missing: checks.filter((c) => !c.live).map((c) => c.kind),
+    missing: checks.filter((c) => c.state === 'missing').map((c) => c.kind),
+    different: checks.filter((c) => c.state === 'different').map((c) => c.kind),
     dmarcPolicy: dmarcPolicyOf(dmarc.answer.filter((a) => a.type === 16).map((a) => a.data)),
   };
 }
@@ -214,6 +213,7 @@ export async function loadSnapshot(signal?: AbortSignal, critical = false): Prom
               enabled,
               allowRelaying: d.allowRelaying === true,
               missing: dns?.missing ?? null,
+              different: dns?.different ?? null,
               dmarcPolicy: dns?.dmarcPolicy ?? null,
             };
           }),
