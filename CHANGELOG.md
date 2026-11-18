@@ -10,6 +10,19 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [2026.10.26.8] - 2026-11-18
+
+A fix to the Security overview for the 2026 series; 27.1 gets it in its
+next release candidate.
+
+### Fixed
+- Security overview: a domain's own DMARC or SPF record, valid but not the
+  one inbuxa suggests (other report addresses, an extra include), is no
+  longer reported as missing from public DNS. A record that is really
+  missing still is; an MX or DKIM record that differs, or a broken SPF or
+  DMARC, is reported as not matching this server; and a domain whose DNS
+  lookups all failed shows as not checked. (#236)
+
 ## [2026.10.26.7] - 2026-11-15
 
 A fix to the certificates guide for the 2026 series; 27.1 gets it in its
