@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import inbuxaMark from '@/assets/inbuxa-mark.png';
 import { getLogoState, loadLogoOnce, subscribeToLogo } from '@/lib/logoCache';
+import { useUIStore } from '@/stores/uiStore';
 
 export function DefaultLogo() {
   const { t } = useTranslation();
@@ -58,25 +59,30 @@ export function DefaultLogo() {
 
 /**
  * The server's own logo if an admin set one, else inbuxa's. Until the server
- * answers, an empty space the logo's size holds the layout still.
+ * answers, an empty space the logo's size holds the layout still. The dark
+ * theme shows the logo set for dark mode, where there is one (BT-27).
  */
 export default function Logo() {
   const { t } = useTranslation();
-  const logo = useSyncExternalStore(subscribeToLogo, getLogoState, getLogoState);
-  const [broken, setBroken] = useState(false);
-  useEffect(loadLogoOnce, []);
+  const theme = useUIStore((state) => state.theme);
+  const read = () => getLogoState(theme);
+  const logo = useSyncExternalStore(subscribeToLogo, read, read);
+  // The URL that failed: a broken image in one theme says nothing about the
+  // other theme's logo
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  useEffect(() => loadLogoOnce(theme), [theme]);
   switch (logo.status) {
     case 'custom':
       // A logo that loaded once can still fail later (its host goes away
       // after the cache runs out); the inbuxa logo beats a broken image.
-      return broken ? (
+      return brokenUrl === logo.url ? (
         <DefaultLogo />
       ) : (
         <img
           src={logo.url}
           alt={t('logo.alt', 'Logo')}
           className="h-7 w-auto max-w-[220px] object-contain"
-          onError={() => setBroken(true)}
+          onError={() => setBrokenUrl(logo.url)}
         />
       );
     case 'loading':
