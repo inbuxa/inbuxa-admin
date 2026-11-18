@@ -14,6 +14,35 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.20] - 2026-11-18
+
+Pairs with inbuxa-server 27.1-rc.28. The console image sends security
+headers and can run with a read-only root filesystem.
+
+### Security
+- The console image sends a Content-Security-Policy (scripts only from the
+  console itself, `frame-ancestors 'none'`), `X-Frame-Options: DENY`,
+  `X-Content-Type-Options: nosniff` and
+  `Referrer-Policy: strict-origin-when-cross-origin` on every answer, so
+  another site can't show the console in a frame. The policy's
+  `connect-src` names the server set in `API_BASE_URL`. The Sieve
+  playground has its own policy. nginx no longer names its version.
+  Found by Coffey Labs. (#230)
+
+### Changed
+- `API_BASE_URL` is checked at start: it must be a plain `http://` or
+  `https://` address, with no quotes, spaces, `;`, `$`, `<`, `>` or
+  backticks. Anything else stops the container with a message, where it
+  used to be written into the page unchecked.
+- The image can run locked down: nothing in it is written at start (the
+  page with the server's address, the policy and the IPv6 listener go to
+  `/tmp/inbuxa-admin`), and the files it serves belong to root, so the
+  nginx user can't change them. Run it with
+  `--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges`,
+  or in compose with `read_only: true`, `tmpfs: [/tmp]`, `cap_drop: [ALL]`
+  and `security_opt: [no-new-privileges:true]`. A plain `docker run` works
+  as before.
+
 ## [27.1-rc.19] - 2026-11-16
 
 Pairs with inbuxa-server 27.1-rc.25.
