@@ -9,6 +9,7 @@ import {
   EMPTY_LOG_FILTER,
   componentOf,
   mergeNewer,
+  jsonFields,
   parseFields,
   toJsonLines,
   toServerFilter,
@@ -49,6 +50,20 @@ describe('parseFields', () => {
     expect(parseFields('subject = "say "hi" now", size = 3')).toEqual([
       { key: 'subject', value: 'say "hi" now' },
       { key: 'size', value: '3' },
+    ]);
+  });
+
+  it('reads the JSON object of a tracer writing JSON lines', () => {
+    expect(
+      parseFields(
+        '{"to":["a@example.org"],"subject":"say \\"hi\\", now","size":12,"tls":true,"causedBy":{"type":"store.error"}}',
+      ),
+    ).toEqual([
+      { key: 'to', value: '["a@example.org"]' },
+      { key: 'subject', value: 'say "hi", now' },
+      { key: 'size', value: '12' },
+      { key: 'tls', value: 'true' },
+      { key: 'causedBy', value: '{"type":"store.error"}' },
     ]);
   });
 
@@ -111,8 +126,24 @@ describe('export', () => {
     });
   });
 
+  it('keeps the typed fields of a JSON entry', () => {
+    const [line] = toJsonLines([entry('1', '{"size":12,"to":["a@example.org"]}')])
+      .trimEnd()
+      .split('\n');
+    expect(JSON.parse(line).fields).toEqual({ size: 12, to: ['a@example.org'] });
+  });
+
   it('names an event id’s component', () => {
     expect(componentOf('smtp.connection-start')).toBe('smtp');
     expect(componentOf('store')).toBe('store');
+  });
+});
+
+describe('jsonFields', () => {
+  it('reads only a JSON object', () => {
+    expect(jsonFields('{"size":12}')).toEqual({ size: 12 });
+    expect(jsonFields('size = 12')).toBeNull();
+    expect(jsonFields('{not json')).toBeNull();
+    expect(jsonFields('[1]')).toBeNull();
   });
 });
