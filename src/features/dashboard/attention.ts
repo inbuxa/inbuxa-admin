@@ -203,24 +203,38 @@ export function buildAttention({
       detail: t('cc.a.slowDetailPage', 'Performance shows which one.'),
       href: slowHref,
     });
+  // DMARC and TLS reports are separate matters with separate pages, so each
+  // gets its own item (#218). One summed count read as disagreeing with the
+  // DMARC reports page, which lists one domain at a time.
   const dmarc = total(samples, DMARC_WARNINGS);
-  const tls = total(samples, TLS_WARNINGS);
-  if (dmarc + tls > 0)
+  if (dmarc > 0)
     attention.push({
-      id: 'reports',
+      id: 'dmarcReports',
       severity: 'warn',
       icon: FileWarning,
-      count: dmarc + tls,
-      title: t('cc.a.reports', {
-        count: dmarc + tls,
-        defaultValue_one: 'report with warnings',
-        defaultValue_other: 'reports with warnings',
+      count: dmarc,
+      title: t('cc.a.dmarcReports', {
+        count: dmarc,
+        defaultValue_one: 'DMARC report with warnings',
+        defaultValue_other: 'DMARC reports with warnings',
       }),
-      detail: t('cc.a.reportsDetail', 'Other providers flagged how your mail arrived ({{dmarc}} DMARC, {{tls}} TLS).', {
-        dmarc,
-        tls,
+      detail: t('cc.a.dmarcReportsDetail', 'Received this period, across all your domains.'),
+      href: linkOf(DMARC_WARNINGS),
+    });
+  const tls = total(samples, TLS_WARNINGS);
+  if (tls > 0)
+    attention.push({
+      id: 'tlsReports',
+      severity: 'warn',
+      icon: FileWarning,
+      count: tls,
+      title: t('cc.a.tlsReports', {
+        count: tls,
+        defaultValue_one: 'TLS report with warnings',
+        defaultValue_other: 'TLS reports with warnings',
       }),
-      href: linkOf(dmarc ? DMARC_WARNINGS : TLS_WARNINGS),
+      detail: t('cc.a.tlsReportsDetail', 'Received this period, across all your domains.'),
+      href: linkOf(TLS_WARNINGS),
     });
   if (liveStatus === 'error')
     attention.push({

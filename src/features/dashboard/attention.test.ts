@@ -49,3 +49,44 @@ describe('buildAttention: scheduled reports (RP-17)', () => {
     expect(buildAttention({ ...quiet, failingReports: null })).toEqual([]);
   });
 });
+
+describe('buildAttention: report warnings (#218)', () => {
+  const counter = (metric: string, count: number) => ({ '@type': 'Counter' as const, metric, count });
+  const linkOf = (metrics: string[]) =>
+    metrics[0].includes('dmarc') ? '/Management/x:DmarcExternalReport' : '/Management/x:TlsExternalReport';
+
+  it('lists DMARC and TLS warnings as separate items, each linking to its own page', () => {
+    const items = buildAttention({
+      ...quiet,
+      linkOf,
+      samples: [
+        counter('incoming-report.dmarc-report-with-warnings', 3),
+        counter('incoming-report.dmarc-report-with-warnings', 2),
+        counter('incoming-report.tls-report-with-warnings', 7),
+      ],
+    });
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({
+      id: 'dmarcReports',
+      count: 5,
+      title: 'DMARC reports with warnings',
+      href: '/Management/x:DmarcExternalReport',
+    });
+    expect(items[1]).toMatchObject({
+      id: 'tlsReports',
+      count: 7,
+      title: 'TLS reports with warnings',
+      href: '/Management/x:TlsExternalReport',
+    });
+  });
+
+  it('shows only the kind that has warnings', () => {
+    const items = buildAttention({
+      ...quiet,
+      linkOf,
+      samples: [counter('incoming-report.tls-report-with-warnings', 1)],
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ id: 'tlsReports', count: 1, title: 'TLS report with warnings' });
+  });
+});
