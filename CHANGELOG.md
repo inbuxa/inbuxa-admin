@@ -10,6 +10,19 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [2026.10.26.9] - 2026-11-18
+
+A fix to the DNS setup pages for the 2026 series; 27.1 gets it in its
+next release candidate.
+
+### Fixed
+- DNS setup: a domain's own DMARC or SPF record, valid but not the one
+  inbuxa suggests (other report addresses, an extra include), now shows
+  as "Your own record, valid" and counts toward "All set". The amber mark
+  and its note about cached records stay for records that really differ:
+  two SPF records, a DMARC with no policy, an MX or DKIM key elsewhere.
+  (#239)
+
 ## [2026.10.26.8] - 2026-11-18
 
 A fix to the Security overview for the 2026 series; 27.1 gets it in its
