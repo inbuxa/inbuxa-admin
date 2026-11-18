@@ -26,17 +26,17 @@ function fakeImage(loads: boolean) {
 }
 
 /** A fresh copy of the module, since it probes once per page load. */
-async function load(loads: boolean) {
+async function load(loads: boolean, theme: 'light' | 'dark' = 'light') {
   vi.resetModules();
   const image = fakeImage(loads);
   const mod = await import('./logoCache');
   const changed = vi.fn();
   mod.subscribeToLogo(changed);
-  expect(mod.getLogoState()).toEqual({ status: 'loading' });
-  mod.loadLogoOnce();
-  mod.loadLogoOnce();
+  expect(mod.getLogoState(theme)).toEqual({ status: 'loading' });
+  mod.loadLogoOnce(theme);
+  mod.loadLogoOnce(theme);
   await vi.waitFor(() => expect(changed).toHaveBeenCalled());
-  return { state: mod.getLogoState(), ...image };
+  return { state: mod.getLogoState(theme), mod, ...image };
 }
 
 describe('logo cache', () => {
@@ -58,5 +58,29 @@ describe('logo cache', () => {
 
   it('falls back to the inbuxa logo when /logo is not an image', async () => {
     expect((await load(false)).state).toEqual({ status: 'default' });
+  });
+
+  // inbuxa-server#410: the dark theme asks for the logo set for dark mode
+  it('asks for the dark-mode logo in the dark theme, apart from the light one', async () => {
+    const { state, sources, mod } = await load(true, 'dark');
+    expect(state).toEqual({ status: 'custom', url: 'https://mail.example/logo?theme=dark' });
+    expect(sources).toEqual(['https://mail.example/logo?theme=dark']);
+    expect(mod.getLogoState('light')).toEqual({ status: 'loading' });
+    mod.loadLogoOnce('light');
+    await vi.waitFor(() => expect(mod.getLogoState('light')).toEqual({ status: 'custom', url: 'https://mail.example/logo' }));
+    expect(sources).toEqual(['https://mail.example/logo?theme=dark', 'https://mail.example/logo']);
+  });
+
+  it('follows the page theme when none is given', async () => {
+    vi.resetModules();
+    const { sources } = fakeImage(true);
+    document.documentElement.classList.add('dark');
+    try {
+      const mod = await import('./logoCache');
+      mod.loadLogoOnce();
+      expect(sources).toEqual(['https://mail.example/logo?theme=dark']);
+    } finally {
+      document.documentElement.classList.remove('dark');
+    }
   });
 });
