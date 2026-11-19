@@ -14,6 +14,22 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.22] - 2026-11-19
+
+Pairs with inbuxa-server 27.1-rc.33. Your own passkeys under Account ›
+Credentials, and listeners a node couldn't open on the dashboard.
+
+### Added
+- Passkeys: Account › Credentials › Passkeys lists your own passkeys and
+  lets you add, rename and remove them, so people who can't open
+  Directory › Accounts can manage theirs. Administrators keep the card on
+  each account's page. The menu link needs server 27.1-rc.33. Thanks to
+  Stefan. (#251, fixes #250)
+- Dashboard: "Needs attention" shows a critical item, "N listeners not
+  open", naming each node, listener, address and reason, on a single
+  server too. Needs a server that reports listeners it couldn't open (the
+  release after 27.1-rc.33); older servers show nothing new. (#252)
+
 ## [27.1-rc.21] - 2026-11-19
 
 Pairs with inbuxa-server 27.1-rc.32. Passkeys on the account page, a Logs
