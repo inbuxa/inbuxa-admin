@@ -65,6 +65,8 @@ const PAGES: Record<string, PageRule> = {
   'CustomComponent/SharedMailboxes': readOnly('sysAccountLock'),
   'CustomComponent/DeletedAccounts': readOnly('sysAccount'),
   'CustomComponent/Deliverability': readOnly('sysDeliverability'),
+  // Your own passkeys, under Account › Credentials (#250)
+  'CustomComponent/Passkeys': readOnly('sysPasskey'),
   'CustomComponent/ScheduledReports': readOnly('sysScheduledReport'),
   // A migration has no read permission of its own: running one is the right
   'CustomComponent/Migrations': { enterprise: false, visible: (c) => holds('sysMigrationRun', c) },
