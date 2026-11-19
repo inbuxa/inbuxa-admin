@@ -11,6 +11,7 @@ vi.mock('@/services/jmap/client', () => ({ jmapRequest: (...args: unknown[]) => 
 
 import {
   createPasskey,
+  passkeyPolicy,
   fetchPasskeys,
   fromServer,
   nameProblem,
@@ -119,5 +120,14 @@ describe('requests', () => {
   it('sends nothing when there is nothing to remove', async () => {
     await removePasskeys('acc', []);
     expect(jmapRequest).not.toHaveBeenCalled();
+  });
+
+  it('reads up front whether adding is allowed (PK-19)', () => {
+    const session = (cap: Record<string, unknown>) => ({ accounts: { a: { accountCapabilities: { 'urn:inbuxa:jmap': cap } } } });
+    expect(passkeyPolicy(session({ passkeysAllowed: false, maxPasskeys: 10 }), 'a')).toEqual({ allowed: false, max: 10 });
+    expect(passkeyPolicy(session({ passkeysAllowed: true, maxPasskeys: 3 }), 'a')).toEqual({ allowed: true, max: 3 });
+    // an older server says nothing: the add stays and the server refuses it
+    expect(passkeyPolicy(session({ aiExplain: false }), 'a')).toEqual({ allowed: undefined, max: undefined });
+    expect(passkeyPolicy(null, 'a')).toEqual({});
   });
 });
