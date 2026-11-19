@@ -33,11 +33,13 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { useAccountStore } from '@/stores/accountStore';
 import { useAuthStore } from '@/stores/authStore';
+import { fetchSession } from '@/services/jmap/client';
 import {
   createPasskey,
   fetchPasskeys,
   MAX_NAME,
   nameProblem,
+  passkeyPolicy,
   PasskeyRefused,
   removePasskeys,
   renamePasskey,
@@ -80,6 +82,8 @@ export function PasskeysPanel({ accountId }: { accountId: string }) {
 
   // undefined until known; null when the server has no passkeys for us to show
   const [passkeys, setPasskeys] = useState<Passkey[] | null | undefined>(undefined);
+  // PK-19: whether the server would refuse an add, read from the session
+  const [policy, setPolicy] = useState<{ allowed?: boolean; max?: number }>({});
   const [fetches, setFetches] = useState(0);
   const refresh = useCallback(() => setFetches((n) => n + 1), []);
 
@@ -96,6 +100,19 @@ export function PasskeysPanel({ accountId }: { accountId: string }) {
       });
     return () => controller.abort();
   }, [accountId, canGet, fetches]);
+
+  useEffect(() => {
+    if (!canAdd) return;
+    let live = true;
+    fetchSession()
+      .then((session) => {
+        if (live) setPolicy(passkeyPolicy(session as Record<string, unknown>, accountId));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [accountId, canAdd, fetches]);
 
   if (!canGet || passkeys === null) return null;
 
@@ -137,7 +154,19 @@ export function PasskeysPanel({ accountId }: { accountId: string }) {
           </ul>
         )}
         <div className="flex flex-wrap items-start justify-between gap-3">
-          {canAdd ? <AddPasskey accountId={accountId} onChanged={refresh} /> : <span />}
+          {!canAdd ? (
+            <span />
+          ) : policy.allowed === false ? (
+            <p className="text-xs text-muted-foreground">
+              {t('passkeys.forbidden', 'Passkeys are turned off for this account.')}
+            </p>
+          ) : policy.max !== undefined && passkeys !== undefined && passkeys.length >= policy.max ? (
+            <p className="text-xs text-muted-foreground">
+              {t('passkeys.overQuota', 'This account has as many passkeys as it may. Remove one first.')}
+            </p>
+          ) : (
+            <AddPasskey accountId={accountId} onChanged={refresh} />
+          )}
           {canRemove && passkeys && passkeys.length > 1 && (
             <RemoveAll accountId={accountId} ids={passkeys.map((p) => p.id)} own={own} onChanged={refresh} />
           )}

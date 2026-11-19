@@ -16,6 +16,27 @@ import { jmapRequest } from '@/services/jmap/client';
 const CAPABILITY = 'urn:inbuxa:jmap';
 const OBJECT = 'inbuxa:Passkey';
 
+/**
+ * What the session says up front about adding a passkey to the signed-in
+ * account (PK-19): `allowed` false when a switch turns passkeys off for it,
+ * `max` the most it may have. Both undefined from a server that doesn't say;
+ * that server refuses the add itself.
+ */
+export function passkeyPolicy(
+  session: Record<string, unknown> | null,
+  accountId: string | null,
+): { allowed?: boolean; max?: number } {
+  if (!session || !accountId) return {};
+  const accounts = session.accounts as Record<string, { accountCapabilities?: Record<string, unknown> }> | undefined;
+  const cap = accounts?.[accountId]?.accountCapabilities?.[CAPABILITY] as
+    | { passkeysAllowed?: unknown; maxPasskeys?: unknown }
+    | undefined;
+  return {
+    allowed: typeof cap?.passkeysAllowed === 'boolean' ? cap.passkeysAllowed : undefined,
+    max: typeof cap?.maxPasskeys === 'number' ? cap.maxPasskeys : undefined,
+  };
+}
+
 /** Longest name the server takes. */
 export const MAX_NAME = 64;
 
