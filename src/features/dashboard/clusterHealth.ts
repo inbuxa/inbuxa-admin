@@ -69,10 +69,13 @@ export function minutesSilent(lastRenewal: string, now: number = Date.now()): nu
   return Number.isNaN(t) ? null : Math.max(0, Math.floor((now - t) / 60_000));
 }
 
-/** A registry set: an array, or an index-keyed map. */
-function listOf(value: unknown): string[] {
+/** A registry set, which arrives as `{"<value>": true}`; an array is read as is. */
+export function setOf(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String);
   if (!value || typeof value !== 'object') return [];
-  return Object.values(value as Record<string, unknown>).map(String);
+  return Object.entries(value as Record<string, unknown>)
+    .filter(([, on]) => on === true)
+    .map(([key]) => key);
 }
 
 async function fetchNodes(): Promise<ClusterNodeRow[] | null> {
@@ -102,7 +105,7 @@ async function fetchNodes(): Promise<ClusterNodeRow[] | null> {
     nodeId: n.nodeId === undefined || n.nodeId === null ? undefined : String(n.nodeId),
     status: String(n.status ?? 'active').toLowerCase() as NodeStatus,
     lastRenewal: String(n.lastRenewal ?? ''),
-    unboundListeners: listOf(n.unboundListeners),
+    unboundListeners: setOf(n.unboundListeners),
   }));
 }
 

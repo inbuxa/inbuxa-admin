@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { minutesSilent, summarizeNodes, unboundOf, type ClusterNodeRow } from './clusterHealth';
+import { minutesSilent, setOf, summarizeNodes, unboundOf, type ClusterNodeRow } from './clusterHealth';
 
 const node = (hostname: string, status: ClusterNodeRow['status'], lastRenewal = '2026-09-25T10:00:00Z') => ({
   hostname,
@@ -71,5 +71,18 @@ describe('unboundOf (inbuxa-server#485)', () => {
     ];
     expect(unboundOf(nodes)).toEqual([{ hostname: 'mx1', listeners: ['imaps [::]:993: in use'] }]);
     expect(unboundOf([nodes[0]])).toHaveLength(1);
+  });
+});
+
+describe('setOf', () => {
+  it('reads a registry set as the server sends it', () => {
+    // As a live server answered for a listener held by another process
+    const wire = { 'imaps [::]:12993: Failed to bind to [::]:12993: Address already in use (os error 98); retrying': true };
+    expect(setOf(wire)).toEqual([
+      'imaps [::]:12993: Failed to bind to [::]:12993: Address already in use (os error 98); retrying',
+    ]);
+    expect(setOf({})).toEqual([]);
+    expect(setOf(undefined)).toEqual([]);
+    expect(setOf(['a', 'b'])).toEqual(['a', 'b']);
   });
 });
