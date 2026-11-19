@@ -118,6 +118,11 @@ const CUSTOM_PAGES: Record<string, ComponentType> = {
     () => import('@/features/deletedAccounts/DeletedAccountsPage'),
     (m) => m.DeletedAccountsPage,
   ),
+  // Account › Credentials: the signed-in account's own passkeys (#250)
+  Passkeys: onDemand(
+    () => import('@/features/passkeys/OwnPasskeysPage'),
+    (m) => m.OwnPasskeysPage,
+  ),
   Deliverability: onDemand(
     () => import('@/features/deliverability/DeliverabilityPage'),
     (m) => m.DeliverabilityPage,

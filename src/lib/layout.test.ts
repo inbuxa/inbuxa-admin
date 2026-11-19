@@ -67,6 +67,11 @@ describe('layout visibility', () => {
     expect(visibleLayouts(schema, 'enterprise', ehlo).map((l) => l.name)).toEqual(['Settings']);
   });
 
+  it('shows your own passkeys to an account that may read passkeys (#250)', () => {
+    expect(isLinkVisible(schema, 'CustomComponent/Passkeys', 'oss', canGetFrom(['sysPasskeyGet']))).toBe(true);
+    expect(isLinkVisible(schema, 'CustomComponent/Passkeys', 'oss', canGetFrom([]))).toBe(false);
+  });
+
   it('hides a page this console cannot draw', () => {
     const all = () => true;
     expect(isLinkVisible(schema, 'CustomComponent/NotInThisConsole', 'enterprise', all)).toBe(false);
