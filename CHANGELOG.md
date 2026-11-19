@@ -14,6 +14,45 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.21] - 2026-11-19
+
+Pairs with inbuxa-server 27.1-rc.32. Passkeys on the account page, a Logs
+page with fields, filters, live view and export, separate DMARC and TLS
+warnings on the dashboard, and a domain's own DMARC or SPF counted as done.
+
+### Added
+- Passkeys: a person's account page has a Passkeys card listing each
+  passkey's name, when it was added and last used, and whether it syncs or
+  needs adding again after a server rename. Administrators can rename or
+  remove one, or remove them all to help someone locked out; removing signs
+  the account out everywhere, and the password still works. On your own
+  account, "Add a passkey" opens the server's page in a new window, and the
+  card says up front when passkeys are off or the account is at its limit.
+  Needs server 27.1-rc.32; the card is hidden on older servers. (#247, #248)
+- Logs: entries open to show their fields, levels are coloured, and the
+  page filters by level and above, component, text and time. Follow live
+  checks for new entries every 5 seconds, and Save as file downloads up to
+  5,000 filtered entries as JSON lines or text. Entries from a JSON log file
+  keep their fields as written. The level, component and time filters need
+  server 27.1-rc.32. Thanks to Stefan. (#244, #246, fixes #229)
+- Relays: a field for how many port 25 connections a relay takes at once
+  (`maxSmtpSessions`), shown for relays on server 27.1-rc.28 or later.
+  (#232)
+
+### Changed
+- Dashboard: DMARC and TLS report warnings are separate items, "N DMARC
+  reports with warnings" and "N TLS reports with warnings", each linking to
+  its own reports page. (#242, fixes #218)
+- The header logo follows the console's theme, showing the server's dark
+  logo in the dark theme. (#245)
+
+### Fixed
+- Security overview: a domain's own valid DMARC or SPF record, not the one
+  inbuxa suggests, is no longer reported as missing. (#237, fixes #236)
+- DNS setup: such a record shows as "Your own record, valid" and counts
+  toward "All set"; the amber mark stays for records that really differ.
+  (#240, fixes #239)
+
 ## [2026.10.26.9] - 2026-11-18
 
 A fix to the DNS setup pages for the 2026 series; 27.1 gets it in its
