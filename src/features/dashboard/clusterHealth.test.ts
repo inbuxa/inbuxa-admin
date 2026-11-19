@@ -5,12 +5,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { minutesSilent, summarizeNodes, type ClusterNodeRow } from './clusterHealth';
+import { minutesSilent, setOf, summarizeNodes, unboundOf, type ClusterNodeRow } from './clusterHealth';
 
 const node = (hostname: string, status: ClusterNodeRow['status'], lastRenewal = '2026-09-25T10:00:00Z') => ({
   hostname,
   status,
   lastRenewal,
+  unboundListeners: [] as string[],
 });
 
 describe('summarizeNodes', () => {
@@ -58,5 +59,30 @@ describe('minutesSilent', () => {
     expect(minutesSilent('2026-09-25T10:00:00Z', now)).toBe(7);
     expect(minutesSilent('2026-09-25T10:08:00Z', now)).toBe(0);
     expect(minutesSilent('', now)).toBeNull();
+  });
+});
+
+describe('unboundOf (inbuxa-server#485)', () => {
+  it('lists nodes with listeners not open, a single server included, but not old leases', () => {
+    const nodes = [
+      { ...node('mx1', 'active'), unboundListeners: ['imaps [::]:993: in use'] },
+      node('mx2', 'active'),
+      { ...node('old', 'inactive'), unboundListeners: ['smtp [::]:25: gone'] },
+    ];
+    expect(unboundOf(nodes)).toEqual([{ hostname: 'mx1', listeners: ['imaps [::]:993: in use'] }]);
+    expect(unboundOf([nodes[0]])).toHaveLength(1);
+  });
+});
+
+describe('setOf', () => {
+  it('reads a registry set as the server sends it', () => {
+    // As a live server answered for a listener held by another process
+    const wire = { 'imaps [::]:12993: Failed to bind to [::]:12993: Address already in use (os error 98); retrying': true };
+    expect(setOf(wire)).toEqual([
+      'imaps [::]:12993: Failed to bind to [::]:12993: Address already in use (os error 98); retrying',
+    ]);
+    expect(setOf({})).toEqual([]);
+    expect(setOf(undefined)).toEqual([]);
+    expect(setOf(['a', 'b'])).toEqual(['a', 'b']);
   });
 });

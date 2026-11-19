@@ -22,11 +22,12 @@ import {
   ServerCrash,
   ShieldAlert,
   Timer,
+  Unplug,
 } from 'lucide-react';
 import { LEGACY_PROTOCOLS_VIEW } from '@/features/hardening/LegacyProtocolsBanner';
 import type { Metric } from './types/metrics';
 import type { ServerFacts } from './serverFacts';
-import type { ClusterHealth } from './clusterHealth';
+import type { ClusterHealth, UnboundNode } from './clusterHealth';
 import type { Attention } from './components/AttentionRail';
 import { DMARC_WARNINGS, LATENCIES, TLS_WARNINGS, mean, nearQuota, total, zoneOf } from './commandCenter';
 
@@ -38,6 +39,8 @@ export interface AttentionInput {
   may: (view: string) => boolean;
   facts: ServerFacts | null;
   health: ClusterHealth | null;
+  /** inbuxa: nodes with listeners they couldn't open (inbuxa-server#485). */
+  unbound?: UnboundNode[];
   critical: number | null;
   /** inbuxa: blocklist and reverse-DNS failures on Domains › Deliverability (DL-18). */
   deliverability?: number | null;
@@ -58,6 +61,7 @@ export function buildAttention({
   may,
   facts,
   health,
+  unbound = [],
   critical,
   deliverability,
   deliverabilityHref,
@@ -126,6 +130,21 @@ export function buildAttention({
         defaultValue_other: 'nodes not responding',
       }),
       detail: health.silent.map((n) => n.hostname).join(', '),
+      href: nodesHref,
+    });
+  const closed = unbound.reduce((s, n) => s + n.listeners.length, 0);
+  if (closed)
+    attention.push({
+      id: 'listeners',
+      severity: 'crit',
+      icon: Unplug,
+      count: closed,
+      title: t('cc.a.listeners', {
+        count: closed,
+        defaultValue_one: 'listener not open',
+        defaultValue_other: 'listeners not open',
+      }),
+      detail: unbound.map((n) => `${n.hostname}: ${n.listeners.join('; ')}`).join(' · '),
       href: nodesHref,
     });
   if (bounced && may(QUEUE))
