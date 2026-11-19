@@ -66,6 +66,10 @@ const AccountLockBanner = onDemand(
   () => import('@/features/lock/AccountLockBanner'),
   (m) => m.AccountLockBanner,
 );
+const PasskeysPanel = onDemand(
+  () => import('@/features/passkeys/PasskeysPanel'),
+  (m) => m.PasskeysPanel,
+);
 const SharingSwitches = onDemand(
   () => import('@/features/sharing/SharingSwitches'),
   (m) => m.SharingSwitches,
@@ -272,9 +276,14 @@ function recordPage(viewName: string, objectName: string, permissionPrefix: stri
   if (objectName === 'x:Tenant') {
     return stacked(<TenantLegacyProtocols tenantId={id} />, <SharingSwitches tenantId={id} />, page);
   }
-  // A person's page says whether they're on hold or locked.
+  // A person's page says whether they're on hold or locked, and lists their passkeys below.
   if (viewName === 'x:Account/User') {
-    return stacked(<HeldNotice accountId={id} />, <AccountLockBanner accountId={id} />, page);
+    return stacked(
+      <HeldNotice accountId={id} />,
+      <AccountLockBanner accountId={id} />,
+      page,
+      <PasskeysPanel accountId={id} />,
+    );
   }
   return page;
 }
