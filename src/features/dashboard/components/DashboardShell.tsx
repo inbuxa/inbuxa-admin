@@ -61,7 +61,7 @@ export function DashboardShell({
   const liveStatus = useLiveMetricsStore((s) => s.status);
   const liveSnapshot = useLiveMetricsStore((s) => s.snapshot);
   const facts = useServerFacts(tick).facts;
-  const cluster = useClusterState(tick);
+  const { cluster, unbound } = useClusterState(tick);
   const critical = useCriticalCount();
   // inbuxa: DL-18
   const deliverability = useDeliverabilityAlarms(tick);
@@ -106,6 +106,7 @@ export function DashboardShell({
     may: canViewObject,
     facts,
     health,
+    unbound,
     critical,
     deliverability,
     deliverabilityHref: deliverabilitySection ? `/${deliverabilitySection}/CustomComponent/Deliverability` : null,

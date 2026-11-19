@@ -90,3 +90,30 @@ describe('buildAttention: report warnings (#218)', () => {
     expect(items[0]).toMatchObject({ id: 'tlsReports', count: 1, title: 'TLS report with warnings' });
   });
 });
+
+describe('buildAttention: listeners not open (inbuxa-server#485)', () => {
+  it('counts every listener a node could not open and says which', () => {
+    const items = buildAttention({
+      ...quiet,
+      unbound: [
+        { hostname: 'mx1', listeners: ['imaps [::]:993: Failed to bind to [::]:993: Address in use'] },
+        { hostname: 'mx2', listeners: ['pop3s [::]:995: x', 'sieve [::]:4190: y'] },
+      ],
+      nodesHref: '/Management/Dashboard/cluster',
+    });
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      id: 'listeners',
+      severity: 'crit',
+      count: 3,
+      title: 'listeners not open',
+      href: '/Management/Dashboard/cluster',
+    });
+    expect(items[0].detail).toContain('mx1: imaps [::]:993');
+    expect(items[0].detail).toContain('mx2: pop3s [::]:995: x; sieve [::]:4190: y');
+  });
+
+  it('says nothing when every listener is open', () => {
+    expect(buildAttention({ ...quiet, unbound: [] })).toEqual([]);
+  });
+});

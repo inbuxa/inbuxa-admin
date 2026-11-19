@@ -14,6 +14,9 @@
  * A server counts as a cluster when more than one node holds a lease. On a
  * single server, or when the viewer can't list nodes, there's nothing here
  * and the dashboard keeps its Server Memory card.
+ *
+ * inbuxa: each node also says which of its listeners it couldn't open
+ * (inbuxa-server#485), which matters on a single server too.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { getAccountId, jmapRequest } from '@/services/jmap/client';
@@ -26,6 +29,21 @@ export interface ClusterNodeRow {
   status: NodeStatus;
   /** When the node last renewed its lease. */
   lastRenewal: string;
+  /** Listeners the node couldn't open, as "id address: reason" (#485). */
+  unboundListeners: string[];
+}
+
+/** A node with listeners that aren't open. */
+export interface UnboundNode {
+  hostname: string;
+  listeners: string[];
+}
+
+/** Nodes still in the cluster that couldn't open a listener; old leases are left out. */
+export function unboundOf(nodes: ClusterNodeRow[]): UnboundNode[] {
+  return nodes
+    .filter((n) => n.status !== 'inactive' && n.unboundListeners.length > 0)
+    .map(({ hostname, unboundListeners }) => ({ hostname, listeners: unboundListeners }));
 }
 
 export interface ClusterHealth {
@@ -51,6 +69,12 @@ export function minutesSilent(lastRenewal: string, now: number = Date.now()): nu
   return Number.isNaN(t) ? null : Math.max(0, Math.floor((now - t) / 60_000));
 }
 
+/** A registry set: an array, or an index-keyed map. */
+function listOf(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return [];
+  return Object.values(value as Record<string, unknown>).map(String);
+}
+
 async function fetchNodes(): Promise<ClusterNodeRow[] | null> {
   let accountId: string;
   try {
@@ -64,8 +88,8 @@ async function fetchNodes(): Promise<ClusterNodeRow[] | null> {
       'x:ClusterNode/get',
       {
         accountId,
+        // Every property: naming unboundListeners would fail on a server without it
         '#ids': { resultOf: 'q', name: 'x:ClusterNode/query', path: '/ids' },
-        properties: ['hostname', 'nodeId', 'status', 'lastRenewal'],
       },
       'g',
     ],
@@ -78,6 +102,7 @@ async function fetchNodes(): Promise<ClusterNodeRow[] | null> {
     nodeId: n.nodeId === undefined || n.nodeId === null ? undefined : String(n.nodeId),
     status: String(n.status ?? 'active').toLowerCase() as NodeStatus,
     lastRenewal: String(n.lastRenewal ?? ''),
+    unboundListeners: listOf(n.unboundListeners),
   }));
 }
 
@@ -91,17 +116,21 @@ export interface ClusterState {
 
 /**
  * The cluster's nodes and their health, refreshed every 30 seconds and
- * whenever `tick` moves. undefined until the first answer; null when this
- * server isn't one node of several, or the viewer can't list nodes.
+ * whenever `tick` moves. `cluster` is undefined until the first answer, and
+ * null when this server isn't one node of several or the viewer can't list
+ * nodes. `unbound` lists nodes, a single server included, with listeners
+ * they couldn't open.
  */
 export function useClusterState(tick = 0) {
   const [state, setState] = useState<ClusterState | null | undefined>(undefined);
+  const [unbound, setUnbound] = useState<UnboundNode[]>([]);
 
   const refresh = useCallback(() => {
     fetchNodes()
       .then((nodes) => {
         const health = nodes ? summarizeNodes(nodes) : null;
         setState(nodes && health ? { nodes, health } : null);
+        setUnbound(nodes ? unboundOf(nodes) : []);
       })
       // A failed refresh keeps the last answer rather than flipping the page back.
       .catch(() => setState((s) => (s === undefined ? null : s)));
@@ -117,5 +146,5 @@ export function useClusterState(tick = 0) {
     };
   }, [refresh, tick]);
 
-  return state;
+  return { cluster: state, unbound };
 }

@@ -1823,7 +1823,9 @@
       "dmarcReportsDetail": "Received this period, across all your domains.",
       "tlsReports_one": "TLS report with warnings",
       "tlsReports_other": "TLS reports with warnings",
-      "tlsReportsDetail": "Received this period, across all your domains."
+      "tlsReportsDetail": "Received this period, across all your domains.",
+      "listeners_one": "listener not open",
+      "listeners_other": "listeners not open"
     },
     "attention_one": "Needs attention · {{count}}",
     "attention_other": "Needs attention · {{count}}",
