@@ -46,21 +46,80 @@ export function unboundOf(nodes: ClusterNodeRow[]): UnboundNode[] {
     .map(({ hostname, unboundListeners }) => ({ hostname, listeners: unboundListeners }));
 }
 
+/*
+ * inbuxa: K-A3. On Kubernetes a node's hostname is its pod's name, and the
+ * name says what made the pod: a Deployment's pods are named
+ * `<deployment>-<template hash>-<5>`, a Job's (and a DaemonSet's)
+ * `<job>-<5>`, the generated parts drawn from an alphabet with no vowels and
+ * no 0, 1 or 3. A pod's name is never used again: one that stopped renewing
+ * isn't coming back, its replacement leases under a new name. So a silent
+ * lease with a pod's name is a pod that's gone (a rollout replaced it, or a
+ * Job finished), not a node that's down, and it's left out of the count,
+ * which would otherwise be half red for a day after every rollout. Only
+ * when no pod of a Deployment is renewing at all is the role down, and then
+ * it counts once.
+ */
+const POD_CHARS = '[bcdfghjklmnpqrstvwxz2456789]';
+const DEPLOYMENT_POD = new RegExp(`^([a-z0-9][a-z0-9-]*?)-(${POD_CHARS}{6,10})-(${POD_CHARS}{5})$`);
+const OTHER_POD = new RegExp(`^([a-z0-9][a-z0-9-]*?)-(${POD_CHARS}{5})$`);
+
+export interface PodName {
+  /** What made the pod: the Deployment, Job or DaemonSet's name. */
+  group: string;
+  /** The generated part that tells this pod from its siblings. */
+  pod: string;
+  /** A Deployment's pod, which is replaced when it goes. */
+  replicated: boolean;
+}
+
+/** The parts of a Kubernetes pod name, or null for any other hostname. */
+export function podName(hostname: string): PodName | null {
+  const d = DEPLOYMENT_POD.exec(hostname);
+  if (d) return { group: d[1], pod: `${d[2]}-${d[3]}`, replicated: true };
+  const o = OTHER_POD.exec(hostname);
+  return o ? { group: o[1], pod: o[2], replicated: false } : null;
+}
+
 export interface ClusterHealth {
   healthy: number;
   unhealthy: number;
   /** Nodes that stopped renewing, longest silent first. */
   silent: { hostname: string; lastRenewal: string }[];
+  /** Pods that stopped renewing and won't be back (see podName), latest first. */
+  gone: { hostname: string; lastRenewal: string }[];
 }
 
 export function summarizeNodes(nodes: ClusterNodeRow[]): ClusterHealth | null {
   const members = nodes.filter((n) => n.status !== 'inactive');
   if (members.length < 2) return null;
-  const silent = members
-    .filter((n) => n.status !== 'active')
+  const quiet = members.filter((n) => n.status !== 'active');
+  const renewing = new Set(
+    members
+      .filter((n) => n.status === 'active')
+      .map((n) => podName(n.hostname)?.group)
+      .filter(Boolean),
+  );
+  // A Deployment with no pod renewing: its latest pod stands for it
+  const down = new Map<string, ClusterNodeRow>();
+  for (const n of quiet) {
+    const pod = podName(n.hostname);
+    if (!pod?.replicated || renewing.has(pod.group)) continue;
+    const seen = down.get(pod.group);
+    if (!seen || seen.lastRenewal < n.lastRenewal) down.set(pod.group, n);
+  }
+  const standsFor = new Set(down.values());
+  const isGone = (n: ClusterNodeRow) => podName(n.hostname) !== null && !standsFor.has(n);
+  const pick = ({ hostname, lastRenewal }: ClusterNodeRow) => ({ hostname, lastRenewal });
+  const silent = quiet
+    .filter((n) => !isGone(n))
     .sort((a, b) => a.lastRenewal.localeCompare(b.lastRenewal))
-    .map(({ hostname, lastRenewal }) => ({ hostname, lastRenewal }));
-  return { healthy: members.length - silent.length, unhealthy: silent.length, silent };
+    .map(pick);
+  const gone = quiet
+    .filter(isGone)
+    .sort((a, b) => b.lastRenewal.localeCompare(a.lastRenewal))
+    .map(pick);
+  const healthy = members.length - quiet.length;
+  return { healthy, unhealthy: silent.length, silent, gone };
 }
 
 /** Whole minutes since a node last renewed its lease, or null if the time can't be read. */
