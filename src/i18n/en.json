@@ -1990,7 +1990,11 @@
     "zoomed": "Zoom",
     "dragToZoom": "Drag to zoom",
     "nodeMail": "Mail",
-    "nodeConnections": "Connections"
+    "nodeConnections": "Connections",
+    "groupCount_one": "{{up}} of {{count}} pod up",
+    "groupCount_other": "{{up}} of {{count}} pods up",
+    "gone_one": "{{count}} pod replaced or finished, not counted: {{names}}",
+    "gone_other": "{{count}} pods replaced or finished, not counted: {{names}}"
   },
   "commands": {
     "actionHint": "Server action",

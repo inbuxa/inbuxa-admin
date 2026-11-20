@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { minutesSilent, setOf, summarizeNodes, unboundOf, type ClusterNodeRow } from './clusterHealth';
+import { minutesSilent, podName, setOf, summarizeNodes, unboundOf, type ClusterNodeRow } from './clusterHealth';
 
 const node = (hostname: string, status: ClusterNodeRow['status'], lastRenewal = '2026-09-25T10:00:00Z') => ({
   hostname,
@@ -27,7 +27,7 @@ describe('summarizeNodes', () => {
         node('mx2.example.org', 'active'),
         node('mx3.example.org', 'active'),
       ]),
-    ).toEqual({ healthy: 3, unhealthy: 0, silent: [] });
+    ).toEqual({ healthy: 3, unhealthy: 0, silent: [], gone: [] });
   });
 
   it('names the silent nodes, longest quiet first', () => {
@@ -50,6 +50,63 @@ describe('summarizeNodes', () => {
         node('old.example.org', 'inactive'),
       ]),
     ).toMatchObject({ healthy: 1, unhealthy: 1 });
+  });
+});
+
+describe('pods (K-A3)', () => {
+  it('reads Kubernetes pod names, and nothing else', () => {
+    expect(podName('inbuxa-mta-674c7dffc5-c9bp7')).toEqual({
+      group: 'inbuxa-mta',
+      pod: '674c7dffc5-c9bp7',
+      replicated: true,
+    });
+    expect(podName('inbuxa-upgrade-fcxxt')).toEqual({ group: 'inbuxa-upgrade', pod: 'fcxxt', replicated: false });
+    expect(podName('mx2.example.org')).toBeNull();
+    expect(podName('mail')).toBeNull();
+    expect(podName('inbuxa-0')).toBeNull(); // a StatefulSet's pod keeps its name
+    expect(podName('mail-relay')).toBeNull(); // vowels: a word, not a generated suffix
+  });
+
+  // The lab after a few rollouts: five pods renewing, four replaced, and the
+  // upgrade hook's pod that ran once.
+  const lab = [
+    node('inbuxa-core-786fbfd875-wftz8', 'active', '2026-11-20T07:24:47Z'),
+    node('inbuxa-front-75d4794556-9nv8k', 'active', '2026-11-20T07:24:45Z'),
+    node('inbuxa-front-75d4794556-x7tjq', 'active', '2026-11-20T07:24:49Z'),
+    node('inbuxa-mta-674c7dffc5-c9bp7', 'active', '2026-11-20T07:24:45Z'),
+    node('inbuxa-mta-674c7dffc5-jj6br', 'active', '2026-11-20T07:24:47Z'),
+    node('inbuxa-front-75d4794556-4m47f', 'stale', '2026-11-20T06:49:40Z'),
+    node('inbuxa-front-75d4794556-v2zxq', 'stale', '2026-11-20T06:50:03Z'),
+    node('inbuxa-mta-674c7dffc5-5f6v9', 'stale', '2026-11-20T06:49:49Z'),
+    node('inbuxa-mta-674c7dffc5-9g5nx', 'stale', '2026-11-20T06:50:03Z'),
+    node('inbuxa-upgrade-fcxxt', 'stale', '2026-11-20T07:19:22Z'),
+  ];
+
+  it('does not count pods a rollout replaced, or a finished Job', () => {
+    const health = summarizeNodes(lab);
+    expect(health).toMatchObject({ healthy: 5, unhealthy: 0, silent: [] });
+    expect(health?.gone.map((n) => n.hostname)).toEqual([
+      'inbuxa-upgrade-fcxxt',
+      'inbuxa-front-75d4794556-v2zxq',
+      'inbuxa-mta-674c7dffc5-9g5nx',
+      'inbuxa-mta-674c7dffc5-5f6v9',
+      'inbuxa-front-75d4794556-4m47f',
+    ]);
+  });
+
+  it('counts a role with no pod renewing as down, once', () => {
+    const health = summarizeNodes(
+      lab.filter((n) => !n.hostname.startsWith('inbuxa-mta-674c7dffc5-') || n.status !== 'active'),
+    );
+    expect(health).toMatchObject({ healthy: 3, unhealthy: 1 });
+    expect(health?.silent.map((n) => n.hostname)).toEqual(['inbuxa-mta-674c7dffc5-9g5nx']);
+    expect(health?.gone.map((n) => n.hostname)).toContain('inbuxa-mta-674c7dffc5-5f6v9');
+  });
+
+  it('still counts a silent server that is not a pod', () => {
+    const health = summarizeNodes([...lab, node('mx2.example.org', 'stale', '2026-11-20T07:00:00Z')]);
+    expect(health).toMatchObject({ healthy: 5, unhealthy: 1 });
+    expect(health?.silent.map((n) => n.hostname)).toEqual(['mx2.example.org']);
   });
 });
 
@@ -77,7 +134,9 @@ describe('unboundOf (inbuxa-server#485)', () => {
 describe('setOf', () => {
   it('reads a registry set as the server sends it', () => {
     // As a live server answered for a listener held by another process
-    const wire = { 'imaps [::]:12993: Failed to bind to [::]:12993: Address already in use (os error 98); retrying': true };
+    const wire = {
+      'imaps [::]:12993: Failed to bind to [::]:12993: Address already in use (os error 98); retrying': true,
+    };
     expect(setOf(wire)).toEqual([
       'imaps [::]:12993: Failed to bind to [::]:12993: Address already in use (os error 98); retrying',
     ]);

@@ -27,7 +27,7 @@ import {
   series,
   total,
 } from '../commandCenter';
-import type { ClusterNodeRow } from '../clusterHealth';
+import { podName, type ClusterNodeRow } from '../clusterHealth';
 import { useDashboardShared } from '../dashboardContext';
 import { usePageHistory } from '../usePageHistory';
 import type { Tone } from '../tones';
@@ -130,8 +130,22 @@ export function ClusterView() {
     );
 
   const { nodes, health } = cluster;
-  const members = nodes.filter((n) => n.status !== 'inactive');
+  // inbuxa: K-A3, pods that are gone (see podName) get a line, not a card
+  const gone = new Set(health.gone.map((g) => g.hostname));
+  const members = nodes.filter((n) => n.status !== 'inactive' && !gone.has(n.hostname));
   const retired = nodes.filter((n) => n.status === 'inactive');
+  // Cards grouped by what made the pod; servers that aren't pods come first
+  const groups = new Map<string, ClusterNodeRow[]>();
+  for (const node of [...members].sort((a, b) => a.hostname.localeCompare(b.hostname))) {
+    const key = podName(node.hostname)?.group ?? '';
+    groups.set(key, [...(groups.get(key) ?? []), node]);
+  }
+  const grouped = [...groups.entries()].sort(([a], [b]) => (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)));
+  const goneByGroup = new Map<string, number>();
+  for (const g of health.gone) {
+    const key = podName(g.hostname)?.group ?? g.hostname;
+    goneByGroup.set(key, (goneByGroup.get(key) ?? 0) + 1);
+  }
   const all = health.healthy + health.unhealthy;
   const activeAges = members
     .filter((n) => n.status === 'active')
@@ -242,74 +256,107 @@ export function ClusterView() {
           </span>
         }
       >
-        <div className="flex flex-wrap gap-3 [&>*]:min-w-0 [&>*]:flex-[1_1_220px]">
-          {members.map((node) => {
-            const age = ageOf(node, now);
-            const up = node.status === 'active';
-            const share = age === null ? 1 : Math.min(1, age / STALE_AFTER_MS);
-            return (
-              <div
-                key={node.hostname}
-                className={cn(
-                  'relative overflow-hidden rounded-lg border bg-background/40 p-3.5',
-                  !up && 'border-destructive/50',
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    {up && (
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-50" />
-                    )}
-                    <span
+        <div className="space-y-4">
+          {grouped.map(([group, list]) => (
+            <div key={group || '-'}>
+              {group && (
+                <div className="mb-2 flex items-baseline gap-2 text-xs">
+                  <span className="font-mono font-semibold">{group}</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {t('cc.groupCount', {
+                      count: list.length,
+                      up: list.filter((x) => x.status === 'active').length,
+                      defaultValue_one: '{{up}} of {{count}} pod up',
+                      defaultValue_other: '{{up}} of {{count}} pods up',
+                    })}
+                  </span>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-3 [&>*]:min-w-0 [&>*]:flex-[1_1_220px]">
+                {list.map((node) => {
+                  const age = ageOf(node, now);
+                  const up = node.status === 'active';
+                  const share = age === null ? 1 : Math.min(1, age / STALE_AFTER_MS);
+                  return (
+                    <div
+                      key={node.hostname}
                       className={cn(
-                        'relative inline-flex h-2.5 w-2.5 rounded-full',
-                        up ? 'bg-primary' : 'bg-destructive',
+                        'relative overflow-hidden rounded-lg border bg-background/40 p-3.5',
+                        !up && 'border-destructive/50',
                       )}
-                    />
-                  </span>
-                  <span className="truncate font-mono text-sm font-semibold">{node.hostname}</span>
-                  {node.nodeId !== undefined && (
-                    <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {t('cc.nodeId', 'id {{id}}', { id: node.nodeId })}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-2.5 flex items-baseline justify-between gap-2 whitespace-nowrap text-xs">
-                  <span className={cn('uppercase tracking-wider', up ? 'text-muted-foreground' : 'text-destructive')}>
-                    {up ? t('cc.nodeActive', 'Active') : t('cc.nodeSilent', 'Silent')}
-                  </span>
-                  <span className="font-mono tabular-nums">
-                    {age === null ? '—' : t('cc.heartbeatAgo', 'heartbeat {{ago}} ago', { ago: ago(age) })}
-                  </span>
-                </div>
-                <div className="mt-2 h-1 rounded-full bg-muted" aria-hidden>
-                  <div
-                    className={cn(
-                      'h-full rounded-full transition-[width] duration-1000 ease-linear',
-                      !up ? 'bg-destructive' : share > 0.5 ? 'bg-highlight' : 'bg-primary',
-                    )}
-                    style={{ width: `${Math.max(2, share * 100)}%` }}
-                  />
-                </div>
-                {perNode && node.nodeId !== undefined && (
-                  <div className="mt-3 space-y-1.5 border-t pt-2.5">
-                    {nodeStrips(Number(node.nodeId)).map((row) => (
-                      <div key={row.label} className="grid grid-cols-[6.5rem_1fr] items-end gap-2">
-                        <div className="flex items-baseline justify-between gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                          <span className="truncate">{row.label}</span>
-                          <span className="font-mono text-xs font-semibold tabular-nums text-foreground">
-                            {n(row.total)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="relative flex h-2.5 w-2.5">
+                          {up && (
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-50" />
+                          )}
+                          <span
+                            className={cn(
+                              'relative inline-flex h-2.5 w-2.5 rounded-full',
+                              up ? 'bg-primary' : 'bg-destructive',
+                            )}
+                          />
+                        </span>
+                        <span className="truncate font-mono text-sm font-semibold" title={node.hostname}>
+                          {group ? (podName(node.hostname)?.pod ?? node.hostname) : node.hostname}
+                        </span>
+                        {node.nodeId !== undefined && (
+                          <span className="ml-auto font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                            {t('cc.nodeId', 'id {{id}}', { id: node.nodeId })}
                           </span>
-                        </div>
-                        <BarStrip bars={row.bars} tone={up ? 'primary' : 'crit'} className="h-4" />
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <div className="mt-2.5 flex items-baseline justify-between gap-2 whitespace-nowrap text-xs">
+                        <span
+                          className={cn('uppercase tracking-wider', up ? 'text-muted-foreground' : 'text-destructive')}
+                        >
+                          {up ? t('cc.nodeActive', 'Active') : t('cc.nodeSilent', 'Silent')}
+                        </span>
+                        <span className="font-mono tabular-nums">
+                          {age === null ? '—' : t('cc.heartbeatAgo', 'heartbeat {{ago}} ago', { ago: ago(age) })}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1 rounded-full bg-muted" aria-hidden>
+                        <div
+                          className={cn(
+                            'h-full rounded-full transition-[width] duration-1000 ease-linear',
+                            !up ? 'bg-destructive' : share > 0.5 ? 'bg-highlight' : 'bg-primary',
+                          )}
+                          style={{ width: `${Math.max(2, share * 100)}%` }}
+                        />
+                      </div>
+                      {perNode && node.nodeId !== undefined && (
+                        <div className="mt-3 space-y-1.5 border-t pt-2.5">
+                          {nodeStrips(Number(node.nodeId)).map((row) => (
+                            <div key={row.label} className="grid grid-cols-[6.5rem_1fr] items-end gap-2">
+                              <div className="flex items-baseline justify-between gap-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                <span className="truncate">{row.label}</span>
+                                <span className="font-mono text-xs font-semibold tabular-nums text-foreground">
+                                  {n(row.total)}
+                                </span>
+                              </div>
+                              <BarStrip bars={row.bars} tone={up ? 'primary' : 'crit'} className="h-4" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
+        {health.gone.length > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground" title={health.gone.map((g) => g.hostname).join(', ')}>
+            {t('cc.gone', {
+              count: health.gone.length,
+              defaultValue_one: '{{count}} pod replaced or finished, not counted: {{names}}',
+              defaultValue_other: '{{count}} pods replaced or finished, not counted: {{names}}',
+              names: [...goneByGroup.entries()].map(([g, c]) => (c > 1 ? `${g} ×${c}` : g)).join(', '),
+            })}
+          </p>
+        )}
         {retired.length > 0 && (
           <p className="mt-3 text-xs text-muted-foreground">
             {t('cc.retired', {
