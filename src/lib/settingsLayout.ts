@@ -189,7 +189,12 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
       },
       {
         name: 'Web',
-        pages: [p('x:Http', 'HTTP'), p('x:Http/HttpSecurity', 'HTTP security'), p('x:HttpForm', 'Contact form')],
+        pages: [
+          p('x:Http', 'HTTP'),
+          p('CustomComponent/FrontEnds', 'Front ends'),
+          p('x:Http/HttpSecurity', 'HTTP security'),
+          p('x:HttpForm', 'Contact form'),
+        ],
       },
       {
         name: 'DNS',

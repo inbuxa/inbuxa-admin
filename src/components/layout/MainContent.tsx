@@ -183,6 +183,11 @@ const CUSTOM_PAGES: Record<string, ComponentType> = {
     () => import('@/features/storeTools/BlobStoreChangesPage'),
     (m) => m.BlobStoreChangesPage,
   ),
+  // Where inbuxa Admin and the webmail are served (inbuxa:FrontEnds, C-4)
+  FrontEnds: onDemand(
+    () => import('@/features/frontEnds/FrontEndsPage'),
+    (m) => m.FrontEndsPage,
+  ),
 };
 
 /** Guided jobs, by the name after `Wizard/`; always reached by choosing "Guide me", never by default. */
