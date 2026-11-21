@@ -14,6 +14,34 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.23] - 2026-11-21
+
+Pairs with inbuxa-server 27.1-rc.39. A page for where inbuxa Admin and the
+webmail are served, and Cluster Health that reads right on Kubernetes.
+
+### Added
+- Front ends: Settings › Network › Web › Front ends sets where inbuxa
+  Admin and the webmail are served, the webmail's client secret, and other
+  origins allowed to call the server from a browser, which until now only
+  `inbuxa join` or the server's environment could set. The secret is made
+  on the page and shown once; what each node's environment says is shown
+  beside the stored value; and the page warns before a change would stop
+  this console reaching the server. The menu link needs server
+  27.1-rc.39. (#259)
+- Release images are signed keyless with cosign, with an SBOM per
+  architecture, one of the app itself, and build provenance. (#256)
+
+### Changed
+- Releases are announced in the forum's inbuxa › Releases, and release
+  candidates in inbuxa › Release Candidates, instead of Announcements.
+  (#254)
+
+### Fixed
+- Cluster Health on Kubernetes: pods a rollout replaced, and finished Job
+  pods, no longer stay counted as silent nodes for a day. They're listed
+  on one line, and the roster groups pods under the Deployment that made
+  them ("inbuxa-mta: 2 of 2 pods up"). (#258)
+
 ## [27.1-rc.22] - 2026-11-19
 
 Pairs with inbuxa-server 27.1-rc.33. Your own passkeys under Account ›
