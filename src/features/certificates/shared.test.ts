@@ -5,7 +5,16 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { challengeOf, defaultDirect, LE_PRODUCTION, LE_STAGING, PORT, providerFor, type ProviderRow } from './shared';
+import {
+  challengeOf,
+  defaultDirect,
+  LE_PRODUCTION,
+  LE_STAGING,
+  orderingMethod,
+  PORT,
+  providerFor,
+  type ProviderRow,
+} from './shared';
 
 const row = (id: string, challengeType: string, directory = LE_PRODUCTION): ProviderRow => ({
   id,
@@ -38,5 +47,27 @@ describe('certificate accounts (#206)', () => {
     expect(challengeOf('dns', 'Http01')).toBe('Dns01');
     expect(challengeOf('tls', 'Http01')).toBe('Http01');
     expect(challengeOf('tls', 'TlsAlpn01')).toBe('TlsAlpn01');
+  });
+});
+
+describe('the names an automatic domain orders today', () => {
+  const providers = [
+    row('alpn', 'TlsAlpn01'),
+    row('http', 'Http01'),
+    row('dns', 'Dns01'),
+    row('persist', 'DnsPersist01'),
+  ];
+
+  it('follows the domain’s account, not whether its DNS is automatic', () => {
+    // A TLS-ALPN account on a domain whose DNS the server manages: the technical names, no wildcard.
+    expect(orderingMethod('alpn', true, providers)).toBe('tls');
+    expect(orderingMethod('http', true, providers)).toBe('tls');
+    expect(orderingMethod('dns', false, providers)).toBe('dns');
+    expect(orderingMethod('persist', false, providers)).toBe('dns');
+  });
+
+  it('guesses from the DNS setting only when the account is missing', () => {
+    expect(orderingMethod(undefined, true, providers)).toBe('dns');
+    expect(orderingMethod('gone', false, providers)).toBe('tls');
   });
 });
