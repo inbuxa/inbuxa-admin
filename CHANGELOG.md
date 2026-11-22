@@ -14,6 +14,18 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.24] - 2026-11-22
+
+Pairs with inbuxa-server 27.1-rc.39. One fix to the Certificates page.
+
+### Fixed
+- Certificates: Ordered automatically showed a domain as "*.example.com,
+  example.com · not issued yet" when its DNS is managed automatically but
+  its Let's Encrypt account checks names over TLS-ALPN or HTTP. The names
+  now follow the domain's own account, as the server's do, so the panel
+  finds the certificate it already has. The order guide's "what this domain
+  orders today" reads the same way. (#261)
+
 ## [27.1-rc.23] - 2026-11-21
 
 Pairs with inbuxa-server 27.1-rc.39. A page for where inbuxa Admin and the
