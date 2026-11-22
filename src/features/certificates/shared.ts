@@ -46,6 +46,24 @@ export function providerFor(
   return providers.find((p) => p.directory === directory && p.challengeType === challengeOf(method, direct));
 }
 
+/**
+ * How a domain that's already ordered automatically gets its names checked,
+ * from its own Let’s Encrypt account. The server goes by the account's
+ * challenge (common/src/network/acme/order.rs): DNS-01 orders the domain and
+ * a wildcard, anything else the technical names. Whether the domain's DNS is
+ * managed automatically doesn't decide it, so it's only the guess when the
+ * account can't be found.
+ */
+export function orderingMethod(
+  providerId: string | undefined,
+  dnsAutomatic: boolean,
+  providers: ProviderRow[],
+): Method {
+  const provider = providers.find((p) => p.id === providerId);
+  if (!provider) return dnsAutomatic ? 'dns' : 'tls';
+  return provider.challengeType === 'Dns01' || provider.challengeType === 'DnsPersist01' ? 'dns' : 'tls';
+}
+
 export interface DomainRow {
   id: string;
   name: string;

@@ -55,6 +55,7 @@ import {
   LE_STAGING,
   type Loaded,
   load,
+  orderingMethod,
   pollOrders,
   PORT,
   providerFor,
@@ -134,8 +135,13 @@ export function OrderCertificatePage() {
   const domain: DomainRow | undefined = candidates.find((d) => d.id === domainId) ?? candidates[0];
   const method: Method = domain?.dnsAutomatic ? 'dns' : 'tls';
   const wildcardBlocked = method === 'tls' && names.some(isWildcard);
+  // What the domain orders today goes by its own account, not by how this order will be checked.
+  const currentMethod = useMemo(
+    () => orderingMethod(domain?.providerId, !!domain?.dnsAutomatic, data?.providers ?? []),
+    [data, domain],
+  );
   const currentNames = domain?.automatic
-    ? orderNames(domain.name, method, data?.serverName ?? '', domain.zone, domain.hostnames)
+    ? orderNames(domain.name, currentMethod, data?.serverName ?? '', domain.zone, domain.hostnames)
     : [];
   const unchanged = !!domain?.automatic && sameNames(currentNames, names);
   const replaced = domain?.automatic && !unchanged ? currentNames.filter((n) => !names.includes(n)) : [];
@@ -298,7 +304,9 @@ export function OrderCertificatePage() {
     </p>
   );
   const how =
-    method === 'dns' ? t('certSetup.howDnsWord', 'through DNS') : t('certSetup.howTlsWord', 'on port {{port}}', { port });
+    method === 'dns'
+      ? t('certSetup.howDnsWord', 'through DNS')
+      : t('certSetup.howTlsWord', 'on port {{port}}', { port });
 
   // ── Step 1: names (also where it goes back to if the domain stops fitting) ──
   if (step === 0 || !domain) {

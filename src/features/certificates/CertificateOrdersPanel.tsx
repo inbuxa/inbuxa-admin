@@ -20,7 +20,7 @@ import { useSchemaStore } from '@/stores/schemaStore';
 import { cn } from '@/lib/utils';
 import { orderNames } from './names';
 import { canOrderAgain, orderAgainSet, renewalState, type RenewalState } from './orders';
-import { coveringCert, fmtDate, type CertRow, type Loaded, load, pollOrders, refusal } from './shared';
+import { coveringCert, fmtDate, type CertRow, type Loaded, load, orderingMethod, pollOrders, refusal } from './shared';
 import { ORDER_WIZARD_VIEW } from './CertificateSetupCard';
 
 interface State {
@@ -142,7 +142,7 @@ export function CertificateOrdersPanel({ className }: { className?: string }) {
       {automatic.length > 0 && (
         <ul className="divide-y rounded-lg border text-sm">
           {automatic.map((d) => {
-            const method = d.dnsAutomatic ? 'dns' : 'tls';
+            const method = orderingMethod(d.providerId, d.dnsAutomatic, state.data.providers);
             const names = orderNames(d.name, method, state.data.serverName, d.zone, d.hostnames);
             const cert = coveringCert(state.certs, names);
             const task = state.tasks.find((x) => x.domainId === d.id);
