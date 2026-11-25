@@ -49,3 +49,23 @@ COPY --chmod=0755 docker/entrypoint.sh /docker-entrypoint.d/40-api-base-url.sh
 # The base image's user already; said here so the image never runs as root
 # if that changes.
 USER 101
+
+# Last in the image, after everything that does work: a value that changes
+# every build (the version, the commit) then never costs a cached layer.
+# What the image says it is. The base image's own labels (nginx's name,
+# licence, source and dates) carry over unless every one is set here; these
+# are inbuxa Admin's. Version, revision and build time come from the build.
+ARG INBUXA_VERSION=dev
+ARG INBUXA_REVISION=""
+ARG INBUXA_CREATED=""
+LABEL org.opencontainers.image.title="inbuxa Admin" \
+      org.opencontainers.image.description="The administration console for the inbuxa mail server: every setting it has, with dashboards, live delivery tracing and guided jobs like publishing a domain's DNS." \
+      org.opencontainers.image.url="https://inbuxa.org/" \
+      org.opencontainers.image.documentation="https://docs.inbuxa.org/" \
+      org.opencontainers.image.source="https://git.coffeylabs.org/inbuxa/inbuxa-admin" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.vendor="Coffey Labs LLC" \
+      org.opencontainers.image.version="$INBUXA_VERSION" \
+      org.opencontainers.image.revision="$INBUXA_REVISION" \
+      org.opencontainers.image.created="$INBUXA_CREATED" \
+      maintainer="Coffey Labs LLC"
