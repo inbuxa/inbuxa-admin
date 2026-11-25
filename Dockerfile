@@ -53,7 +53,7 @@ USER 101
 # Last in the image, after everything that does work: a value that changes
 # every build (the version, the commit) then never costs a cached layer.
 # What the image says it is. The base image's own labels (nginx's name,
-# licence, source and dates) carry over unless every one is set here; these
+# license, source and dates) carry over unless every one is set here; these
 # are inbuxa Admin's. Version, revision and build time come from the build.
 ARG INBUXA_VERSION=dev
 ARG INBUXA_REVISION=""
