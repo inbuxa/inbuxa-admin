@@ -27,6 +27,23 @@ ENV INBUXA_REVISION=${INBUXA_REVISION}
 RUN npm run build
 
 FROM mirror.gcr.io/nginxinc/nginx-unprivileged:1.29-alpine
+# What the image says it is. The base image's own labels (nginx's name,
+# licence, source and dates) carry over unless every one is set here; these
+# are inbuxa Admin's. Version, revision and build time come from the build.
+ARG INBUXA_VERSION=dev
+ARG INBUXA_REVISION=""
+ARG INBUXA_CREATED=""
+LABEL org.opencontainers.image.title="inbuxa Admin" \
+      org.opencontainers.image.description="The administration console for the inbuxa mail server: every setting it has, with dashboards, live delivery tracing and guided jobs like publishing a domain's DNS." \
+      org.opencontainers.image.url="https://inbuxa.org/" \
+      org.opencontainers.image.documentation="https://docs.inbuxa.org/" \
+      org.opencontainers.image.source="https://git.coffeylabs.org/inbuxa/inbuxa-admin" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.vendor="Coffey Labs LLC" \
+      org.opencontainers.image.version="$INBUXA_VERSION" \
+      org.opencontainers.image.revision="$INBUXA_REVISION" \
+      org.opencontainers.image.created="$INBUXA_CREATED" \
+      maintainer="Coffey Labs LLC"
 # Unprivileged nginx, which runs as uid 101 and cannot bind 80. 8080 is the
 # port it listens on and the one to publish.
 #

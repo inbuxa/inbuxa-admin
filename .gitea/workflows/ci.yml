@@ -154,7 +154,9 @@ jobs:
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --provenance=false --sbom=false \
+            --build-arg INBUXA_VERSION="$VERSION" \
             --build-arg INBUXA_REVISION="${{ github.sha }}" \
+            --build-arg INBUXA_CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             $(for t in $TAGS; do printf '%s %s:%s ' --tag "$IMAGE" "$t"; done) \
             --push .
           docker buildx imagetools inspect "$IMAGE:$VERSION"
