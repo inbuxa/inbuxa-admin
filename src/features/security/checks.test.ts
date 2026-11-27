@@ -103,6 +103,50 @@ describe('the checks (acceptance tests 1-8)', () => {
     expect(ids(at(-1))).toContain('SS-5');
   });
 
+  it('4b: a certificate a later one covers is a leftover, unless it is the default', () => {
+    const iso = (days: number) => new Date(NOW + days * DAY).toISOString();
+    const old = { id: 'old', names: ['mail.example.org', 'autoconfig.example.org'], notValidAfter: iso(4) };
+    const renewed = {
+      id: 'new',
+      names: ['MX2.example.org', 'mail.example.org', 'autoconfig.example.org'],
+      notValidAfter: iso(80),
+    };
+    const certChecks = (s: Snapshot) =>
+      evaluate(s, defaults).items.filter((i) => i.check === 'SS-5' || i.check === 'SS-14');
+
+    // Covered by a later certificate and not the default: nothing to do.
+    expect(certChecks({ ...fresh(), certificates: [old, renewed], defaultCertificateId: null })).toEqual([]);
+    expect(certChecks({ ...fresh(), certificates: [old, renewed], defaultCertificateId: 'new' })).toEqual([]);
+
+    // The default couldn't be read: the old one is still listed.
+    expect(certChecks({ ...fresh(), certificates: [old, renewed] }).map((i) => i.subject)).toEqual(['old']);
+
+    // A later certificate that misses a name doesn't cover it.
+    const partial = { ...renewed, names: ['mail.example.org'] };
+    expect(
+      certChecks({ ...fresh(), certificates: [old, partial], defaultCertificateId: null }).map((i) => i.subject),
+    ).toEqual(['old']);
+
+    // An earlier certificate doesn't cover a later one.
+    const earlier = { ...renewed, notValidAfter: iso(2) };
+    expect(
+      certChecks({ ...fresh(), certificates: [old, earlier], defaultCertificateId: null })
+        .map((i) => i.subject)
+        .sort(),
+    ).toEqual(['new', 'old']);
+
+    // The default is the leftover: one item whose Fix points the default at the later one.
+    const [item] = certChecks({ ...fresh(), certificates: [old, renewed], defaultCertificateId: 'old' });
+    expect(item.check).toBe('SS-5');
+    expect(item.title).toBe('The default certificate expires in 4 days');
+    expect(item.action).toMatchObject({
+      kind: 'fix',
+      object: 'x:SystemSettings',
+      patch: { defaultCertificateId: 'new' },
+      undo: { defaultCertificateId: 'old' },
+    });
+  });
+
   it('5: an empty ban rate is fixed back to its default', () => {
     const item = evaluate({ ...fresh(), security: { authBanRate: null, abuseBanRate: {}, scanBanRate: {} } }, defaults)
       .items[0];

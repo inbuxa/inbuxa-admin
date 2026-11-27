@@ -105,6 +105,8 @@ export interface Snapshot {
   rcpt?: { allowRelaying?: Expr };
   auth?: { require?: Expr };
   certificates?: { id: string; names: string[]; notValidAfter: string | null }[];
+  /** The certificate sent to connections that name no host; null when none is set, undefined when it couldn't be read. */
+  defaultCertificateId?: string | null;
   security?: { authBanRate?: unknown; abuseBanRate?: unknown; scanBanRate?: unknown };
   http?: { rateLimitAnonymous?: unknown };
   oidc?: { anonymousClientRegistration?: boolean; requireClientRegistration?: boolean };
@@ -134,6 +136,7 @@ export type Part =
   | 'senderAuth'
   | 'metrics'
   | 'mtaSts'
+  | 'defaultCertificate'
   | 'domains'
   | 'dns'
   | 'legacy'
@@ -324,19 +327,63 @@ export function evaluate(s: Snapshot, defaults: Defaults): Result {
     ];
   });
 
+  // A renewal stores a new certificate and leaves the old one. The old one is
+  // only a leftover when a later certificate covers every name on it, and
+  // it isn't the default, which is still sent to connections that name no
+  // host. While the default can't be read, nothing is skipped.
+  const certs = s.certificates ?? [];
+  const isDefault = (c: { id: string }) => s.defaultCertificateId === c.id;
+  const supersededBy = (c: (typeof certs)[number], until: number) => {
+    const names = c.names.map((n) => n.toLowerCase());
+    if (names.length === 0) return undefined;
+    return certs.find((d) => {
+      if (d.id === c.id || !d.notValidAfter) return false;
+      const later = Date.parse(d.notValidAfter);
+      if (Number.isNaN(later) || later <= until) return false;
+      const has = new Set(d.names.map((n) => n.toLowerCase()));
+      return names.every((n) => has.has(n));
+    });
+  };
+
   // SS-5 and SS-14 read the same certificates: within 7 days is critical and
   // replaces the 30-day item.
   const certItems = (within: number, severity: Severity, id: string) => () =>
-    (s.certificates ?? []).flatMap((c): Item[] => {
+    certs.flatMap((c): Item[] => {
       if (!c.notValidAfter) return [];
       const until = Date.parse(c.notValidAfter);
       if (Number.isNaN(until)) return [];
+      const newer = supersededBy(c, until);
+      if (newer && s.defaultCertificateId !== undefined && !isDefault(c)) return [];
       const left = until - s.now;
       if (id === 'SS-14' && left <= 7 * DAY) return [];
       if (left > within) return [];
       const name = c.names[0] ?? c.id;
       const expired = left <= 0;
       const days = Math.max(0, Math.ceil(left / DAY));
+      if (newer && isDefault(c)) {
+        const label = (x: typeof c) => x.names.join(', ') || x.id;
+        return [
+          {
+            check: id,
+            severity,
+            subject: c.id,
+            value: c.notValidAfter,
+            title: expired
+              ? 'The default certificate has expired'
+              : `The default certificate expires in ${days} day${days === 1 ? '' : 's'}`,
+            why: `It’s an older copy for ${name}, sent to connections that don’t name a host. A later certificate covers the same names: make that one the default.`,
+            action: {
+              kind: 'fix',
+              object: 'x:SystemSettings',
+              id: 'singleton',
+              patch: { defaultCertificateId: newer.id },
+              undo: { defaultCertificateId: c.id },
+              changes: [{ field: 'Default certificate', from: label(c), to: label(newer) }],
+            },
+            explain: { object: 'x:SystemSettings', id: 'singleton', field: 'defaultCertificateId' },
+          },
+        ];
+      }
       return [
         {
           check: id,

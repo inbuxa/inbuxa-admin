@@ -65,6 +65,12 @@ const CALLS: Call[] = [
   { part: 'metrics', method: 'x:Metrics/get', ids: ['singleton'], properties: ['prometheus'] },
   { part: 'mtaSts', method: 'x:MtaSts/get', ids: ['singleton'], properties: ['mode'] },
   {
+    part: 'defaultCertificate',
+    method: 'x:SystemSettings/get',
+    ids: ['singleton'],
+    properties: ['defaultCertificateId'],
+  },
+  {
     part: 'directories',
     method: 'x:Directory/get',
     ids: null,
@@ -123,7 +129,7 @@ async function askDns(name: string, zoneFile: string | undefined): Promise<DnsFa
 }
 
 /** The parts the critical checks (SS-1 to SS-5) read: enough for the dashboard's line (SS-27). */
-const CRITICAL_PARTS: Part[] = ['imap', 'rcpt', 'auth', 'certificates', 'domains'];
+const CRITICAL_PARTS: Part[] = ['imap', 'rcpt', 'auth', 'certificates', 'defaultCertificate', 'domains'];
 
 /**
  * What the checks read. `critical` loads only what SS-1 to SS-5 need, with
@@ -170,6 +176,10 @@ export async function loadSnapshot(signal?: AbortSignal, critical = false): Prom
         notValidAfter: typeof c.notValidAfter === 'string' ? c.notValidAfter : null,
       };
     });
+  }
+  if (lists.defaultCertificate) {
+    const id = one('defaultCertificate')?.defaultCertificateId;
+    snapshot.defaultCertificateId = typeof id === 'string' && id !== '' ? id : null;
   }
   if (lists.directories) {
     snapshot.directories = lists.directories.map((d) => ({
