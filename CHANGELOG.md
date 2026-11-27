@@ -14,6 +14,29 @@ https://git.coffeylabs.org/inbuxa/inbuxa-admin/releases.
 Every version PR adds that version's entry here. CI refuses a version this
 file has no entry for (`tools/changelog-check.sh`).
 
+## [27.1-rc.25] - 2026-11-27
+
+Pairs with inbuxa-server 27.1-rc.50. The last release candidate before the
+27.1 feature freeze on 1 December.
+
+### Changed
+- Domains: on a tenant's domain with automatic certificates, a note under
+  the certificate settings says which names its certificate may have (the
+  domain, names under it, and names under the tenant's other verified
+  domains and aliases), that a new domain gets its certificate once it's
+  verified, and that an older domain with a name that isn't allowed has
+  other changes refused until the name is removed. The server enforces
+  this since 27.1-rc.47. When it refuses a name, the reason now shows under
+  Certificate Hostnames instead of only above the form. (#268, #269)
+
+### Fixed
+- Security: a renewed certificate's old copy no longer shows as an
+  expiring certificate, since connections get the renewed one. The default
+  certificate is the exception: when it's an old copy, the item says so,
+  and Fix points the default at the renewed certificate. (#267)
+- Image: the container image carries inbuxa Admin's own labels. Registries
+  showed it as nginx's, with nginx's license and source. (#264)
+
 ## [27.1-rc.24] - 2026-11-22
 
 Pairs with inbuxa-server 27.1-rc.39. One fix to the Certificates page.
