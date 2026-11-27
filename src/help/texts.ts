@@ -102,6 +102,8 @@ export const FIELD_HELP: Record<string, string> = {
     'The kinds of key the domain signs with, each kept and rotated on its own. Tick DKIM2 next to DKIM1 to sign with both while receivers start checking DKIM2; its key is made as soon as you save.',
   'x:Domain.certificateManagement':
     'The TLS certificate for this domain’s mail and web addresses. Automatic gets and renews one for you.',
+  'x:CertificateManagementProperties.subjectAlternativeNames':
+    'The names the certificate covers, like mail.example.com. On a tenant’s domain each must be the domain, or a name under it or under another of the tenant’s verified domains and aliases.',
   'x:Domain.dnsManagement':
     'Whether the server writes this domain’s DNS records itself through your DNS host, or you add them by hand.',
   'x:Domain.reportAddressUri':

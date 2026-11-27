@@ -3192,5 +3192,10 @@
     "saving": "Saving…",
     "save": "Save",
     "changed": "Last changed {{when}} by account {{who}}."
+  },
+  "certificates": {
+    "tenantNames": {
+      "note": "On a tenant’s domain, the certificate can name only the domain itself, names under it, and names under the tenant’s other verified domains and aliases. A name with no dot, like mail, goes under the domain. A new domain gets its certificate once it’s verified: until then the order fails, so save these settings again after verifying. If an older domain lists a name that isn’t allowed, other changes to it are refused until you remove that name."
+    }
   }
 }
