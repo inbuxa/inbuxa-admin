@@ -69,6 +69,9 @@ import { celebrateIfFirstDomain } from '@/features/celebrate/firstDomain';
 import { logFormChange } from '@/lib/debug';
 import { FieldWidget } from '@/components/forms/FieldWidget';
 import { DnsConnectCard } from '@/features/dns/DnsConnectCard';
+import { showsTenantCertificateNote } from '@/features/certificates/tenantNames';
+import { TenantCertificateNote } from '@/features/certificates/TenantCertificateNote';
+import { childErrorsOf, embeddedErrorHome } from '@/components/forms/errorPlacement';
 import { DirectoryTestCard } from '@/features/directory/DirectoryTestCard';
 import { changedFields } from '@/features/settings/changedFromDefault';
 import { isSieveScriptField } from '@/lib/sievepad';
@@ -93,6 +96,8 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
   const schema = useSchemaStore((s) => s.schema);
   const viewToSection = useSchemaStore((s) => s.viewToSection);
   const edition = useAccountStore((s) => s.edition);
+  // inbuxa: inside a tenant the domain's tenant isn't sent; see tenantNames.ts (#268)
+  const canCreateTenants = useAccountStore((s) => s.hasObjectPermission('sysTenant', 'Create'));
   const { canUpdateObject, canDestroyObject } = usePermissions();
 
   const resolved = useMemo(() => {
@@ -304,12 +309,12 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
   const handleFieldChange = useCallback((fieldName: string, value: unknown) => {
     setFormData((prev) => ({ ...prev, [fieldName]: value }));
     setFieldErrors((prev) => {
-      if (prev[fieldName]) {
-        const copy = { ...prev };
-        delete copy[fieldName];
-        return copy;
-      }
-      return prev;
+      // inbuxa: an embedded object's own refusals are kept as `field/child` (#268)
+      const stale = Object.keys(prev).filter((k) => k === fieldName || k.startsWith(`${fieldName}/`));
+      if (stale.length === 0) return prev;
+      const copy = { ...prev };
+      for (const k of stale) delete copy[k];
+      return copy;
     });
   }, []);
 
@@ -384,7 +389,11 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
       if (error.properties && error.properties.length > 0) {
         for (const prop of error.properties) {
           const topLevel = prop.split('/')[0];
-          if (topLevel && currentFields?.properties[topLevel]) {
+          // inbuxa: a property of an embedded object goes under its own field there (#268)
+          const home = currentFields ? embeddedErrorHome(prop, currentFields.properties, formData) : null;
+          if (home) {
+            newFieldErrors[`${home.field}/${home.child}`] = errorMsg;
+          } else if (topLevel && currentFields?.properties[topLevel]) {
             newFieldErrors[topLevel] = errorMsg;
           }
         }
@@ -405,7 +414,7 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
         setFieldErrors(newFieldErrors);
       }
     },
-    [currentFields, t],
+    [currentFields, formData, t],
   );
 
   const validateRequired = useCallback(
@@ -874,6 +883,7 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
 
                   const fieldValue = formData[formField.name];
                   const fieldError = fieldErrors[formField.name];
+                  const childErrors = childErrorsOf(fieldErrors, formField.name);
                   const fieldReadOnly =
                     readOnly ||
                     (field.update === 'immutable' && !isCreate) ||
@@ -897,6 +907,7 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
                       onChange={(v) => handleFieldChange(formField.name, v)}
                       readOnly={fieldReadOnly}
                       error={fieldError}
+                      childErrors={childErrors}
                       schema={schema}
                       sieveScriptName={
                         isSieveScriptField(resolved.obj.objectName, formField.name) ? scriptName : undefined
@@ -923,6 +934,20 @@ export function DynamicForm({ viewName, objectId, intro, foldSections }: Dynamic
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
+                    );
+                  }
+
+                  // inbuxa: which names a tenant's domain may have certificates for (#268)
+                  if (
+                    resolved.obj.objectName === 'x:Domain' &&
+                    formField.name === 'certificateManagement' &&
+                    showsTenantCertificateNote(formData, canCreateTenants)
+                  ) {
+                    return (
+                      <div key={formField.name} className="space-y-2">
+                        {widget}
+                        <TenantCertificateNote />
+                      </div>
                     );
                   }
 

@@ -69,6 +69,8 @@ export interface FieldWidgetProps {
   onChange: (value: unknown) => void;
   readOnly: boolean;
   error?: string;
+  /** inbuxa: the server's refusals for the fields of an embedded object, by field name (#268). */
+  childErrors?: Record<string, string>;
   schema: Schema;
   sieveScriptName?: string;
   /** inbuxa: the interpreter that runs that script, for the playground's limits. */
@@ -104,6 +106,7 @@ export function FieldWidget(props: FieldWidgetProps) {
     onChange,
     readOnly,
     error,
+    childErrors,
     schema,
     sieveScriptName,
     sieveInterpreter = 'user',
@@ -204,6 +207,7 @@ export function FieldWidget(props: FieldWidgetProps) {
             formField={formField}
             nullable={ft.nullable}
             expression={ft.expression}
+            childErrors={childErrors}
           />
         );
       case 'objectList':
@@ -1429,6 +1433,8 @@ interface EmbeddedObjectFieldProps {
   nullable?: boolean;
   /** inbuxa: an expression field's allowed constants and variables, from the schema. */
   expression?: ExpressionHints;
+  /** inbuxa: the server's refusals for this object's fields, by field name (#268). */
+  childErrors?: Record<string, string>;
 }
 
 function EmbeddedObjectField({
@@ -1440,6 +1446,7 @@ function EmbeddedObjectField({
   formField,
   nullable,
   expression,
+  childErrors,
 }: EmbeddedObjectFieldProps) {
   const { t } = useTranslation();
   const objValue = (value as Record<string, unknown>) ?? {};
@@ -1500,6 +1507,7 @@ function EmbeddedObjectField({
               value={objValue[ff.name]}
               onChange={(v) => handleFieldChange(ff.name, v)}
               readOnly={readOnly}
+              error={childErrors?.[ff.name]}
               schema={schema}
               helpScope={helpScopeHere}
             />
@@ -1516,6 +1524,7 @@ function EmbeddedObjectField({
                 value={objValue[name]}
                 onChange={(v) => handleFieldChange(name, v)}
                 readOnly={readOnly}
+                error={childErrors?.[name]}
                 schema={schema}
                 helpScope={helpScopeHere}
               />
@@ -1567,6 +1576,7 @@ function EmbeddedObjectField({
               value={objValue[ff.name]}
               onChange={(v) => handleFieldChange(ff.name, v)}
               readOnly={readOnly}
+              error={childErrors?.[ff.name]}
               schema={schema}
               helpScope={helpScopeHere}
             />
@@ -1584,6 +1594,7 @@ function EmbeddedObjectField({
               value={objValue[name]}
               onChange={(v) => handleFieldChange(name, v)}
               readOnly={readOnly}
+              error={childErrors?.[name]}
               schema={schema}
               helpScope={helpScopeHere}
             />
