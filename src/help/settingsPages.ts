@@ -167,7 +167,8 @@ export const SETTINGS_PAGE_HELP: Record<string, PageHelp> = {
     about: 'When the server blocks an address by itself: after repeated wrong passwords, abuse or scanning.',
   },
   'x:Asn': {
-    about: 'Where the server looks up which network and country an address belongs to, for filtering and reports.',
+    about:
+      'Which network and country an address is in, for the spam filter. Off on a new server: URL Resource with empty lists turns it on.',
   },
 
   // ── Network ──
