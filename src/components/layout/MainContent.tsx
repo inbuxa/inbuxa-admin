@@ -102,6 +102,11 @@ const CUSTOM_PAGES: Record<string, ComponentType> = {
     () => import('@/features/ai/LocalAiPage'),
     (m) => m.LocalAiPage,
   ),
+  // inbuxa: the opt-in "count this server" switch (System › Server)
+  ServerCount: onDemand(
+    () => import('@/features/count/ServerCountPage'),
+    (m) => m.ServerCountPage,
+  ),
   AuditLog: onDemand(
     () => import('@/features/audit/AuditLogPage'),
     (m) => m.AuditLogPage,

@@ -318,7 +318,13 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
       },
       {
         name: 'Server',
-        pages: [p('x:TaskManager', 'Task manager'), p('x:AiModel', 'AI models'), p('x:Enterprise', 'Branding')],
+        pages: [
+          p('x:TaskManager', 'Task manager'),
+          p('x:AiModel', 'AI models'),
+          p('x:Enterprise', 'Branding'),
+          // The opt-in "count this server" switch, off by default.
+          p('CustomComponent/ServerCount', 'Server count'),
+        ],
       },
       {
         name: 'Lookups',

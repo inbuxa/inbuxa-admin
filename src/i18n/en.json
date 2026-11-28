@@ -3197,5 +3197,36 @@
     "tenantNames": {
       "note": "On a tenant’s domain, the certificate can name only the domain itself, names under it, and names under the tenant’s other verified domains and aliases. A name with no dot, like mail, goes under the domain. A new domain gets its certificate once it’s verified: until then the order fails, so save these settings again after verifying. If an older domain lists a name that isn’t allowed, other changes to it are refused until you remove that name."
     }
+  },
+  "serverCount": {
+    "explanation": "This is off unless you turn it on. Once a week, this server sends a random ID and its version number, and nothing else. Our collector works out the country from the request and does not keep the address. Turning it off deletes the ID here and asks the collector to forget it.",
+    "failed": "Not saved",
+    "endpointSaved": "Collector address saved.",
+    "title": "Help count inbuxa servers",
+    "noAccess": "Your account may not read this setting.",
+    "unavailable": "This server has no count setting, so it sends nothing.",
+    "switch": "Count this server",
+    "statusOff": "Off. This server sends nothing.",
+    "statusLast": "On. Last checked in on {{date}}.",
+    "statusNotYet": "On. Not checked in yet.",
+    "details": "Turning it on makes a new random ID. In a cluster, only one node sends. While it is off, this server makes no request for the count at all.",
+    "whatIsSent": "Exactly what is sent",
+    "noPreview": "The server did not say.",
+    "whatIsSentNote": "This is the whole request body, once a week, while the switch is on.",
+    "docsLink": "How the count works",
+    "sourceLink": "Collector source",
+    "advanced": "Advanced",
+    "endpointHelp": "Where the weekly request goes. Forks and private builds can point this at their own collector. It must be an https:// address.",
+    "endpoint": "Collector address",
+    "save": "Save"
+  },
+  "countQuestion": {
+    "thanks": "Thank you. You can turn this off at any time on Server count.",
+    "declined": "This server will not be counted. You can change that on Server count.",
+    "failed": "Not saved",
+    "title": "Help count inbuxa servers?",
+    "seeWhat": "See exactly what’s sent",
+    "yes": "Count this server",
+    "no": "No thanks"
   }
 }

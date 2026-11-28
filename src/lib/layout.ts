@@ -76,6 +76,8 @@ const PAGES: Record<string, PageRule> = {
   'CustomComponent/BlobStoreChanges': { enterprise: false, visible: (c) => holds('sysBlobStoreChange', c) },
   // inbuxa:FrontEnds is read with the HTTP settings' permission; server administrators only.
   'CustomComponent/FrontEnds': readOnly('sysHttp'),
+  // inbuxa:CountSettings takes inbuxa:LogSettings' permission; server administrators only.
+  'CustomComponent/ServerCount': readOnly('sysTracer'),
   // Guided jobs are for whoever may read everything they change.
   'Wizard/certificates': readOnly('sysDomain', 'sysAcmeProvider', 'sysCertificate'),
   'Wizard/certificate-order': readOnly('sysDomain', 'sysAcmeProvider', 'sysCertificate'),

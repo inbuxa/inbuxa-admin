@@ -24,6 +24,7 @@ import { SENDING_WIZARD_VIEW, SendingLaunchChoice } from '@/features/sending/Sen
 import { DIRECTORY_WIZARD_VIEW, DirectoryLaunchChoice } from '@/features/directory/DirectorySetupCard';
 import { LIMITS_WIZARD_VIEW, LimitsLaunchChoice } from '@/features/limits/LimitsSummary';
 import { CERTIFICATE_WIZARD_VIEW, CertificateLaunchChoice } from '@/features/certificates/CertificateSetupCard';
+import { CountQuestionCard } from '@/features/count/CountQuestionCard';
 
 /** Calls per JMAP request; the protocol's own floor, so any server takes it. */
 const CALLS_PER_REQUEST = 16;
@@ -223,6 +224,9 @@ export function SettingsOverviewPage() {
           )}
         </p>
       </header>
+
+      {/* inbuxa: the one-time "count this server?" question, until it's answered */}
+      <CountQuestionCard />
 
       {setups.length > 0 && (
         <section className="space-y-3">
